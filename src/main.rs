@@ -7,7 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 use anyhow::Result;
-use gpui_kit::button::{Button, ButtonVariants};
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::label::Label;
 use gpui_kit::component::scroll::ScrollableElement;
