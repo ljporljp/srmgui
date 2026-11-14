@@ -3,10 +3,12 @@ mod net;
 mod registry;
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
 use anyhow::Result;
+use gpui_kit::PathPromptOptions;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::label::Label;
@@ -120,6 +122,25 @@ fn level_display(level: &Level, speed_only: bool) -> (String, LevelTone) {
 /// 去掉指标中的空白，如 "125 KB/s" -> "125KB/s"。
 fn compact(text: &str) -> String {
     text.split_whitespace().collect()
+}
+
+/// 规范化 Registry URL：缺少协议时补全为 sparse+https 并追加结尾斜杠。
+fn normalize_registry_url(url: &str) -> String {
+    let url = url.trim();
+    if url.starts_with("sparse+") || url.starts_with("http") {
+        url.to_string()
+    } else {
+        format!("sparse+https://{url}/")
+    }
+}
+
+/// 补全导出文件的 `.srmgui` 扩展名。
+fn with_sources_extension(path: &Path) -> PathBuf {
+    if path.extension().is_some() {
+        path.to_path_buf()
+    } else {
+        path.with_extension(config_io::SOURCES_EXTENSION)
+    }
 }
 
 /// 粗估单行文字宽度（ASCII 按半个字宽计），用于判断是否会被截断。
@@ -435,6 +456,156 @@ impl RootView {
             let _ = view.update(cx, |view, cx| {
                 view.app.update(cx, |model, cx| {
                     model.state.probes.insert(id.clone(), probe);
+                    cx.notify();
+                });
+            });
+        })
+        .detach();
+    }
+
+    /// 选择 srmgui 源文件并导入。
+    fn import_customs(&mut self, cx: &mut Context<Self>) {
+        let receiver = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("选择 srmgui 自定义源文件".into()),
+        });
+        cx.spawn(async move |view, cx| {
+            let path = match receiver.await {
+                Ok(Ok(Some(paths))) => paths.into_iter().next(),
+                Ok(Ok(None)) => None,
+                Ok(Err(error)) => {
+                    let message = format!("打开文件选择器失败：{error}");
+                    let _ = view.update(cx, |view, cx| {
+                        view.app.update(cx, |model, cx| {
+                            model.state.status = Status::Error(message.clone().into());
+                            cx.notify();
+                        });
+                    });
+                    None
+                }
+                Err(_) => None,
+            };
+            if let Some(path) = path {
+                let _ = view.update(cx, |view, cx| view.import_customs_from(&path, cx));
+            }
+        })
+        .detach();
+    }
+
+    /// 从文件导入自定义源：跳过内置与已存在的标识，新增项立即测速。
+    fn import_customs_from(&mut self, path: &Path, cx: &mut Context<Self>) {
+        let imported = std::fs::read_to_string(path)
+            .map_err(|error| format!("读取 {} 失败：{error}", path.display()))
+            .and_then(|text| {
+                config_io::import_customs(&text).map_err(|error| format!("{error:#}"))
+            });
+
+        let imported = match imported {
+            Ok(imported) => imported,
+            Err(message) => {
+                self.app.update(cx, |model, cx| {
+                    model.state.status = Status::Error(message.into());
+                    cx.notify();
+                });
+                return;
+            }
+        };
+
+        let builtin_ids: Vec<&str> = registry::builtins().iter().map(|r| r.id).collect();
+        let mut added: Vec<(String, String)> = Vec::new();
+        let mut skipped = 0usize;
+        self.app.update(cx, |model, cx| {
+            for (name, url) in imported {
+                if builtin_ids.contains(&name.as_str()) || model.state.customs.contains_key(&name) {
+                    skipped += 1;
+                    continue;
+                }
+                let url = normalize_registry_url(&url);
+                model.state.customs.insert(name.clone(), url.clone());
+                added.push((name, url));
+            }
+
+            model.state.status = if added.is_empty() {
+                Status::Error(format!("没有导入任何源（跳过 {skipped} 个内置或重复项）").into())
+            } else if skipped == 0 {
+                Status::Success(format!("已导入 {} 个自定义源", added.len()).into())
+            } else {
+                Status::Success(
+                    format!(
+                        "已导入 {} 个自定义源，跳过 {skipped} 个内置或重复项",
+                        added.len()
+                    )
+                    .into(),
+                )
+            };
+            cx.notify();
+        });
+
+        for (name, url) in added {
+            self.measure(name, url, cx);
+        }
+    }
+
+    /// 将自定义源导出为 srmgui 格式文件。
+    fn export_customs(&mut self, cx: &mut Context<Self>) {
+        let builtin_ids: Vec<&str> = registry::builtins().iter().map(|r| r.id).collect();
+        let customs: HashMap<String, String> = self
+            .app
+            .read(cx)
+            .state
+            .customs
+            .iter()
+            .filter(|(id, _)| !builtin_ids.contains(&id.as_str()))
+            .map(|(id, url)| (id.clone(), url.clone()))
+            .collect();
+
+        if customs.is_empty() {
+            self.app.update(cx, |model, cx| {
+                model.state.status = Status::Error("还没有可导出的自定义源".into());
+                cx.notify();
+            });
+            return;
+        }
+
+        let directory = config_io::cargo_home()
+            .ok()
+            .and_then(|home| home.parent().map(Path::to_path_buf))
+            .unwrap_or_else(|| PathBuf::from("."));
+        let suggested = format!("srmgui-sources.{}", config_io::SOURCES_EXTENSION);
+        let receiver = cx.prompt_for_new_path(&directory, Some(&suggested));
+        cx.spawn(async move |view, cx| {
+            let path = match receiver.await {
+                Ok(Ok(Some(path))) => path,
+                Ok(Ok(None)) => return,
+                Ok(Err(error)) => {
+                    let message = format!("打开保存对话框失败：{error}");
+                    let _ = view.update(cx, |view, cx| {
+                        view.app.update(cx, |model, cx| {
+                            model.state.status = Status::Error(message.clone().into());
+                            cx.notify();
+                        });
+                    });
+                    return;
+                }
+                Err(_) => return,
+            };
+
+            let target = with_sources_extension(&path);
+            let count = customs.len();
+            let text = config_io::export_customs(&customs);
+            let result = std::fs::write(&target, text);
+            let _ = view.update(cx, |view, cx| {
+                view.app.update(cx, |model, cx| {
+                    model.state.status = match result {
+                        Ok(()) => Status::Success(
+                            format!("已导出 {count} 个自定义源到 {}", target.display()).into(),
+                        ),
+                        Err(error) => {
+                            Status::Error(format!("写入 {} 失败：{error}", target.display()).into())
+                        }
+                    };
                     cx.notify();
                 });
             });
@@ -827,11 +998,7 @@ impl RootView {
                                 return;
                             }
                             view.app.update(cx, |model, cx| {
-                                let url = if url.starts_with("sparse+") || url.starts_with("http") {
-                                    url
-                                } else {
-                                    format!("sparse+https://{url}/")
-                                };
+                                let url = normalize_registry_url(&url);
                                 model.state.customs.insert(id.clone(), url);
                                 model.state.selected = id.clone().into();
                                 model.state.status = Status::Success("已添加自定义源".into());
@@ -934,6 +1101,28 @@ impl Render for RootView {
                             .flex_1()
                             .min_h_0()
                             .gap_3()
+                            .child(
+                                h_flex()
+                                    .items_center()
+                                    .justify_end()
+                                    .gap_2()
+                                    .child(
+                                        Button::new("import-customs")
+                                            .label("导入")
+                                            .secondary()
+                                            .on_click(cx.listener(|view, _ev, _window, cx| {
+                                                view.import_customs(cx);
+                                            })),
+                                    )
+                                    .child(
+                                        Button::new("export-customs")
+                                            .label("导出")
+                                            .secondary()
+                                            .on_click(cx.listener(|view, _ev, _window, cx| {
+                                                view.export_customs(cx);
+                                            })),
+                                    ),
+                            )
                             .child(self.render_custom_list(cx))
                             .child(self.render_add_form(cx))
                             .into_any_element()
