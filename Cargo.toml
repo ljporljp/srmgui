@@ -3,6 +3,11 @@ name = "srmgui"
 version = "0.1.0"
 edition = "2024"
 description = "GUI tool to switch Rust Cargo registry mirrors, built with GPUI Kit"
+license = "MIT"
+repository = "https://github.com/ljporljp/srmgui"
+readme = "README.md"
+keywords = ["cargo", "mirror", "registry", "gui", "gpui"]
+categories = ["development-tools", "command-line-utilities"]
 
 [dependencies]
 gpui-kit = "0.9"
