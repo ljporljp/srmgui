@@ -14,8 +14,12 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, h_flex, v_flex};
+use gpui_kit::component::{Theme, ThemeMode};
 use gpui_kit::prelude::*;
-use gpui_kit::{AnyElement, App, Entity, SharedString, Window, WindowOptions, actions, div, px};
+use gpui_kit::{
+    Animation, AnimationExt as _, AnyElement, App, Entity, Hsla, SharedString, Window,
+    WindowAppearance, WindowOptions, actions, div, px,
+};
 
 actions!(cargo_mirror_switcher, [Quit, ToggleTheme]);
 
@@ -29,6 +33,15 @@ enum Status {
 
 /// 自动测速周期。
 const PROBE_INTERVAL: Duration = Duration::from_secs(180);
+
+/// 每个探测步骤内容的固定展示宽度。
+const STEP_WIDTH: f32 = 80.;
+
+/// 源名称（含说明）列的固定宽度。
+const NAME_WIDTH: f32 = 160.;
+
+/// 跑马灯两段文字之间的间距。
+const MARQUEE_GAP: f32 = 32.;
 
 /// 单层探测在 UI 中的状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,25 +96,113 @@ impl Probe {
     }
 }
 
-/// 截断过长的文字（按字符），避免单行被撑开。
-fn shorten(text: &str, max_chars: usize) -> String {
-    let mut chars = text.chars();
-    let truncated: String = chars.by_ref().take(max_chars).collect();
-    if chars.next().is_some() {
-        format!("{truncated}…")
-    } else {
-        truncated
-    }
-}
-
 /// 单个步骤的展示文字与语义状态。
-fn level_display(level: &Level) -> (String, LevelTone) {
+///
+/// 只保留耗时 / 速度指标（丢弃版本号等附加信息）；错误信息保留全文，
+/// 由固定宽度布局截断，完整内容通过悬停 tips 查看。
+fn level_display(level: &Level, speed_only: bool) -> (String, LevelTone) {
     match level {
         Level::Running => ("⏳".to_string(), LevelTone::Pending),
         Level::Skipped => ("—".to_string(), LevelTone::Skipped),
-        Level::Passed(detail) => (detail.to_string(), LevelTone::Passed),
-        Level::Failed(error) => (shorten(error, 24), LevelTone::Failed),
+        Level::Passed(detail) => {
+            let unit = if speed_only { "/s" } else { "ms" };
+            let text = detail
+                .split(" · ")
+                .find(|part| part.contains(unit))
+                .map(compact)
+                .unwrap_or_else(|| compact(detail));
+            (text, LevelTone::Passed)
+        }
+        Level::Failed(error) => (error.to_string(), LevelTone::Failed),
     }
+}
+
+/// 去掉指标中的空白，如 "125 KB/s" -> "125KB/s"。
+fn compact(text: &str) -> String {
+    text.split_whitespace().collect()
+}
+
+/// 粗估单行文字宽度（ASCII 按半个字宽计），用于判断是否会被截断。
+fn text_width_estimate(text: &str, font_size: f32) -> f32 {
+    text.chars()
+        .map(|c| {
+            if c.is_ascii() {
+                font_size * 0.55
+            } else {
+                font_size
+            }
+        })
+        .sum()
+}
+
+/// 固定宽度单行文本：放得下时省略号截断；放不下时循环滚动。
+/// 完整内容始终通过悬停 tips 提供。
+fn scrolling_text(
+    id: String,
+    text: SharedString,
+    width: f32,
+    font_size: f32,
+    color: Hsla,
+    semibold: bool,
+) -> AnyElement {
+    let full = text.clone();
+    let text_width = text_width_estimate(&text, font_size);
+
+    let body = if text_width <= width {
+        Label::new(text)
+            .w_full()
+            .text_size(px(font_size))
+            .text_color(color)
+            .whitespace_nowrap()
+            .text_ellipsis()
+            .when(semibold, |l| l.font_semibold())
+            .into_any_element()
+    } else {
+        // 复制一份文字并衔接排列，滚动一整段后视觉上无缝回到起点。
+        let cycle = text_width + MARQUEE_GAP;
+        let duration = Duration::from_secs_f32((cycle / 20.).clamp(4., 10.));
+        let label = move |text: SharedString| {
+            Label::new(text)
+                .flex_shrink_0()
+                .text_size(px(font_size))
+                .text_color(color)
+                .whitespace_nowrap()
+                .when(semibold, |l| l.font_semibold())
+        };
+        h_flex()
+            .gap(px(MARQUEE_GAP))
+            .with_animation(
+                format!("marquee-{id}"),
+                Animation::new(duration).repeat(),
+                move |this, delta| {
+                    let progress = ((delta - 0.1) / 0.75).clamp(0., 1.);
+                    this.ml(px(-cycle * progress))
+                },
+            )
+            .child(label(text.clone()))
+            .child(label(text))
+            .into_any_element()
+    };
+
+    div()
+        .w(px(width))
+        .flex_shrink_0()
+        .overflow_hidden()
+        .id(format!("text-{id}"))
+        .tooltip(move |_, cx| cx.new(|_| Tooltip::new(full.clone())).into())
+        .child(body)
+        .into_any_element()
+}
+
+/// 贯通列表项上下的竖直分隔线（负外边距延伸进行内边距）。
+fn v_separator(color: Hsla) -> AnyElement {
+    div()
+        .w(px(1.))
+        .self_stretch()
+        .mt(-px(12.))
+        .mb(-px(12.))
+        .bg(color)
+        .into_any_element()
 }
 
 /// 步骤语义状态，用于决定文字颜色。
@@ -123,6 +224,49 @@ fn level_tip(title: &str, level: &Level) -> String {
     }
 }
 
+/// 主题切换方式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ThemeChoice {
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemeChoice {
+    fn from_index(index: usize) -> Self {
+        match index {
+            1 => Self::Light,
+            2 => Self::Dark,
+            _ => Self::System,
+        }
+    }
+
+    fn index(self) -> usize {
+        match self {
+            Self::System => 0,
+            Self::Light => 1,
+            Self::Dark => 2,
+        }
+    }
+}
+
+/// 应用主题：跟随系统时按当前系统外观解析，并同步原生窗口外观。
+fn apply_theme(choice: ThemeChoice, cx: &mut App) {
+    let appearance = match choice {
+        ThemeChoice::System => None,
+        ThemeChoice::Light => Some(WindowAppearance::Light),
+        ThemeChoice::Dark => Some(WindowAppearance::Dark),
+    };
+    // 先解除/设置原生外观覆盖，再解析「跟随系统」的实际颜色。
+    cx.set_window_appearance(appearance);
+    let mode = match choice {
+        ThemeChoice::System => ThemeMode::from(cx.window_appearance()),
+        ThemeChoice::Light => ThemeMode::Light,
+        ThemeChoice::Dark => ThemeMode::Dark,
+    };
+    Theme::change(mode, None, cx);
+}
+
 /// Source of truth for the whole UI.
 #[derive(Debug, Clone)]
 struct State {
@@ -132,7 +276,7 @@ struct State {
     customs: HashMap<String, String>,
     status: Status,
     probes: HashMap<String, Probe>,
-    theme_dark: bool,
+    theme: ThemeChoice,
 }
 
 impl State {
@@ -145,7 +289,7 @@ impl State {
             customs,
             status: Status::Info("选择一个源，然后点击「应用」写入 ~/.cargo/config.toml".into()),
             probes: HashMap::new(),
-            theme_dark: true,
+            theme: ThemeChoice::System,
         }
     }
 }
@@ -177,7 +321,7 @@ fn main() {
                 }),
                 window_bounds: Some(gpui_kit::WindowBounds::Windowed(gpui_kit::Bounds {
                     origin: gpui_kit::point(gpui_kit::px(200.), gpui_kit::px(200.)),
-                    size: gpui_kit::size(gpui_kit::px(620.), gpui_kit::px(560.)),
+                    size: gpui_kit::size(gpui_kit::px(760.), gpui_kit::px(560.)),
                 })),
                 ..Default::default()
             },
@@ -203,6 +347,16 @@ impl RootView {
             new_id_input,
             new_url_input,
         };
+
+        // 启动时按当前选择应用主题，并在「跟随系统」时响应系统外观变化。
+        let theme = view.app.read(cx).state.theme;
+        apply_theme(theme, cx);
+        cx.observe_window_appearance(window, |view, _window, cx| {
+            if view.app.read(cx).state.theme == ThemeChoice::System {
+                apply_theme(ThemeChoice::System, cx);
+            }
+        })
+        .detach();
 
         // 启动时立即测速，之后按固定周期自动重新测速。
         cx.spawn(async move |view, cx| {
@@ -301,25 +455,18 @@ impl RootView {
             ("⬇️", "下载端点速度", &probe.download),
         ];
 
-        let mut row = h_flex().items_stretch().gap_3().self_stretch();
+        let mut row = h_flex().items_stretch().gap_2().self_stretch();
         for (index, (icon, title, level)) in steps.iter().enumerate() {
             if index > 0 {
-                // 贯通列表项上下的分隔线：负外边距让它延伸进行内边距。
-                row = row.child(
-                    div()
-                        .w(px(1.))
-                        .self_stretch()
-                        .mt(-px(12.))
-                        .mb(-px(12.))
-                        .bg(cx.theme().border),
-                );
+                row = row.child(v_separator(cx.theme().border));
             }
-            row = row.child(self.render_step(id, index, icon, title, level, cx));
+            let show_speed = index + 1 == steps.len();
+            row = row.child(self.render_step(id, index, icon, title, level, show_speed, cx));
         }
         row.into_any_element()
     }
 
-    /// 渲染单个步骤：图标 + 状态/耗时文字，悬停显示状态说明。
+    /// 渲染单个步骤：固定宽度内显示图标与耗时/速度，悬停显示完整状态。
     fn render_step(
         &self,
         row_id: &str,
@@ -327,25 +474,37 @@ impl RootView {
         icon: &'static str,
         title: &'static str,
         level: &Level,
+        show_speed: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let (text, tone) = level_display(level);
-        let color = match tone {
-            LevelTone::Passed => cx.theme().success,
-            LevelTone::Failed => cx.theme().danger,
-            LevelTone::Pending => cx.theme().muted_foreground,
-            LevelTone::Skipped => cx.theme().muted_foreground.alpha(0.35),
+        let (text, tone) = level_display(level, show_speed);
+        let (color, bg) = match tone {
+            LevelTone::Passed => (cx.theme().success, cx.theme().transparent),
+            LevelTone::Failed => (cx.theme().danger, cx.theme().danger.alpha(0.18)),
+            LevelTone::Pending => (cx.theme().muted_foreground, cx.theme().transparent),
+            LevelTone::Skipped => (
+                cx.theme().muted_foreground.alpha(0.35),
+                cx.theme().transparent,
+            ),
         };
         let tip = level_tip(title, level);
 
         v_flex()
+            .w(px(STEP_WIDTH))
+            .flex_shrink_0()
+            .items_center()
             .justify_center()
+            .rounded_md()
+            .bg(bg)
             .id(format!("probe-{row_id}-{index}"))
             .tooltip(move |_, cx| cx.new(|_| Tooltip::new(tip.clone())).into())
             .child(
                 Label::new(format!("{icon} {text}"))
+                    .w_full()
+                    .text_sm()
                     .text_color(color)
-                    .text_sm(),
+                    .whitespace_nowrap()
+                    .text_ellipsis(),
             )
             .into_any_element()
     }
@@ -365,12 +524,11 @@ impl RootView {
                 let id: SharedString = r.id.into();
                 let is_selected = selected == id;
                 let is_current = current.as_ref().map(|c| c.as_ref()) == Some(r.id);
-                let status = if is_current { "当前生效" } else { "" };
 
                 h_flex()
                     .id(format!("preset-{}", r.id))
-                    .gap_3()
-                    .items_center()
+                    .gap_2()
+                    .items_stretch()
                     .p_3()
                     .rounded_lg()
                     .bg(if is_selected {
@@ -386,43 +544,52 @@ impl RootView {
                     })
                     .when(is_selected, |f| f.cursor_pointer())
                     .child(
-                        div()
-                            .child(
-                                h_flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .child(
-                                        Label::new(r.name)
-                                            .text_lg()
-                                            .font_semibold()
-                                            .when(is_selected, |l| {
-                                                l.text_color(cx.theme().selection)
-                                            }),
-                                    )
-                                    .when(!status.is_empty(), |f| {
-                                        f.child(
-                                            Label::new(status)
-                                                .text_color(cx.theme().success)
-                                                .text_sm(),
-                                        )
-                                    }),
-                            )
-                            .child(
-                                Label::new(r.description)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .text_sm(),
-                            ),
+                        v_flex()
+                            .w(px(NAME_WIDTH))
+                            .flex_shrink_0()
+                            .justify_center()
+                            .gap_1()
+                            .child(h_flex().items_center().gap_2().child(scrolling_text(
+                                format!("name-{}", r.id),
+                                r.name.into(),
+                                NAME_WIDTH,
+                                18.,
+                                if is_selected {
+                                    cx.theme().selection
+                                } else {
+                                    cx.theme().foreground
+                                },
+                                true,
+                            )))
+                            .child(scrolling_text(
+                                format!("desc-{}", r.id),
+                                r.description.into(),
+                                NAME_WIDTH,
+                                14.,
+                                cx.theme().muted_foreground,
+                                false,
+                            )),
                     )
+                    .child(v_separator(cx.theme().border))
+                    .child(self.render_probe(r.id, cx))
                     .child(
                         h_flex()
                             .ml_auto()
                             .items_center()
-                            .gap_3()
+                            .gap_2()
                             .self_stretch()
-                            .child(self.render_probe(r.id, cx))
                             .child({
                                 if is_current {
-                                    Label::new("✅").text_xl().into_any_element()
+                                    h_flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .child(
+                                            Label::new("当前生效")
+                                                .text_color(cx.theme().success)
+                                                .text_sm(),
+                                        )
+                                        .child(Label::new("✅").text_xl())
+                                        .into_any_element()
                                 } else {
                                     Button::new(format!("apply-{}", r.id))
                                         .label("应用")
@@ -491,8 +658,8 @@ impl RootView {
                 let url_display = url.strip_prefix("sparse+").unwrap_or(&url).to_string();
                 h_flex()
                     .id(format!("custom-{id}"))
-                    .gap_3()
-                    .items_center()
+                    .gap_2()
+                    .items_stretch()
                     .p_3()
                     .rounded_lg()
                     .bg(if is_selected {
@@ -507,46 +674,75 @@ impl RootView {
                         cx.theme().border
                     })
                     .child(
-                        Button::new(format!("del-{id}"))
-                            .label("删除")
-                            .ghost()
-                            .on_click(cx.listener({
-                                let delete_id = id.clone();
-                                move |view, _ev, _window, cx| {
-                                    view.app.update(cx, |model, cx| {
-                                        model.state.customs.remove(&delete_id);
-                                        if model.state.selected.as_ref() == delete_id {
-                                            model.state.selected = "rsproxy".into();
+                        h_flex()
+                            .self_stretch()
+                            .flex_shrink_0()
+                            .items_center()
+                            .child(
+                                Button::new(format!("del-{id}"))
+                                    .label("删除")
+                                    .ghost()
+                                    .on_click(cx.listener({
+                                        let delete_id = id.clone();
+                                        move |view, _ev, _window, cx| {
+                                            view.app.update(cx, |model, cx| {
+                                                model.state.customs.remove(&delete_id);
+                                                if model.state.selected.as_ref() == delete_id {
+                                                    model.state.selected = "rsproxy".into();
+                                                }
+                                                cx.notify();
+                                            });
                                         }
-                                        cx.notify();
-                                    });
-                                }
-                            })),
+                                    })),
+                            ),
                     )
                     .child(
                         v_flex()
+                            .w(px(NAME_WIDTH))
+                            .flex_shrink_0()
+                            .justify_center()
                             .gap_1()
-                            .child(
-                                Label::new(id.clone())
-                                    .font_semibold()
-                                    .when(is_selected, |l| l.text_color(cx.theme().selection)),
-                            )
-                            .child(
-                                Label::new(url_display)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .text_sm(),
-                            ),
+                            .child(scrolling_text(
+                                format!("custom-name-{id}"),
+                                id.clone().into(),
+                                NAME_WIDTH,
+                                16.,
+                                if is_selected {
+                                    cx.theme().selection
+                                } else {
+                                    cx.theme().foreground
+                                },
+                                true,
+                            ))
+                            .child(scrolling_text(
+                                format!("custom-url-{id}"),
+                                url_display.into(),
+                                NAME_WIDTH,
+                                14.,
+                                cx.theme().muted_foreground,
+                                false,
+                            )),
                     )
+                    .child(v_separator(cx.theme().border))
+                    .child(self.render_probe(&id, cx))
                     .child(
                         h_flex()
                             .ml_auto()
                             .items_center()
-                            .gap_3()
+                            .gap_2()
                             .self_stretch()
-                            .child(self.render_probe(&id, cx))
                             .child({
                                 if is_current {
-                                    Label::new("✅").text_xl().into_any_element()
+                                    h_flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .child(
+                                            Label::new("当前生效")
+                                                .text_color(cx.theme().success)
+                                                .text_sm(),
+                                        )
+                                        .child(Label::new("✅").text_xl())
+                                        .into_any_element()
                                 } else {
                                     Button::new(format!("apply-custom-{id}"))
                                         .label("应用")
@@ -677,9 +873,10 @@ impl RootView {
 
 impl Render for RootView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = self.app.read(cx).state.theme_dark;
+        let theme = self.app.read(cx).state.theme;
         let active_tab = self.app.read(cx).state.active_tab;
         let app = self.app.clone();
+        let theme_app = self.app.clone();
 
         v_flex()
             .size_full()
@@ -693,15 +890,20 @@ impl Render for RootView {
                     .child(Label::new("Cargo 镜像源切换工具").text_xl().font_bold())
                     .child(
                         div().ml_auto().child(
-                            Button::new("toggle-theme")
-                                .label(if theme { "浅色" } else { "深色" })
-                                .ghost()
-                                .on_click(cx.listener(|view, _ev, _window, cx| {
-                                    view.app.update(cx, |model, cx| {
-                                        model.state.theme_dark = !model.state.theme_dark;
+                            TabBar::new("theme-tabs")
+                                .segmented()
+                                .selected_index(theme.index())
+                                .on_click(move |index, _window, cx| {
+                                    let choice = ThemeChoice::from_index(*index);
+                                    theme_app.update(cx, |model, cx| {
+                                        model.state.theme = choice;
                                         cx.notify();
                                     });
-                                })),
+                                    apply_theme(choice, cx);
+                                })
+                                .child(Tab::new().label("跟随系统"))
+                                .child(Tab::new().label("浅色"))
+                                .child(Tab::new().label("深色")),
                         ),
                     ),
             )
@@ -745,6 +947,18 @@ impl Render for RootView {
 mod tests {
     use super::*;
 
+    #[test]
+    fn theme_choice_index_roundtrip() {
+        for (index, choice) in [
+            (0, ThemeChoice::System),
+            (1, ThemeChoice::Light),
+            (2, ThemeChoice::Dark),
+        ] {
+            assert_eq!(ThemeChoice::from_index(index), choice);
+            assert_eq!(choice.index(), index);
+        }
+    }
+
     fn probe(tcp: Level, http: Level, parse: Level, download: Level) -> Probe {
         Probe {
             tcp,
@@ -756,37 +970,43 @@ mod tests {
 
     #[test]
     fn passed_step_shows_its_duration() {
-        let (text, tone) = level_display(&Level::Passed("12 ms".into()));
-        assert_eq!(text, "12 ms");
+        let (text, tone) = level_display(&Level::Passed("12 ms".into()), false);
+        assert_eq!(text, "12ms");
         assert_eq!(tone, LevelTone::Passed);
     }
 
     #[test]
-    fn failed_step_is_red_and_truncated() {
+    fn passed_step_drops_version_and_keeps_duration() {
+        let (text, _) = level_display(&Level::Passed("1.0.229 · 285 ms".into()), false);
+        assert_eq!(text, "285ms");
+    }
+
+    #[test]
+    fn download_step_shows_speed_only() {
+        let (text, _) = level_display(&Level::Passed("651 ms · 125 KB/s".into()), true);
+        assert_eq!(text, "125KB/s");
+    }
+
+    #[test]
+    fn failed_step_keeps_full_error_for_tooltip() {
         let long: SharedString = "x".repeat(30).into();
-        let (text, tone) = level_display(&Level::Failed(long));
-        assert_eq!(text, format!("{}…", "x".repeat(24)));
+        let (text, tone) = level_display(&Level::Failed(long.clone()), false);
+        assert_eq!(text, long);
         assert_eq!(tone, LevelTone::Failed);
     }
 
     #[test]
     fn skipped_step_has_no_detail() {
-        let (text, tone) = level_display(&Level::Skipped);
+        let (text, tone) = level_display(&Level::Skipped, false);
         assert_eq!(text, "—");
         assert_eq!(tone, LevelTone::Skipped);
     }
 
     #[test]
     fn running_step_shows_hourglass() {
-        let (text, tone) = level_display(&Level::Running);
+        let (text, tone) = level_display(&Level::Running, false);
         assert_eq!(text, "⏳");
         assert_eq!(tone, LevelTone::Pending);
-    }
-
-    #[test]
-    fn shorten_counts_chars_not_bytes() {
-        assert_eq!(shorten("连接超时", 3), "连接超…");
-        assert_eq!(shorten("abc", 3), "abc");
     }
 
     #[test]
@@ -810,7 +1030,7 @@ mod tests {
             Level::Passed("1.0.0 · 34 ms".into()),
             Level::Failed("timeout".into()),
         );
-        assert_eq!(level_display(&p.tcp).1, LevelTone::Passed);
-        assert_eq!(level_display(&p.download).1, LevelTone::Failed);
+        assert_eq!(level_display(&p.tcp, false).1, LevelTone::Passed);
+        assert_eq!(level_display(&p.download, true).1, LevelTone::Failed);
     }
 }
