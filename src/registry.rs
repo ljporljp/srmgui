@@ -52,17 +52,39 @@ pub fn builtins() -> Vec<Registry> {
 }
 
 /// Build the `[source.crates-io]` replacement block for a chosen source id.
+///
+/// Duplicate filtering rules applied while writing:
+/// - The built-in `official` source points at crates.io itself and must NOT be
+///   emitted as its own `[source.official]` block — cargo forbids defining a
+///   source that resolves to the same registry as `crates-io`. Selecting it
+///   simply means "use the default crates.io", so `replace-with` is omitted.
+/// - Custom sources whose id collides with a built-in source are skipped,
+///   since the built-in block is always emitted first. A duplicate
+///   `[source.<id>]` section would produce invalid / redundant TOML.
 pub fn build_config(selected: &str, customs: &HashMap<String, String>) -> String {
     let mut out = String::new();
     out.push_str("[source.crates-io]\n");
-    out.push_str(&format!("replace-with = \"{selected}\"\n\n"));
+    if selected != "official" {
+        out.push_str(&format!("replace-with = \"{selected}\"\n"));
+    }
+    out.push('\n');
+
+    let builtin_ids: Vec<&str> = builtins().iter().map(|r| r.id).collect();
 
     for r in builtins() {
+        // `official` is crates.io itself; never emit a [source.official] block.
+        if r.id == "official" {
+            continue;
+        }
         out.push_str(&format!("[source.{}]\n", r.id));
         out.push_str(&format!("registry = \"{}\"\n\n", r.url));
     }
 
     for (id, url) in customs {
+        // Skip customs that shadow a built-in id to avoid duplicate sections.
+        if builtin_ids.contains(&id.as_str()) {
+            continue;
+        }
         let url = if url.starts_with("sparse+") || url.starts_with("http") {
             url.clone()
         } else {
