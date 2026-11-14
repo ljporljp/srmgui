@@ -12,9 +12,10 @@ use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::label::Label;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tab::{Tab, TabBar};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::prelude::*;
-use gpui_kit::{AnyElement, App, Entity, SharedString, Window, WindowOptions, actions, div};
+use gpui_kit::{AnyElement, App, Entity, SharedString, Window, WindowOptions, actions, div, px};
 
 actions!(cargo_mirror_switcher, [Quit, ToggleTheme]);
 
@@ -26,32 +27,99 @@ enum Status {
     Error(SharedString),
 }
 
-/// Latency measurement result for one registry.
-#[derive(Debug, Clone)]
-enum Latency {
-    Measuring,
-    Ok(Duration),
-    Err(SharedString),
+/// 自动测速周期。
+const PROBE_INTERVAL: Duration = Duration::from_secs(180);
+
+/// 单层探测在 UI 中的状态。
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Level {
+    /// 正在探测。
+    Running,
+    /// 前序层失败，未执行。
+    Skipped,
+    /// 通过，附带详情。
+    Passed(SharedString),
+    /// 失败，附带错误信息。
+    Failed(SharedString),
 }
 
-/// 列表行里展示的测速文本；未测过时返回 `None`（不渲染状态标签）。
-fn latency_text(latency: Option<&Latency>) -> Option<String> {
-    match latency {
-        None => None,
-        Some(Latency::Measuring) => Some("测速中…".to_string()),
-        Some(Latency::Ok(d)) => Some(format!("{:.0} ms", d.as_secs_f64() * 1000.0)),
-        Some(Latency::Err(e)) => Some(format!("失败：{}", truncate_detail(e, 24))),
+impl Level {
+    fn from_layer(layer: net::Layer) -> Self {
+        match layer {
+            net::Layer::Skipped => Level::Skipped,
+            net::Layer::Passed(detail) => Level::Passed(detail.into()),
+            net::Layer::Failed(error) => Level::Failed(error.into()),
+        }
     }
 }
 
-/// 按字符截断错误信息，超长时追加省略号。
-fn truncate_detail(detail: &str, max_chars: usize) -> String {
-    let mut chars = detail.chars();
+/// 一个源的四层探测状态：TCP → HTTP 索引探测 → 索引文件解析 → 下载速度。
+#[derive(Debug, Clone)]
+struct Probe {
+    tcp: Level,
+    http: Level,
+    parse: Level,
+    download: Level,
+}
+
+impl Probe {
+    /// 测速进行中的占位状态。
+    fn running() -> Self {
+        Self {
+            tcp: Level::Running,
+            http: Level::Running,
+            parse: Level::Running,
+            download: Level::Running,
+        }
+    }
+
+    fn from_report(report: net::ProbeReport) -> Self {
+        Self {
+            tcp: Level::from_layer(report.tcp),
+            http: Level::from_layer(report.http),
+            parse: Level::from_layer(report.parse),
+            download: Level::from_layer(report.download),
+        }
+    }
+}
+
+/// 截断过长的文字（按字符），避免单行被撑开。
+fn shorten(text: &str, max_chars: usize) -> String {
+    let mut chars = text.chars();
     let truncated: String = chars.by_ref().take(max_chars).collect();
     if chars.next().is_some() {
         format!("{truncated}…")
     } else {
         truncated
+    }
+}
+
+/// 单个步骤的展示文字与语义状态。
+fn level_display(level: &Level) -> (String, LevelTone) {
+    match level {
+        Level::Running => ("⏳".to_string(), LevelTone::Pending),
+        Level::Skipped => ("—".to_string(), LevelTone::Skipped),
+        Level::Passed(detail) => (detail.to_string(), LevelTone::Passed),
+        Level::Failed(error) => (shorten(error, 24), LevelTone::Failed),
+    }
+}
+
+/// 步骤语义状态，用于决定文字颜色。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LevelTone {
+    Pending,
+    Passed,
+    Failed,
+    Skipped,
+}
+
+/// 步骤悬停提示：说明该步骤的含义与当前状态。
+fn level_tip(title: &str, level: &Level) -> String {
+    match level {
+        Level::Running => format!("{title}：测速中…"),
+        Level::Skipped => format!("{title}：已跳过（前序步骤未通过）"),
+        Level::Passed(detail) => format!("{title}：通过 · {detail}"),
+        Level::Failed(error) => format!("{title}：不通过 · {error}"),
     }
 }
 
@@ -63,7 +131,7 @@ struct State {
     active_tab: usize,
     customs: HashMap<String, String>,
     status: Status,
-    latencies: HashMap<String, Latency>,
+    probes: HashMap<String, Probe>,
     theme_dark: bool,
 }
 
@@ -76,7 +144,7 @@ impl State {
             active_tab: 0,
             customs,
             status: Status::Info("选择一个源，然后点击「应用」写入 ~/.cargo/config.toml".into()),
-            latencies: HashMap::new(),
+            probes: HashMap::new(),
             theme_dark: true,
         }
     }
@@ -130,11 +198,22 @@ impl RootView {
         let new_id_input = cx.new(|cx| InputState::new(window, cx).placeholder("如 my-mirror"));
         let new_url_input = cx
             .new(|cx| InputState::new(window, cx).placeholder("sparse+https://example.com/index/"));
-        Self {
+        let view = Self {
             app,
             new_id_input,
             new_url_input,
-        }
+        };
+
+        // 启动时立即测速，之后按固定周期自动重新测速。
+        cx.spawn(async move |view, cx| {
+            loop {
+                let _ = view.update(cx, |view, cx| view.measure_all(cx));
+                cx.background_executor().timer(PROBE_INTERVAL).await;
+            }
+        })
+        .detach();
+
+        view
     }
 
     fn apply(&mut self, cx: &mut Context<Self>) {
@@ -162,25 +241,46 @@ impl RootView {
         });
     }
 
+    /// 对所有内置源与自定义源发起一轮分层测速。
+    fn measure_all(&mut self, cx: &mut Context<Self>) {
+        let builtins = registry::builtins();
+        let builtin_ids: Vec<&str> = builtins.iter().map(|r| r.id).collect();
+        let targets: Vec<(String, String)> = builtins
+            .iter()
+            .map(|r| (r.id.to_string(), r.url.to_string()))
+            .chain(
+                self.app
+                    .read(cx)
+                    .state
+                    .customs
+                    .iter()
+                    .filter(|(id, _)| !builtin_ids.contains(&id.as_str()))
+                    .map(|(id, url)| (id.clone(), url.clone())),
+            )
+            .collect();
+
+        for (id, url) in targets {
+            self.measure(id, url, cx);
+        }
+    }
+
+    /// 对一个源执行四层探测，先置为进行中，完成后写入结果。
     fn measure(&mut self, id: String, url: String, cx: &mut Context<Self>) {
         self.app.update(cx, |model, cx| {
-            model.state.latencies.insert(id.clone(), Latency::Measuring);
+            model.state.probes.insert(id.clone(), Probe::running());
             cx.notify();
         });
 
         cx.spawn(async move |view, cx| {
-            let result = cx
+            let report = cx
                 .background_executor()
-                .spawn(async move { net::measure_latency(&url) })
+                .spawn(async move { net::probe(&url) })
                 .await;
-            let latency = match result {
-                Ok(d) => Latency::Ok(d),
-                Err(e) => Latency::Err(e.to_string().into()),
-            };
+            let probe = Probe::from_report(report);
 
             let _ = view.update(cx, |view, cx| {
                 view.app.update(cx, |model, cx| {
-                    model.state.latencies.insert(id, latency);
+                    model.state.probes.insert(id.clone(), probe);
                     cx.notify();
                 });
             });
@@ -188,22 +288,65 @@ impl RootView {
         .detach();
     }
 
-    /// 单个源的测速状态展示：进行中 / 成功 / 失败。
-    fn render_latency(&self, id: &str, cx: &mut Context<Self>) -> AnyElement {
-        let latency = self.app.read(cx).state.latencies.get(id);
-        let Some(text) = latency_text(latency) else {
+    /// 单个源的四个步骤：步骤之间用贯通上下的分隔线隔开，并各自带状态 tips。
+    fn render_probe(&self, id: &str, cx: &mut Context<Self>) -> AnyElement {
+        let Some(probe) = self.app.read(cx).state.probes.get(id).cloned() else {
             return div().into_any_element();
         };
-        let color = match latency {
-            Some(Latency::Measuring) => cx.theme().muted,
-            Some(Latency::Ok(_)) => cx.theme().success,
-            Some(Latency::Err(_)) => cx.theme().danger,
-            None => cx.theme().muted,
-        };
 
-        Label::new(text)
-            .text_color(color)
-            .text_sm()
+        let steps = [
+            ("🔌", "TCP 连通", &probe.tcp),
+            ("🌐", "HTTP 索引探测", &probe.http),
+            ("📄", "索引文件解析", &probe.parse),
+            ("⬇️", "下载端点速度", &probe.download),
+        ];
+
+        let mut row = h_flex().items_stretch().gap_3().self_stretch();
+        for (index, (icon, title, level)) in steps.iter().enumerate() {
+            if index > 0 {
+                // 贯通列表项上下的分隔线：负外边距让它延伸进行内边距。
+                row = row.child(
+                    div()
+                        .w(px(1.))
+                        .self_stretch()
+                        .mt(-px(12.))
+                        .mb(-px(12.))
+                        .bg(cx.theme().border),
+                );
+            }
+            row = row.child(self.render_step(id, index, icon, title, level, cx));
+        }
+        row.into_any_element()
+    }
+
+    /// 渲染单个步骤：图标 + 状态/耗时文字，悬停显示状态说明。
+    fn render_step(
+        &self,
+        row_id: &str,
+        index: usize,
+        icon: &'static str,
+        title: &'static str,
+        level: &Level,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let (text, tone) = level_display(level);
+        let color = match tone {
+            LevelTone::Passed => cx.theme().success,
+            LevelTone::Failed => cx.theme().danger,
+            LevelTone::Pending => cx.theme().muted_foreground,
+            LevelTone::Skipped => cx.theme().muted_foreground.alpha(0.35),
+        };
+        let tip = level_tip(title, level);
+
+        v_flex()
+            .justify_center()
+            .id(format!("probe-{row_id}-{index}"))
+            .tooltip(move |_, cx| cx.new(|_| Tooltip::new(tip.clone())).into())
+            .child(
+                Label::new(format!("{icon} {text}"))
+                    .text_color(color)
+                    .text_sm(),
+            )
             .into_any_element()
     }
 
@@ -275,16 +418,8 @@ impl RootView {
                             .ml_auto()
                             .items_center()
                             .gap_3()
-                            .child(self.render_latency(r.id, cx))
-                            .child(
-                                Button::new(format!("test-{}", r.id))
-                                    .label("测速")
-                                    .ghost()
-                                    .on_click(cx.listener(move |view, _ev, _window, cx| {
-                                        let url = r.url.to_string();
-                                        view.measure(r.id.to_string(), url, cx);
-                                    })),
-                            )
+                            .self_stretch()
+                            .child(self.render_probe(r.id, cx))
                             .child({
                                 if is_current {
                                     Label::new("✅").text_xl().into_any_element()
@@ -407,19 +542,8 @@ impl RootView {
                             .ml_auto()
                             .items_center()
                             .gap_3()
-                            .child(self.render_latency(&id, cx))
-                            .child(
-                                Button::new(format!("test-custom-{id}"))
-                                    .label("测速")
-                                    .ghost()
-                                    .on_click(cx.listener({
-                                        let test_id = id.clone();
-                                        let test_url = url.clone();
-                                        move |view, _ev, _window, cx| {
-                                            view.measure(test_id.clone(), test_url.clone(), cx);
-                                        }
-                                    })),
-                            )
+                            .self_stretch()
+                            .child(self.render_probe(&id, cx))
                             .child({
                                 if is_current {
                                     Label::new("✅").text_xl().into_any_element()
@@ -513,10 +637,15 @@ impl RootView {
                                     format!("sparse+https://{url}/")
                                 };
                                 model.state.customs.insert(id.clone(), url);
-                                model.state.selected = id.into();
+                                model.state.selected = id.clone().into();
                                 model.state.status = Status::Success("已添加自定义源".into());
                                 cx.notify();
                             });
+                            // 新增源立即触发一次分层测速。
+                            if let Some(probe_url) = view.app.read(cx).state.customs.get(&id).cloned()
+                            {
+                                view.measure(id.clone(), probe_url, cx);
+                            }
                             view.new_id_input
                                 .update(cx, |state, cx| state.set_value("", window, cx));
                             view.new_url_input
@@ -616,62 +745,72 @@ impl Render for RootView {
 mod tests {
     use super::*;
 
-    #[test]
-    fn latency_text_is_none_before_measuring() {
-        assert_eq!(latency_text(None), None);
-    }
-
-    #[test]
-    fn latency_text_shows_progress_while_measuring() {
-        assert_eq!(
-            latency_text(Some(&Latency::Measuring)).as_deref(),
-            Some("测速中…")
-        );
-    }
-
-    #[test]
-    fn latency_text_formats_success_as_milliseconds() {
-        let cases = [
-            (Duration::from_millis(42), "42 ms"),
-            (Duration::from_secs(1), "1000 ms"),
-            (Duration::from_micros(400), "0 ms"),
-        ];
-        for (duration, expected) in cases {
-            assert_eq!(
-                latency_text(Some(&Latency::Ok(duration))).as_deref(),
-                Some(expected)
-            );
+    fn probe(tcp: Level, http: Level, parse: Level, download: Level) -> Probe {
+        Probe {
+            tcp,
+            http,
+            parse,
+            download,
         }
     }
 
     #[test]
-    fn latency_text_keeps_short_error_intact() {
-        let latency = Latency::Err("HTTP 502".into());
+    fn passed_step_shows_its_duration() {
+        let (text, tone) = level_display(&Level::Passed("12 ms".into()));
+        assert_eq!(text, "12 ms");
+        assert_eq!(tone, LevelTone::Passed);
+    }
+
+    #[test]
+    fn failed_step_is_red_and_truncated() {
+        let long: SharedString = "x".repeat(30).into();
+        let (text, tone) = level_display(&Level::Failed(long));
+        assert_eq!(text, format!("{}…", "x".repeat(24)));
+        assert_eq!(tone, LevelTone::Failed);
+    }
+
+    #[test]
+    fn skipped_step_has_no_detail() {
+        let (text, tone) = level_display(&Level::Skipped);
+        assert_eq!(text, "—");
+        assert_eq!(tone, LevelTone::Skipped);
+    }
+
+    #[test]
+    fn running_step_shows_hourglass() {
+        let (text, tone) = level_display(&Level::Running);
+        assert_eq!(text, "⏳");
+        assert_eq!(tone, LevelTone::Pending);
+    }
+
+    #[test]
+    fn shorten_counts_chars_not_bytes() {
+        assert_eq!(shorten("连接超时", 3), "连接超…");
+        assert_eq!(shorten("abc", 3), "abc");
+    }
+
+    #[test]
+    fn maps_net_layers_to_ui_levels() {
+        assert_eq!(Level::from_layer(net::Layer::Skipped), Level::Skipped);
         assert_eq!(
-            latency_text(Some(&latency)).as_deref(),
-            Some("失败：HTTP 502")
+            Level::from_layer(net::Layer::Passed("ok".into())),
+            Level::Passed("ok".into())
+        );
+        assert_eq!(
+            Level::from_layer(net::Layer::Failed("boom".into())),
+            Level::Failed("boom".into())
         );
     }
 
     #[test]
-    fn latency_text_truncates_long_error() {
-        let long: SharedString = "x".repeat(30).into();
-        let latency = Latency::Err(long);
-        let expected = format!("失败：{}…", "x".repeat(24));
-        assert_eq!(latency_text(Some(&latency)), Some(expected));
-    }
-
-    #[test]
-    fn latency_text_does_not_truncate_exact_limit() {
-        let exact: SharedString = "y".repeat(24).into();
-        let latency = Latency::Err(exact);
-        let expected = format!("失败：{}", "y".repeat(24));
-        assert_eq!(latency_text(Some(&latency)), Some(expected));
-    }
-
-    #[test]
-    fn truncate_detail_counts_chars_not_bytes() {
-        assert_eq!(truncate_detail("连接超时", 3), "连接超…");
-        assert_eq!(truncate_detail("abc", 3), "abc");
+    fn probe_helper_builds_all_layers() {
+        let p = probe(
+            Level::Passed("12 ms".into()),
+            Level::Passed("30 ms".into()),
+            Level::Passed("1.0.0 · 34 ms".into()),
+            Level::Failed("timeout".into()),
+        );
+        assert_eq!(level_display(&p.tcp).1, LevelTone::Passed);
+        assert_eq!(level_display(&p.download).1, LevelTone::Failed);
     }
 }
