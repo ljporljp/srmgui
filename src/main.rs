@@ -157,16 +157,16 @@ fn text_width_estimate(text: &str, font_size: f32) -> f32 {
 }
 
 /// 固定宽度单行文本：放得下时省略号截断；放不下时循环滚动。
-/// 完整内容始终通过悬停 tips 提供。
+/// 悬停 tips 显示完整详情（可多于该行本身的内容）。
 fn scrolling_text(
     id: String,
     text: SharedString,
+    tip: SharedString,
     width: f32,
     font_size: f32,
     color: Hsla,
     semibold: bool,
 ) -> AnyElement {
-    let full = text.clone();
     let text_width = text_width_estimate(&text, font_size);
 
     let body = if text_width <= width {
@@ -210,7 +210,7 @@ fn scrolling_text(
         .flex_shrink_0()
         .overflow_hidden()
         .id(format!("text-{id}"))
-        .tooltip(move |_, cx| cx.new(|_| Tooltip::new(full.clone())).into())
+        .tooltip(move |_, cx| cx.new(|_| Tooltip::new(tip.clone())).into())
         .child(body)
         .into_any_element()
 }
@@ -695,6 +695,11 @@ impl RootView {
                 let id: SharedString = r.id.into();
                 let is_selected = selected == id;
                 let is_current = current.as_ref().map(|c| c.as_ref()) == Some(r.id);
+                let tip: SharedString = format!(
+                    "名称：{}\n说明：{}\nRegistry URL：{}",
+                    r.name, r.description, r.url
+                )
+                .into();
 
                 h_flex()
                     .id(format!("preset-{}", r.id))
@@ -723,18 +728,16 @@ impl RootView {
                             .child(h_flex().items_center().gap_2().child(scrolling_text(
                                 format!("name-{}", r.id),
                                 r.name.into(),
+                                tip.clone(),
                                 NAME_WIDTH,
                                 18.,
-                                if is_selected {
-                                    cx.theme().selection
-                                } else {
-                                    cx.theme().foreground
-                                },
+                                cx.theme().foreground,
                                 true,
                             )))
                             .child(scrolling_text(
                                 format!("desc-{}", r.id),
                                 r.description.into(),
+                                tip,
                                 NAME_WIDTH,
                                 14.,
                                 cx.theme().muted_foreground,
@@ -827,6 +830,8 @@ impl RootView {
                 let is_selected = selected.as_ref() == id;
                 let is_current = current.as_ref().map(|c| c.as_ref()) == Some(id.as_str());
                 let url_display = url.strip_prefix("sparse+").unwrap_or(&url).to_string();
+                let tip: SharedString =
+                    format!("标识名：{id}\nRegistry URL：{url}").into();
                 h_flex()
                     .id(format!("custom-{id}"))
                     .gap_2()
@@ -876,18 +881,16 @@ impl RootView {
                             .child(scrolling_text(
                                 format!("custom-name-{id}"),
                                 id.clone().into(),
+                                tip.clone(),
                                 NAME_WIDTH,
                                 16.,
-                                if is_selected {
-                                    cx.theme().selection
-                                } else {
-                                    cx.theme().foreground
-                                },
+                                cx.theme().foreground,
                                 true,
                             ))
                             .child(scrolling_text(
                                 format!("custom-url-{id}"),
                                 url_display.into(),
+                                tip,
                                 NAME_WIDTH,
                                 14.,
                                 cx.theme().muted_foreground,
