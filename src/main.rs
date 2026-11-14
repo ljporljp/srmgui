@@ -231,7 +231,7 @@ impl RootView {
                     .p_3()
                     .rounded_lg()
                     .bg(if is_selected {
-                        cx.theme().accent.alpha(0.15)
+                        cx.theme().accent.alpha(0.25)
                     } else {
                         cx.theme().transparent
                     })
@@ -248,7 +248,14 @@ impl RootView {
                                 h_flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(Label::new(r.name).text_lg().font_semibold())
+                                    .child(
+                                        Label::new(r.name)
+                                            .text_lg()
+                                            .font_semibold()
+                                            .when(is_selected, |l| {
+                                                l.text_color(cx.theme().accent)
+                                            }),
+                                    )
                                     .when(!status.is_empty(), |f| {
                                         f.child(
                                             Label::new(status)
@@ -259,7 +266,7 @@ impl RootView {
                             )
                             .child(
                                 Label::new(r.description)
-                                    .text_color(cx.theme().muted)
+                                    .text_color(cx.theme().muted_foreground)
                                     .text_sm(),
                             ),
                     )
@@ -276,6 +283,22 @@ impl RootView {
                                     .on_click(cx.listener(move |view, _ev, _window, cx| {
                                         let url = r.url.to_string();
                                         view.measure(r.id.to_string(), url, cx);
+                                    })),
+                            )
+                            .child(
+                                Button::new(format!("apply-{}", r.id))
+                                    .label("应用")
+                                    .when(is_selected, |b| b.primary().large())
+                                    .when(!is_selected, |b| b.secondary())
+                                    .on_click(cx.listener({
+                                        let apply_id = id.clone();
+                                        move |view, _ev, _window, cx| {
+                                            view.app.update(cx, |model, cx| {
+                                                model.state.selected = apply_id.clone();
+                                                cx.notify();
+                                            });
+                                            view.apply(cx);
+                                        }
                                     })),
                             ),
                     )
@@ -304,7 +327,7 @@ impl RootView {
                 .w_full()
                 .flex_1()
                 .min_h_0()
-                .child(Label::new("还没有自定义源，在下方添加").text_color(cx.theme().muted))
+                .child(Label::new("还没有自定义源，在下方添加").text_color(cx.theme().muted_foreground))
                 .overflow_y_scrollbar()
                 .into_any_element();
         }
@@ -325,7 +348,7 @@ impl RootView {
                     .p_3()
                     .rounded_lg()
                     .bg(if is_selected {
-                        cx.theme().accent.alpha(0.15)
+                        cx.theme().accent.alpha(0.25)
                     } else {
                         cx.theme().transparent
                     })
@@ -338,10 +361,14 @@ impl RootView {
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(Label::new(id.clone()).font_semibold())
+                            .child(
+                                Label::new(id.clone())
+                                    .font_semibold()
+                                    .when(is_selected, |l| l.text_color(cx.theme().accent)),
+                            )
                             .child(
                                 Label::new(url_display)
-                                    .text_color(cx.theme().muted)
+                                    .text_color(cx.theme().muted_foreground)
                                     .text_sm(),
                             ),
                     )
@@ -360,6 +387,22 @@ impl RootView {
                                         let test_url = url.clone();
                                         move |view, _ev, _window, cx| {
                                             view.measure(test_id.clone(), test_url.clone(), cx);
+                                        }
+                                    })),
+                            )
+                            .child(
+                                Button::new(format!("apply-custom-{id}"))
+                                    .label("应用")
+                                    .when(is_selected, |b| b.primary().large())
+                                    .when(!is_selected, |b| b.secondary())
+                                    .on_click(cx.listener({
+                                        let apply_id = id.clone();
+                                        move |view, _ev, _window, cx| {
+                                            view.app.update(cx, |model, cx| {
+                                                model.state.selected = apply_id.clone().into();
+                                                cx.notify();
+                                            });
+                                            view.apply(cx);
                                         }
                                     })),
                             )
@@ -461,7 +504,7 @@ impl RootView {
     fn render_status_bar(&self, cx: &mut Context<Self>) -> AnyElement {
         let status = &self.app.read(cx).state.status;
         let (text, color) = match status {
-            Status::Info(t) => (t.clone(), cx.theme().muted),
+            Status::Info(t) => (t.clone(), cx.theme().muted_foreground),
             Status::Success(t) => (t.clone(), cx.theme().success),
             Status::Error(t) => (t.clone(), cx.theme().danger),
         };
@@ -480,7 +523,6 @@ impl RootView {
 impl Render for RootView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.app.read(cx).state.theme_dark;
-        let selected = self.app.read(cx).state.selected.clone();
         let active_tab = self.app.read(cx).state.active_tab;
         let app = self.app.clone();
 
@@ -539,15 +581,6 @@ impl Render for RootView {
                             .child(self.render_add_form(cx))
                             .into_any_element()
                     }),
-            )
-            // Apply button
-            .child(
-                Button::new("apply")
-                    .label(format!("应用：切换到 {selected}"))
-                    .primary()
-                    .large()
-                    .on_click(cx.listener(|view, _ev, _window, cx| view.apply(cx)))
-                    .into_any_element(),
             )
             .child(self.render_status_bar(cx))
     }
