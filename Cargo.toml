@@ -1,0 +1,18 @@
+[package]
+name = "srmgui"
+version = "0.1.0"
+edition = "2024"
+description = "GUI tool to switch Rust Cargo registry mirrors, built with GPUI Kit"
+
+[dependencies]
+gpui-kit = "0.9"
+anyhow = "1"
+toml = "0.8"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "0.26"
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
+codegen-units = 1
