@@ -696,8 +696,8 @@ impl RootView {
                 let is_selected = selected == id;
                 let is_current = current.as_ref().map(|c| c.as_ref()) == Some(r.id);
                 let tip: SharedString = format!(
-                    "名称：{}\n说明：{}\nRegistry URL：{}",
-                    r.name, r.description, r.url
+                    "标识名：{}\n名称：{}\n说明：{}\nRegistry URL：{}",
+                    r.id, r.name, r.description, r.url
                 )
                 .into();
 
