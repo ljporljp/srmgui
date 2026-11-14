@@ -338,13 +338,18 @@ impl RootView {
                 .into_any_element();
         }
 
+        let builtin_ids: Vec<&str> = registry::builtins().iter().map(|r| r.id).collect();
         v_flex()
             .id("custom-list-scroll")
             .w_full()
             .flex_1()
             .min_h_0()
             .gap_2()
-            .children(customs.into_iter().map(|(id, url)| {
+            .children(
+                customs
+                    .into_iter()
+                    .filter(|(id, _)| !builtin_ids.contains(&id.as_str()))
+                    .map(|(id, url)| {
                 let is_selected = selected.as_ref() == id;
                 let is_current = current.as_ref().map(|c| c.as_ref()) == Some(id.as_str());
                 let url_display = url.strip_prefix("sparse+").unwrap_or(&url).to_string();
@@ -487,6 +492,14 @@ impl RootView {
                                 view.app.update(cx, |model, cx| {
                                     model.state.status =
                                         Status::Error(format!("「{id}」是内置源，不能覆盖").into());
+                                    cx.notify();
+                                });
+                                return;
+                            }
+                            if view.app.read(cx).state.customs.contains_key(&id) {
+                                view.app.update(cx, |model, cx| {
+                                    model.state.status =
+                                        Status::Error(format!("「{id}」已存在，请勿重复添加").into());
                                     cx.notify();
                                 });
                                 return;
