@@ -231,13 +231,17 @@ impl RootView {
                     .p_3()
                     .rounded_lg()
                     .bg(if is_selected {
-                        cx.theme().accent.alpha(0.25)
+                        cx.theme().selection.alpha(0.25)
+                    } else if is_current {
+                        cx.theme().success.alpha(0.20)
                     } else {
                         cx.theme().transparent
                     })
                     .border_1()
                     .border_color(if is_selected {
-                        cx.theme().accent
+                        cx.theme().selection
+                    } else if is_current {
+                        cx.theme().success
                     } else {
                         cx.theme().border
                     })
@@ -253,7 +257,7 @@ impl RootView {
                                             .text_lg()
                                             .font_semibold()
                                             .when(is_selected, |l| {
-                                                l.text_color(cx.theme().accent)
+                                                l.text_color(cx.theme().selection)
                                             }),
                                     )
                                     .when(!status.is_empty(), |f| {
@@ -318,8 +322,10 @@ impl RootView {
     }
 
     fn render_custom_list(&self, cx: &mut Context<Self>) -> AnyElement {
-        let customs = self.app.read(cx).state.customs.clone();
-        let selected = self.app.read(cx).state.selected.clone();
+        let state = &self.app.read(cx).state;
+        let customs = state.customs.clone();
+        let selected = state.selected.clone();
+        let current = state.current.clone();
 
         if customs.is_empty() {
             return v_flex()
@@ -340,6 +346,7 @@ impl RootView {
             .gap_2()
             .children(customs.into_iter().map(|(id, url)| {
                 let is_selected = selected.as_ref() == id;
+                let is_current = current.as_ref().map(|c| c.as_ref()) == Some(id.as_str());
                 let url_display = url.strip_prefix("sparse+").unwrap_or(&url).to_string();
                 h_flex()
                     .id(format!("custom-{id}"))
@@ -348,23 +355,44 @@ impl RootView {
                     .p_3()
                     .rounded_lg()
                     .bg(if is_selected {
-                        cx.theme().accent.alpha(0.25)
+                        cx.theme().selection.alpha(0.25)
+                    } else if is_current {
+                        cx.theme().success.alpha(0.20)
                     } else {
                         cx.theme().transparent
                     })
                     .border_1()
                     .border_color(if is_selected {
-                        cx.theme().accent
+                        cx.theme().selection
+                    } else if is_current {
+                        cx.theme().success
                     } else {
                         cx.theme().border
                     })
+                    .child(
+                        Button::new(format!("del-{id}"))
+                            .label("删除")
+                            .ghost()
+                            .on_click(cx.listener({
+                                let delete_id = id.clone();
+                                move |view, _ev, _window, cx| {
+                                    view.app.update(cx, |model, cx| {
+                                        model.state.customs.remove(&delete_id);
+                                        if model.state.selected.as_ref() == delete_id {
+                                            model.state.selected = "rsproxy".into();
+                                        }
+                                        cx.notify();
+                                    });
+                                }
+                            })),
+                    )
                     .child(
                         v_flex()
                             .gap_1()
                             .child(
                                 Label::new(id.clone())
                                     .font_semibold()
-                                    .when(is_selected, |l| l.text_color(cx.theme().accent)),
+                                    .when(is_selected, |l| l.text_color(cx.theme().selection)),
                             )
                             .child(
                                 Label::new(url_display)
@@ -403,23 +431,6 @@ impl RootView {
                                                 cx.notify();
                                             });
                                             view.apply(cx);
-                                        }
-                                    })),
-                            )
-                            .child(
-                                Button::new(format!("del-{id}"))
-                                    .label("删除")
-                                    .ghost()
-                                    .on_click(cx.listener({
-                                        let delete_id = id.clone();
-                                        move |view, _ev, _window, cx| {
-                                            view.app.update(cx, |model, cx| {
-                                                model.state.customs.remove(&delete_id);
-                                                if model.state.selected.as_ref() == delete_id {
-                                                    model.state.selected = "rsproxy".into();
-                                                }
-                                                cx.notify();
-                                            });
                                         }
                                     })),
                             ),
