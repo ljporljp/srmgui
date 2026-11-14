@@ -12,6 +12,7 @@ use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::label::Label;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tab::{Tab, TabBar};
+use gpui_kit::assets::IconName;
 use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{AnyElement, App, Entity, SharedString, Window, WindowOptions, actions, div};
@@ -232,16 +233,12 @@ impl RootView {
                     .rounded_lg()
                     .bg(if is_selected {
                         cx.theme().selection.alpha(0.25)
-                    } else if is_current {
-                        cx.theme().success.alpha(0.20)
                     } else {
                         cx.theme().transparent
                     })
                     .border_1()
                     .border_color(if is_selected {
                         cx.theme().selection
-                    } else if is_current {
-                        cx.theme().success
                     } else {
                         cx.theme().border
                     })
@@ -289,22 +286,30 @@ impl RootView {
                                         view.measure(r.id.to_string(), url, cx);
                                     })),
                             )
-                            .child(
-                                Button::new(format!("apply-{}", r.id))
-                                    .label("应用")
-                                    .when(is_selected, |b| b.primary().large())
-                                    .when(!is_selected, |b| b.secondary())
-                                    .on_click(cx.listener({
-                                        let apply_id = id.clone();
-                                        move |view, _ev, _window, cx| {
-                                            view.app.update(cx, |model, cx| {
-                                                model.state.selected = apply_id.clone();
-                                                cx.notify();
-                                            });
-                                            view.apply(cx);
-                                        }
-                                    })),
-                            ),
+                            .child({
+                                if is_current {
+                                    Button::new(format!("applied-{}", r.id))
+                                        .icon(IconName::Check)
+                                        .success()
+                                        .into_any_element()
+                                } else {
+                                    Button::new(format!("apply-{}", r.id))
+                                        .label("应用")
+                                        .when(is_selected, |b| b.primary().large())
+                                        .when(!is_selected, |b| b.secondary())
+                                        .on_click(cx.listener({
+                                            let apply_id = id.clone();
+                                            move |view, _ev, _window, cx| {
+                                                view.app.update(cx, |model, cx| {
+                                                    model.state.selected = apply_id.clone();
+                                                    cx.notify();
+                                                });
+                                                view.apply(cx);
+                                            }
+                                        }))
+                                        .into_any_element()
+                                }
+                            }),
                     )
                     .on_click(cx.listener({
                         let id = id.clone();
@@ -361,16 +366,12 @@ impl RootView {
                     .rounded_lg()
                     .bg(if is_selected {
                         cx.theme().selection.alpha(0.25)
-                    } else if is_current {
-                        cx.theme().success.alpha(0.20)
                     } else {
                         cx.theme().transparent
                     })
                     .border_1()
                     .border_color(if is_selected {
                         cx.theme().selection
-                    } else if is_current {
-                        cx.theme().success
                     } else {
                         cx.theme().border
                     })
@@ -423,22 +424,30 @@ impl RootView {
                                         }
                                     })),
                             )
-                            .child(
-                                Button::new(format!("apply-custom-{id}"))
-                                    .label("应用")
-                                    .when(is_selected, |b| b.primary().large())
-                                    .when(!is_selected, |b| b.secondary())
-                                    .on_click(cx.listener({
-                                        let apply_id = id.clone();
-                                        move |view, _ev, _window, cx| {
-                                            view.app.update(cx, |model, cx| {
-                                                model.state.selected = apply_id.clone().into();
-                                                cx.notify();
-                                            });
-                                            view.apply(cx);
-                                        }
-                                    })),
-                            ),
+                            .child({
+                                if is_current {
+                                    Button::new(format!("applied-custom-{id}"))
+                                        .icon(IconName::Check)
+                                        .success()
+                                        .into_any_element()
+                                } else {
+                                    Button::new(format!("apply-custom-{id}"))
+                                        .label("应用")
+                                        .when(is_selected, |b| b.primary().large())
+                                        .when(!is_selected, |b| b.secondary())
+                                        .on_click(cx.listener({
+                                            let apply_id = id.clone();
+                                            move |view, _ev, _window, cx| {
+                                                view.app.update(cx, |model, cx| {
+                                                    model.state.selected = apply_id.clone().into();
+                                                    cx.notify();
+                                                });
+                                                view.apply(cx);
+                                            }
+                                        }))
+                                        .into_any_element()
+                                }
+                            }),
                     )
                     .on_click(cx.listener({
                         let id = id.clone();
