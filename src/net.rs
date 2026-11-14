@@ -10,6 +10,8 @@ use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned};
 const TIMEOUT: Duration = Duration::from_secs(8);
 /// 第 4 层下载测速的字节上限，避免定时测速产生过多流量。
 const DOWNLOAD_MAX_BYTES: usize = 512 * 1024;
+/// 最多的重定向跟随次数。
+const MAX_REDIRECTS: usize = 5;
 /// 用于索引解析与下载测速的示例 crate。
 const SAMPLE_CRATE: &str = "serde";
 
@@ -47,7 +49,7 @@ impl ProbeReport {
 /// 按层级探测一个 registry：
 /// 1. TCP 连通
 /// 2. HTTP 索引探测（GET config.json）
-/// 3. 索引文件解析（拉取 crate 索引项并提取版本，同时从 config.json 提取下载端点）
+/// 3. 解析 config.json 的下载端点并拉取 crate 索引项提取版本
 /// 4. 下载端点速度（从 dl 端点下载示例 crate，计算吞吐）
 ///
 /// 任一层失败时，后续层标记为 `Skipped`。
@@ -81,12 +83,12 @@ pub fn probe(registry_url: &str) -> ProbeReport {
     };
     report.http = Layer::Passed(format!("{} ms", started.elapsed().as_millis()));
 
-    // 第 3 层：索引文件解析
+    // 第 3 层：解析 config.json 并读取索引
     let started = Instant::now();
-    let dl = match json_string_field(&config_body, "dl") {
+    let dl = match download_base(&config_body) {
         Some(dl) => dl,
         None => {
-            report.parse = Layer::Failed("config.json 缺少 dl 字段".into());
+            report.parse = Layer::Failed("config.json 缺少 dl/api 字段".into());
             return report;
         }
     };
@@ -118,7 +120,12 @@ fn probe_tcp(target: &Target) -> std::io::Result<()> {
 
 /// 请求 sparse registry 的 `config.json`，返回响应正文。
 fn probe_config(target: &Target) -> std::io::Result<String> {
-    let resp = http_get(target, &join_path(&target.path, "config.json"), 256 * 1024)?;
+    let resp = http_get(
+        target,
+        &join_path(&target.path, "config.json"),
+        "text/plain",
+        256 * 1024,
+    )?;
     ensure_success(&resp.status)?;
     Ok(String::from_utf8_lossy(&resp.body).to_string())
 }
@@ -128,6 +135,7 @@ fn probe_index_version(target: &Target, krate: &str) -> std::io::Result<String> 
     let resp = http_get(
         target,
         &join_path(&target.path, &index_path(krate)),
+        "text/plain",
         512 * 1024,
     )?;
     ensure_success(&resp.status)?;
@@ -140,7 +148,7 @@ fn download_speed(dl: &str, krate: &str, version: &str) -> std::io::Result<(Dura
     let url = download_url(dl, krate, version);
     let target = parse(&url)?;
     let started = Instant::now();
-    let resp = http_get(&target, &target.path, DOWNLOAD_MAX_BYTES)?;
+    let resp = http_get(&target, &target.path, "*/*", DOWNLOAD_MAX_BYTES)?;
     let elapsed = started.elapsed();
     ensure_success(&resp.status)?;
     if resp.body.is_empty() {
@@ -152,7 +160,7 @@ fn download_speed(dl: &str, krate: &str, version: &str) -> std::io::Result<(Dura
 
 fn ensure_success(status: &str) -> std::io::Result<()> {
     match status.chars().next() {
-        Some('2') | Some('3') => Ok(()),
+        Some('2') => Ok(()),
         _ => Err(std::io::Error::other(format!("HTTP {status}"))),
     }
 }
@@ -177,21 +185,83 @@ fn index_path(krate: &str) -> String {
     }
 }
 
-/// 从 index 文件（每行一个 JSON）中取最后一行的 `vers`。
+/// 从 index 文件（每行一个 JSON）中取最后一条未 yank 的 `vers`。
 fn parse_latest_version(body: &str) -> Option<String> {
     body.lines()
         .rev()
         .filter(|line| !line.trim().is_empty())
+        .filter(|line| json_bool_field(line, "yanked") != Some(true))
         .find_map(|line| json_string_field(line, "vers"))
 }
 
 /// 极简 JSON 字符串字段提取（仅用于我们已知结构的响应）。
+///
+/// registry 的 `config.json` 带缩进（官方源即为多行格式），因此这里按
+/// JSON 语法容忍键、冒号、值之间的空白，而不是只匹配紧凑格式。
 fn json_string_field(json: &str, key: &str) -> Option<String> {
-    let needle = format!("\"{key}\":\"");
-    let start = json.find(&needle)? + needle.len();
-    let rest = &json[start..];
-    let end = rest.find('"')?;
-    Some(rest[..end].to_string())
+    let needle = format!("\"{key}\"");
+    let mut from = 0;
+    while let Some(pos) = json[from..].find(&needle) {
+        let after_key = from + pos + needle.len();
+        let rest = json[after_key..].trim_start();
+        if let Some(rest) = rest.strip_prefix(':') {
+            if let Some(rest) = rest.trim_start().strip_prefix('"') {
+                return parse_json_string(rest);
+            }
+        }
+        from = after_key;
+    }
+    None
+}
+
+/// 极简 JSON 布尔字段提取。
+fn json_bool_field(json: &str, key: &str) -> Option<bool> {
+    let needle = format!("\"{key}\"");
+    let pos = json.find(&needle)? + needle.len();
+    let rest = json[pos..].trim_start().strip_prefix(':')?.trim_start();
+    if rest.starts_with("true") {
+        Some(true)
+    } else if rest.starts_with("false") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// 读取 JSON 字符串内容（入参不含起始引号），并处理转义。
+fn parse_json_string(raw: &str) -> Option<String> {
+    let mut out = String::new();
+    let mut chars = raw.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => return Some(out),
+            '\\' => match chars.next()? {
+                '"' => out.push('"'),
+                '\\' => out.push('\\'),
+                '/' => out.push('/'),
+                'n' => out.push('\n'),
+                'r' => out.push('\r'),
+                't' => out.push('\t'),
+                'u' => {
+                    let hex: String = chars.by_ref().take(4).collect();
+                    out.push(char::from_u32(u32::from_str_radix(&hex, 16).ok()?)?);
+                }
+                _ => return None,
+            },
+            c => out.push(c),
+        }
+    }
+    None
+}
+
+/// 解析上传/下载端点：优先 `dl`；按 sparse 协议 `dl` 可省略，
+/// 此时由 `api` 派生 `{api}/api/v1/crates`。
+fn download_base(config: &str) -> Option<String> {
+    if let Some(dl) = json_string_field(config, "dl") {
+        return Some(dl);
+    }
+    let api = json_string_field(config, "api")?;
+    Some(format!("{}/api/v1/crates", api.trim_end_matches('/')))
 }
 
 /// 根据 config.json 的 `dl` 端点拼出某个 crate 版本的下载 URL。
@@ -218,28 +288,100 @@ fn tls_config() -> Arc<ClientConfig> {
 
 struct Response {
     status: String,
+    location: Option<String>,
     body: Vec<u8>,
 }
 
-/// 发送一个 `GET` 请求并读取响应（最多 `max_bytes` 字节）。
-fn http_get(target: &Target, path: &str, max_bytes: usize) -> std::io::Result<Response> {
-    let tcp = connect(&target.host, target.port, TIMEOUT)?;
+/// 发送一个 `GET` 请求并读取响应（最多 `max_bytes` 字节），自动跟随重定向。
+fn http_get(
+    target: &Target,
+    path: &str,
+    accept: &str,
+    max_bytes: usize,
+) -> std::io::Result<Response> {
+    let mut host = target.host.clone();
+    let mut port = target.port;
+    let mut https = target.https;
+    let mut path = path.to_string();
+
+    for _ in 0..=MAX_REDIRECTS {
+        let resp = http_get_once(&host, port, https, &path, accept, max_bytes)?;
+        if !is_redirect(&resp.status) {
+            return Ok(resp);
+        }
+        let location = resp
+            .location
+            .as_deref()
+            .ok_or_else(|| std::io::Error::other("重定向缺少 Location"))?;
+        let (next_host, next_port, next_https, next_path) =
+            resolve_location(&host, port, https, &path, location)?;
+        host = next_host;
+        port = next_port;
+        https = next_https;
+        path = next_path;
+    }
+    Err(std::io::Error::other(format!(
+        "重定向次数超过 {MAX_REDIRECTS} 次"
+    )))
+}
+
+fn is_redirect(status: &str) -> bool {
+    status.starts_with('3')
+}
+
+/// 解析 `Location`，支持绝对 URL 与相对当前请求路径的位置。
+fn resolve_location(
+    host: &str,
+    port: u16,
+    https: bool,
+    current_path: &str,
+    location: &str,
+) -> std::io::Result<(String, u16, bool, String)> {
+    if location.starts_with("http://") || location.starts_with("https://") {
+        let t = parse(location)?;
+        return Ok((t.host, t.port, t.https, t.path));
+    }
+    let path = if location.starts_with('/') {
+        location.to_string()
+    } else {
+        let dir = match current_path.rfind('/') {
+            Some(i) => &current_path[..=i],
+            None => "/",
+        };
+        format!("{dir}{location}")
+    };
+    Ok((host.to_string(), port, https, path))
+}
+
+fn http_get_once(
+    host: &str,
+    port: u16,
+    https: bool,
+    path: &str,
+    accept: &str,
+    max_bytes: usize,
+) -> std::io::Result<Response> {
+    let tcp = connect(host, port, TIMEOUT)?;
     tcp.set_read_timeout(Some(TIMEOUT))?;
     tcp.set_write_timeout(Some(TIMEOUT))?;
 
+    let host_header = if (https && port == 443) || (!https && port == 80) {
+        host.to_string()
+    } else {
+        format!("{host}:{port}")
+    };
     let request = format!(
         "GET {path} HTTP/1.1\r\n\
-         Host: {}\r\n\
+         Host: {host_header}\r\n\
          User-Agent: cargo-mirror-switcher/0.1\r\n\
-         Accept: */*\r\n\
+         Accept: {accept}\r\n\
          Accept-Encoding: identity\r\n\
-         Connection: close\r\n\r\n",
-        target.host
+         Connection: close\r\n\r\n"
     );
 
-    let raw = if target.https {
+    let raw = if https {
         let config = tls_config();
-        let server_name = ServerName::try_from(target.host.as_str())
+        let server_name = ServerName::try_from(host)
             .map_err(std::io::Error::other)?
             .to_owned();
         let conn = ClientConnection::new(config, server_name).map_err(std::io::Error::other)?;
@@ -286,6 +428,13 @@ fn parse_response(raw: &[u8]) -> std::io::Result<Response> {
         .unwrap_or("000")
         .to_string();
 
+    let location = head.lines().skip(1).find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        name.trim()
+            .eq_ignore_ascii_case("location")
+            .then(|| value.trim().to_string())
+    });
+
     let lower = head.to_ascii_lowercase();
     let chunked = lower
         .lines()
@@ -294,7 +443,11 @@ fn parse_response(raw: &[u8]) -> std::io::Result<Response> {
         body = decode_chunked(&body);
     }
 
-    Ok(Response { status, body })
+    Ok(Response {
+        status,
+        location,
+        body,
+    })
 }
 
 fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
@@ -447,9 +600,52 @@ mod tests {
     }
 
     #[test]
+    fn extracts_json_string_field_from_pretty_json() {
+        let json = "{\n  \"dl\": \"https://static.crates.io/crates\",\n  \"api\": \"https://crates.io\"\n}";
+        assert_eq!(
+            json_string_field(json, "dl").as_deref(),
+            Some("https://static.crates.io/crates")
+        );
+        assert_eq!(
+            json_string_field(json, "api").as_deref(),
+            Some("https://crates.io")
+        );
+    }
+
+    #[test]
+    fn derives_download_base_from_api_when_dl_missing() {
+        let json = "{\n  \"api\": \"https://crates.io/\"\n}";
+        assert_eq!(
+            download_base(json).as_deref(),
+            Some("https://crates.io/api/v1/crates")
+        );
+        assert_eq!(download_base("{}"), None);
+    }
+
+    #[test]
     fn parses_latest_version_from_last_line() {
-        let body = "{\"vers\":\"1.0.0\"}\n{\"vers\":\"1.0.1\"}\n";
+        let body = "{\"vers\":\"1.0.0\",\"yanked\":false}\n{\"vers\":\"1.0.1\",\"yanked\":false}\n";
         assert_eq!(parse_latest_version(body).as_deref(), Some("1.0.1"));
+    }
+
+    #[test]
+    fn skips_yanked_versions() {
+        let body = "{\"vers\":\"1.0.0\",\"yanked\":false}\n{\"vers\":\"1.0.1\",\"yanked\":true}\n";
+        assert_eq!(parse_latest_version(body).as_deref(), Some("1.0.0"));
+    }
+
+    #[test]
+    fn resolves_relative_redirects() {
+        let (host, port, https, path) =
+            resolve_location("example.com", 443, true, "/index/config.json", "/cdn/a").unwrap();
+        assert_eq!(
+            (host.as_str(), port, https, path.as_str()),
+            ("example.com", 443, true, "/cdn/a")
+        );
+
+        let (_, _, _, path) =
+            resolve_location("example.com", 443, true, "/index/config.json", "a/b").unwrap();
+        assert_eq!(path, "/index/a/b");
     }
 
     #[test]
