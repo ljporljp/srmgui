@@ -12,7 +12,6 @@ use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::label::Label;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::assets::IconName;
 use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{AnyElement, App, Entity, SharedString, Window, WindowOptions, actions, div};
@@ -288,10 +287,7 @@ impl RootView {
                             )
                             .child({
                                 if is_current {
-                                    Button::new(format!("applied-{}", r.id))
-                                        .icon(IconName::Check)
-                                        .success()
-                                        .into_any_element()
+                                    Label::new("✅").text_xl().into_any_element()
                                 } else {
                                     Button::new(format!("apply-{}", r.id))
                                         .label("应用")
@@ -426,10 +422,7 @@ impl RootView {
                             )
                             .child({
                                 if is_current {
-                                    Button::new(format!("applied-custom-{id}"))
-                                        .icon(IconName::Check)
-                                        .success()
-                                        .into_any_element()
+                                    Label::new("✅").text_xl().into_any_element()
                                 } else {
                                     Button::new(format!("apply-custom-{id}"))
                                         .label("应用")
