@@ -19,8 +19,8 @@ use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::component::{Theme, ThemeMode};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    Animation, AnimationExt as _, AnyElement, App, Entity, Hsla, SharedString, Window,
-    WindowAppearance, WindowOptions, actions, div, px,
+    Animation, AnimationExt as _, AnyElement, App, Entity, Hsla, Image, ImageFormat, SharedString,
+    Window, WindowAppearance, WindowOptions, actions, div, img, px,
 };
 
 actions!(cargo_mirror_switcher, [Quit, ToggleTheme]);
@@ -212,6 +212,19 @@ fn scrolling_text(
         .id(format!("text-{id}"))
         .tooltip(move |_, cx| cx.new(|_| Tooltip::new(tip.clone())).into())
         .child(body)
+        .into_any_element()
+}
+
+/// 应用图标：编译期内嵌，不依赖运行时资源文件。
+fn logo_icon(size: f32) -> AnyElement {
+    let image = Image::from_bytes(
+        ImageFormat::Png,
+        include_bytes!("../assets/logo.png").to_vec(),
+    );
+    img(std::sync::Arc::new(image))
+        .w(px(size))
+        .h(px(size))
+        .flex_shrink_0()
         .into_any_element()
 }
 
@@ -1057,6 +1070,8 @@ impl Render for RootView {
                 // Header
                 h_flex()
                     .items_center()
+                    .gap_2()
+                    .child(logo_icon(30.))
                     .child(Label::new("Cargo 镜像源切换工具").text_xl().font_bold())
                     .child(
                         div().ml_auto().child(

@@ -11,6 +11,9 @@ toml = "0.8"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 webpki-roots = "0.26"
 
+[build-dependencies]
+embed-resource = "3"
+
 [profile.release]
 strip = true
 opt-level = "z"

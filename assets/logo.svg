@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- srmgui 应用图标：镜像切换环 + Cargo 包 -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#06B6D4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 渐变圆角背景 -->
+  <rect x="0" y="0" width="1024" height="1024" rx="236" ry="236" fill="url(#bg)"/>
+
+  <!-- 环形箭头（两段圆弧 + 箭头） -->
+  <g stroke="#FFFFFF" stroke-width="78" fill="none">
+    <path d="M 741.4 672.6 A 280 280 0 0 1 248.9 607.8"/>
+    <path d="M 282.6 351.4 A 280 280 0 0 1 775.1 416.2"/>
+  </g>
+  <g fill="#FFFFFF">
+    <polygon points="234.1,567.2 205.0,680.0 329.0,634.8"/>
+    <polygon points="789.9,456.8 819.1,344.0 695.1,389.2"/>
+  </g>
+
+  <!-- 中心立方体（Cargo 包） -->
+  <polygon points="512,352 662,427 512,502 362,427" fill="#FFFFFF"/>
+  <polygon points="362,427 512,502 512,672 362,597" fill="#DEE8FF"/>
+  <polygon points="662,427 512,502 512,672 662,597" fill="#B2C6F5"/>
+</svg>
