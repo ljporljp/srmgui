@@ -6,6 +6,8 @@ about:
   version: バージョン %{version}
   description: Rust Cargo のミラーを切り替えるデスクトップツール
   author: 作者
+  email: メール
+  copy_tip: クリップボードにコピー
   license: ライセンス
   homepage: プロジェクトページ
   ok: OK

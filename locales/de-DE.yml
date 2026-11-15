@@ -6,6 +6,8 @@ about:
   version: Version %{version}
   description: Ein kleines Desktop-Tool zum Umschalten der Rust-Cargo-Registry-Spiegel
   author: Autor
+  email: E-Mail
+  copy_tip: In die Zwischenablage kopieren
   license: Lizenz
   homepage: Projektseite
   ok: OK

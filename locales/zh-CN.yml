@@ -6,6 +6,8 @@ about:
   version: 版本 %{version}
   description: 用于切换 Rust Cargo 镜像源的桌面小工具
   author: 作者
+  email: 邮箱
+  copy_tip: 复制到剪贴板
   license: 许可证
   homepage: 项目主页
   ok: 确定

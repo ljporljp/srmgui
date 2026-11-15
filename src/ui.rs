@@ -3,11 +3,11 @@ use std::time::Duration;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::label::Label;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{ActiveTheme, StyledExt, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme, IconName, Sizable, StyledExt, WindowExt as _, h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    Animation, AnimationExt as _, AnyElement, App, Hsla, Image, ImageFormat, SharedString, Window,
-    div, img, px,
+    Animation, AnimationExt as _, AnyElement, App, ClipboardItem, Hsla, Image, ImageFormat,
+    SharedString, Window, div, img, px,
 };
 
 use crate::model::Level;
@@ -110,6 +110,7 @@ pub(crate) fn logo_icon(size: f32) -> AnyElement {
 pub(crate) fn open_about_dialog(window: &mut Window, cx: &mut App) {
     window.open_dialog(cx, |dialog, _window, cx| {
         let muted = cx.theme().muted_foreground;
+        let (author, email) = split_author(env!("CARGO_PKG_AUTHORS"));
         dialog
             .title(rust_i18n::t!("about.title").to_string())
             .w(px(420.))
@@ -149,9 +150,16 @@ pub(crate) fn open_about_dialog(window: &mut Window, cx: &mut App) {
                             .border_1()
                             .border_color(cx.theme().border)
                             .bg(cx.theme().muted)
-                            .child(about_row(
+                            .child(about_copy_row(
+                                "about-copy-author",
                                 rust_i18n::t!("about.author").to_string(),
-                                env!("CARGO_PKG_AUTHORS"),
+                                author,
+                                muted,
+                            ))
+                            .child(about_copy_row(
+                                "about-copy-email",
+                                rust_i18n::t!("about.email").to_string(),
+                                email,
                                 muted,
                             ))
                             .child(about_row(
@@ -206,6 +214,37 @@ fn about_row(label: String, value: &'static str, muted: Hsla) -> AnyElement {
         .child(Label::new(label).text_sm().text_color(muted).w(px(64.)))
         .child(div().flex_1().text_sm().child(value))
         .into_any_element()
+}
+
+/// 「关于」窗口中可单值复制的信息行：右侧按钮将该行内容写入剪贴板。
+fn about_copy_row(id: &'static str, label: String, value: &'static str, muted: Hsla) -> AnyElement {
+    h_flex()
+        .w_full()
+        .items_center()
+        .gap_2()
+        .child(Label::new(label).text_sm().text_color(muted).w(px(64.)))
+        .child(div().flex_1().text_sm().child(value))
+        .child(
+            Button::new(id)
+                .icon(IconName::Copy)
+                .tooltip(rust_i18n::t!("about.copy_tip").to_string())
+                .small()
+                .ghost()
+                .on_click(|_, _, cx| {
+                    cx.write_to_clipboard(ClipboardItem::new_string(value.to_string()))
+                }),
+        )
+        .into_any_element()
+}
+
+/// 拆分 `CARGO_PKG_AUTHORS`（`姓名 <邮箱>` 格式）为姓名与邮箱。
+fn split_author(authors: &'static str) -> (&'static str, &'static str) {
+    match (authors.find('<'), authors.find('>')) {
+        (Some(start), Some(end)) if start < end => {
+            (authors[..start].trim(), authors[start + 1..end].trim())
+        }
+        _ => (authors, ""),
+    }
 }
 
 /// 贯通列表项上下的竖直分隔线（负外边距延伸进行内边距）。

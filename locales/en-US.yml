@@ -6,6 +6,8 @@ about:
   version: Version %{version}
   description: A tiny desktop tool for switching Rust Cargo registry mirrors
   author: Author
+  email: Email
+  copy_tip: Copy to clipboard
   license: License
   homepage: Homepage
   ok: OK

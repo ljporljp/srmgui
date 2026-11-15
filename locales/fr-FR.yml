@@ -6,6 +6,8 @@ about:
   version: Version %{version}
   description: Un petit outil de bureau pour changer de miroir Cargo (Rust)
   author: Auteur
+  email: E-mail
+  copy_tip: Copier dans le presse-papiers
   license: Licence
   homepage: Page du projet
   ok: OK

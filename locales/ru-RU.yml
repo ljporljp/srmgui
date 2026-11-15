@@ -6,6 +6,8 @@ about:
   version: Версия %{version}
   description: Небольшое настольное приложение для переключения зеркал Rust Cargo
   author: Автор
+  email: Эл. почта
+  copy_tip: Скопировать в буфер обмена
   license: Лицензия
   homepage: Страница проекта
   ok: ОК

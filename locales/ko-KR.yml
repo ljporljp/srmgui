@@ -6,6 +6,8 @@ about:
   version: 버전 %{version}
   description: Rust Cargo 미러를 전환하는 데스크톱 도구
   author: 작성자
+  email: 이메일
+  copy_tip: 클립보드에 복사
   license: 라이선스
   homepage: 프로젝트 홈페이지
   ok: 확인

@@ -6,6 +6,8 @@ about:
   version: Versión %{version}
   description: Una pequeña herramienta de escritorio para cambiar el espejo de Cargo (Rust)
   author: Autor
+  email: Correo electrónico
+  copy_tip: Copiar al portapapeles
   license: Licencia
   homepage: Página del proyecto
   ok: Aceptar
