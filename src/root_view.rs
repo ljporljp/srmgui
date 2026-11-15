@@ -288,10 +288,8 @@ impl RootView {
         let target_path = if project_scope {
             project_root.as_deref().map(config_io::project_config_path)
         } else {
-            // 全局配置固定写入 `config.toml`，与 write_config 的目标保持一致。
-            config_io::cargo_home()
-                .ok()
-                .map(|home| home.join("config.toml"))
+            // 与 write_config 的目标保持一致（旧版 `config` 优先于 `config.toml`）。
+            config_io::config_path().ok()
         };
         let target_display = target_path
             .as_ref()

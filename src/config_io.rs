@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use toml_edit::{DocumentMut, Item, Table, TableLike};
 
 /// 自定义源导出文件的扩展名。
 pub const SOURCES_EXTENSION: &str = "srmgui";
@@ -55,12 +56,23 @@ pub fn app_dir() -> Result<PathBuf> {
     Ok(home_dir()?.join("srmgui"))
 }
 
-/// Path to the active cargo config file (prefers `config.toml` over legacy `config`).
+/// 指定目录下 cargo 实际使用的配置文件。
+///
+/// cargo 同时支持无扩展名的 `config` 与 `config.toml`；两者都存在时以
+/// `config` 为准（见 cargo 配置文档）。读写必须落在同一个文件上，
+/// 否则写入 `config.toml` 后 cargo 仍会读取旧的 `config`，配置不生效。
+fn config_file_in(dir: &Path) -> PathBuf {
+    let legacy = dir.join("config");
+    if legacy.is_file() {
+        legacy
+    } else {
+        dir.join("config.toml")
+    }
+}
+
+/// 全局 cargo 配置文件路径（`$CARGO_HOME` 下）。
 pub fn config_path() -> Result<PathBuf> {
-    let home = cargo_home()?;
-    let toml = home.join("config.toml");
-    let legacy = home.join("config");
-    Ok(if toml.exists() { toml } else { legacy })
+    Ok(config_file_in(&cargo_home()?))
 }
 
 /// 自定义源元数据文件路径（存放 name / description 等 cargo config 无法承载的信息）。
@@ -138,9 +150,9 @@ pub fn write_settings(settings: &Settings) -> Result<()> {
     Ok(())
 }
 
-/// 项目级 cargo 配置路径：`<项目根>/.cargo/config.toml`。
+/// 项目级 cargo 配置路径：`<项目根>/.cargo/config.toml`（存在旧版 `config` 时优先用它）。
 pub fn project_config_path(root: &Path) -> PathBuf {
-    root.join(".cargo").join("config.toml")
+    config_file_in(&root.join(".cargo"))
 }
 
 /// 从给定目录向上查找最近的 `Cargo.toml`，返回它所在的目录。
@@ -448,7 +460,7 @@ fn quote(value: &str) -> String {
 
 /// Write the new global config, keeping a `.bak` of the previous file.
 pub fn write_config(content: &str) -> Result<PathBuf> {
-    let path = cargo_home()?.join("config.toml");
+    let path = config_path()?;
     write_config_file(&path, content)?;
     Ok(path)
 }
@@ -460,22 +472,96 @@ pub fn write_project_config(root: &Path, content: &str) -> Result<PathBuf> {
     Ok(path)
 }
 
-/// 写入配置文件：自动创建父目录，并在覆盖前备份为 `config.toml.bak`。
+/// 写入配置文件：自动创建父目录，并在覆盖前备份为 `.bak`。
+///
+/// `content` 只包含 srmgui 负责的键（`[source.*]` 与 `[net]`），写入时与
+/// 现有文件合并，保留其中其他配置和注释（如链接器、`[build]`、用户自定义源），
+/// 避免整文件覆盖造成误删。
 fn write_config_file(path: &Path, content: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).with_context(|| {
             rust_i18n::t!("error.create_dir", path = parent.display().to_string()).to_string()
         })?;
     }
+
+    let existing = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(err) => {
+            return Err(err).with_context(|| {
+                rust_i18n::t!("error.read_file", path = path.display().to_string()).to_string()
+            });
+        }
+    };
+
+    let managed: DocumentMut = content
+        .parse()
+        .with_context(|| rust_i18n::t!("error.parse_cargo_config").to_string())?;
+    let mut merged = if existing.trim().is_empty() {
+        DocumentMut::new()
+    } else {
+        // 现有文件无法解析时直接报错，不做覆盖以免丢失用户配置。
+        existing
+            .parse::<DocumentMut>()
+            .with_context(|| rust_i18n::t!("error.parse_cargo_config").to_string())?
+    };
+    merge_managed(&mut merged, &managed);
+
     if path.exists() {
         let mut backup = path.as_os_str().to_os_string();
         backup.push(".bak");
         let _ = std::fs::copy(path, PathBuf::from(backup));
     }
-    std::fs::write(path, content).with_context(|| {
+    std::fs::write(path, merged.to_string()).with_context(|| {
         rust_i18n::t!("error.write_file", path = path.display().to_string()).to_string()
     })?;
     Ok(())
+}
+
+/// 把 srmgui 管理的配置合并进现有文档，其他内容保持不变。
+fn merge_managed(config: &mut DocumentMut, managed: &DocumentMut) {
+    merge_table(config.as_table_mut(), managed.as_table());
+
+    // `replace-with` 是唯一按需删除的键：选择官方源时生成内容里不含它，
+    // 这里同步移除，否则旧的镜像替换设置会继续生效。
+    let keep_replace = managed
+        .get("source")
+        .and_then(Item::as_table_like)
+        .and_then(|table| table.get("crates-io"))
+        .and_then(Item::as_table_like)
+        .is_some_and(|table| table.contains_key("replace-with"));
+    if !keep_replace {
+        if let Some(crates_io) = config
+            .get_mut("source")
+            .and_then(Item::as_table_like_mut)
+            .and_then(|table| table.get_mut("crates-io"))
+            .and_then(Item::as_table_like_mut)
+        {
+            crates_io.remove("replace-with");
+        }
+    }
+}
+
+/// 递归合并：同名表继续向下合并，其余键直接覆盖。
+fn merge_table(target: &mut dyn TableLike, source: &dyn TableLike) {
+    for (key, item) in source.iter() {
+        if let Some(table) = item.as_table_like() {
+            merge_table(ensure_table(target, key), table);
+        } else {
+            target.insert(key, item.clone());
+        }
+    }
+}
+
+/// 取得（必要时创建）`target` 下的同名子表。
+fn ensure_table<'a>(target: &'a mut dyn TableLike, key: &str) -> &'a mut dyn TableLike {
+    if !target.get(key).is_some_and(Item::is_table_like) {
+        target.insert(key, Item::Table(Table::new()));
+    }
+    target
+        .get_mut(key)
+        .and_then(Item::as_table_like_mut)
+        .expect("just inserted table")
 }
 
 #[cfg(test)]
@@ -608,6 +694,88 @@ mod tests {
 
         std::fs::write(&path, "[net]\ngit-fetch-with-cli = true\n").unwrap();
         assert_eq!(current_source_at(&path).unwrap(), Some("official".to_string()));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn config_file_prefers_legacy_config() {
+        let dir = std::env::temp_dir().join(format!("srmgui-legacy-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(config_file_in(&dir), dir.join("config.toml"));
+
+        std::fs::write(dir.join("config"), "[net]\n").unwrap();
+        assert_eq!(config_file_in(&dir), dir.join("config"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_config_merges_and_preserves_other_sections() {
+        let dir = std::env::temp_dir().join(format!("srmgui-merge-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        std::fs::write(
+            &path,
+            "# 用户注释\n[target.x86_64-pc-windows-msvc]\nlinker = \"rust-lld.exe\"\n\n\
+             [source.crates-io]\nreplace-with = \"old\"\n\n\
+             [source.old]\nregistry = \"sparse+https://old.example/index/\"\n",
+        )
+        .unwrap();
+
+        let managed = "[source.crates-io]\nreplace-with = \"rsproxy\"\n\n\
+                       [source.rsproxy]\nregistry = \"sparse+https://rsproxy.cn/index/\"\n\n\
+                       [net]\ngit-fetch-with-cli = true\n";
+        write_config_file(&path, managed).unwrap();
+
+        let out = std::fs::read_to_string(&path).unwrap();
+        assert!(out.contains("# 用户注释"));
+        assert!(out.contains("linker = \"rust-lld.exe\""));
+        assert!(out.contains("[source.old]"));
+        assert!(out.contains("registry = \"sparse+https://old.example/index/\""));
+        assert!(out.contains("replace-with = \"rsproxy\""));
+        assert!(out.contains("registry = \"sparse+https://rsproxy.cn/index/\""));
+        assert!(out.contains("git-fetch-with-cli = true"));
+        assert!(!out.contains("replace-with = \"old\""));
+        assert!(out.parse::<toml::Table>().is_ok());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn merge_removes_replace_with_when_official_selected() {
+        let dir = std::env::temp_dir().join(format!("srmgui-official-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        std::fs::write(
+            &path,
+            "[source.crates-io]\nreplace-with = \"rsproxy\"\n\n\
+             [source.rsproxy]\nregistry = \"sparse+https://rsproxy.cn/index/\"\n",
+        )
+        .unwrap();
+
+        write_config_file(&path, "[source.crates-io]\n\n[net]\ngit-fetch-with-cli = true\n").unwrap();
+
+        let out = std::fs::read_to_string(&path).unwrap();
+        assert!(!out.contains("replace-with"));
+        // 其他源的配置保留
+        assert!(out.contains("registry = \"sparse+https://rsproxy.cn/index/\""));
+        assert!(out.contains("git-fetch-with-cli = true"));
+        assert!(out.parse::<toml::Table>().is_ok());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_config_refuses_to_overwrite_invalid_file() {
+        let dir = std::env::temp_dir().join(format!("srmgui-invalid-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        std::fs::write(&path, "not = [valid\n").unwrap();
+
+        let managed = "[source.crates-io]\nreplace-with = \"rsproxy\"\n";
+        assert!(write_config_file(&path, managed).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "not = [valid\n");
 
         let _ = std::fs::remove_dir_all(&dir);
     }

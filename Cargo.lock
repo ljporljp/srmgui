@@ -5953,6 +5953,7 @@ dependencies = [
  "rustls",
  "rustls-native-certs",
  "toml 0.8.23",
+ "toml_edit 0.22.27",
  "webpki-roots 0.26.11",
 ]
 
