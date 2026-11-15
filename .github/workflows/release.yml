@@ -89,7 +89,7 @@ jobs:
           $version = "${{ steps.ver.outputs.version }}"
           $platform = "${{ matrix.platform }}"
           $stage = "stage/srmgui-$version-$platform"
-          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          New-Item -ItemType Directory -Path $stage, dist -Force | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/${{ matrix.bin }}" "$stage/"
           Copy-Item README.md, LICENSE "$stage/"
           Compress-Archive -Path "$stage/*" -DestinationPath "dist/srmgui-$version-$platform-portable.zip" -Force
