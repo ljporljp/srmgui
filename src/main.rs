@@ -1,8 +1,11 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod config_io;
+mod logger;
 mod net;
 mod registry;
+
+use logger::LogLevel;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -99,6 +102,29 @@ impl Probe {
             download: Level::from_layer(report.download),
         }
     }
+}
+
+/// 生成探测结果的单行摘要，用于日志记录。
+fn probe_summary(probe: &Probe) -> String {
+    let tcp = match &probe.tcp {
+        Level::Passed(d) => d.to_string(),
+        Level::Failed(e) => format!("失败:{e}"),
+        Level::Skipped => "跳过".into(),
+        Level::Running => "进行中".into(),
+    };
+    let http = match &probe.http {
+        Level::Passed(d) => d.to_string(),
+        Level::Failed(e) => format!("失败:{e}"),
+        Level::Skipped => "跳过".into(),
+        Level::Running => "进行中".into(),
+    };
+    let download = match &probe.download {
+        Level::Passed(d) => d.to_string(),
+        Level::Failed(e) => format!("失败:{e}"),
+        Level::Skipped => "跳过".into(),
+        Level::Running => "进行中".into(),
+    };
+    format!("TCP={tcp} | HTTP={http} | 下载={download}")
 }
 
 /// 单个步骤的展示文字与语义状态。
@@ -371,6 +397,7 @@ fn main() {
 struct RootView {
     app: Entity<CargoMirrorApp>,
     show_add_form: bool,
+    show_log_panel: bool,
     new_id_input: Entity<InputState>,
     new_name_input: Entity<InputState>,
     new_url_input: Entity<InputState>,
@@ -387,11 +414,14 @@ impl RootView {
         let view = Self {
             app,
             show_add_form: false,
+            show_log_panel: false,
             new_id_input,
             new_name_input,
             new_url_input,
             new_desc_input,
         };
+
+        logger::info("app", "srmgui 启动");
 
         // 启动时按当前选择应用主题，并在「跟随系统」时响应系统外观变化。
         let theme = view.app.read(cx).state.theme;
@@ -419,6 +449,8 @@ impl RootView {
         let selected: String = self.app.read(cx).state.selected.clone().into();
         let customs = self.app.read(cx).state.customs.clone();
 
+        logger::info("apply", format!("切换到源：{selected}"));
+
         // Offload config write to a thread so we never block the UI.
         let selected_for_write = selected.clone();
         thread::spawn(move || {
@@ -429,7 +461,10 @@ impl RootView {
                 let _ = config_io::write_customs(&customs);
                 Ok(())
             })();
-            result
+            match result {
+                Ok(_) => logger::info("apply", format!("配置已写入，源 {selected_for_write} 生效")),
+                Err(e) => logger::error("apply", format!("写入配置失败：{e:#}")),
+            }
         });
 
         // Update state synchronously for snappy feedback.
@@ -473,12 +508,24 @@ impl RootView {
             cx.notify();
         });
 
+        logger::info("probe", format!("开始测速 {id} ({url})"));
+
         cx.spawn(async move |view, cx| {
             let report = cx
                 .background_executor()
                 .spawn(async move { net::probe(&url) })
                 .await;
             let probe = Probe::from_report(report);
+
+            let summary = probe_summary(&probe);
+            match &probe.download {
+                Level::Failed(_) | Level::Skipped => {
+                    logger::warn("probe", format!("测速完成 {id}：{summary}"));
+                }
+                _ => {
+                    logger::info("probe", format!("测速完成 {id}：{summary}"));
+                }
+            }
 
             let _ = view.update(cx, |view, cx| {
                 view.app.update(cx, |model, cx| {
@@ -523,6 +570,8 @@ impl RootView {
 
     /// 从文件导入自定义源：跳过内置与已存在的标识，新增项立即测速。
     fn import_customs_from(&mut self, path: &Path, cx: &mut Context<Self>) {
+        logger::info("import", format!("开始导入文件：{}", path.display()));
+
         let imported = std::fs::read_to_string(path)
             .map_err(|error| format!("读取 {} 失败：{error}", path.display()))
             .and_then(|text| {
@@ -532,6 +581,7 @@ impl RootView {
         let imported = match imported {
             Ok(imported) => imported,
             Err(message) => {
+                logger::error("import", format!("导入失败：{message}"));
                 self.app.update(cx, |model, cx| {
                     model.state.status = Status::Error(message.into());
                     cx.notify();
@@ -575,6 +625,11 @@ impl RootView {
 
         // 持久化导入后的自定义源元数据
         let _ = config_io::write_customs(&self.app.read(cx).state.customs);
+
+        logger::info(
+            "import",
+            format!("导入完成：新增 {} 个，跳过 {} 个", added.len(), skipped),
+        );
 
         for (name, url) in added {
             self.measure(name, url, cx);
@@ -629,6 +684,16 @@ impl RootView {
             let count = customs.len();
             let text = config_io::export_customs(&customs);
             let result = std::fs::write(&target, text);
+            match &result {
+                Ok(()) => logger::info(
+                    "export",
+                    format!("已导出 {count} 个自定义源到 {}", target.display()),
+                ),
+                Err(error) => logger::error(
+                    "export",
+                    format!("写入 {} 失败：{error}", target.display()),
+                ),
+            }
             let _ = view.update(cx, |view, cx| {
                 view.app.update(cx, |model, cx| {
                     model.state.status = match result {
@@ -906,6 +971,7 @@ impl RootView {
                                     .on_click(cx.listener({
                                         let delete_id = id.clone();
                                         move |view, _ev, _window, cx| {
+                                            logger::info("custom", format!("删除自定义源：{delete_id}"));
                                             view.app.update(cx, |model, cx| {
                                                 model.state.customs.remove(&delete_id);
                                                 if model.state.selected.as_ref() == delete_id {
@@ -1010,6 +1076,7 @@ impl RootView {
                 .trim()
                 .to_string();
             if id.is_empty() || url.is_empty() {
+                logger::warn("custom", "添加自定义源失败：标识名或 URL 为空");
                 view.app.update(cx, |model, cx| {
                     model.state.status = Status::Error("标识名和 URL 都不能为空".into());
                     cx.notify();
@@ -1017,6 +1084,7 @@ impl RootView {
                 return;
             }
             if registry::builtins().iter().any(|r| r.id == id) {
+                logger::warn("custom", format!("添加失败：「{id}」是内置源"));
                 view.app.update(cx, |model, cx| {
                     model.state.status =
                         Status::Error(format!("「{id}」是内置源，不能覆盖").into());
@@ -1025,6 +1093,7 @@ impl RootView {
                 return;
             }
             if view.app.read(cx).state.customs.contains_key(&id) {
+                logger::warn("custom", format!("添加失败：「{id}」已存在"));
                 view.app.update(cx, |model, cx| {
                     model.state.status =
                         Status::Error(format!("「{id}」已存在，请勿重复添加").into());
@@ -1033,11 +1102,15 @@ impl RootView {
                 return;
             }
             let display_name = if name.is_empty() { id.clone() } else { name };
+            let normalized_url = normalize_registry_url(&url);
+            logger::info(
+                "custom",
+                format!("添加自定义源：{id} ({normalized_url})"),
+            );
             view.app.update(cx, |model, cx| {
-                let url = normalize_registry_url(&url);
                 model.state.customs.insert(
                     id.clone(),
-                    CustomSource::new(display_name, url, description),
+                    CustomSource::new(display_name, normalized_url, description),
                 );
                 model.state.selected = id.clone().into();
                 model.state.status = Status::Success("已添加自定义源".into());
@@ -1107,6 +1180,20 @@ impl RootView {
             Status::Success(t) => (t.clone(), cx.theme().success),
             Status::Error(t) => (t.clone(), cx.theme().danger),
         };
+        let log_btn = if self.show_log_panel {
+            Button::new("toggle-log")
+                .label("日志")
+                .primary()
+        } else {
+            Button::new("toggle-log")
+                .label("日志")
+                .secondary()
+        }
+        .on_click(cx.listener(|view, _ev, _window, cx| {
+            view.show_log_panel = !view.show_log_panel;
+            cx.notify();
+        }));
+
         h_flex()
             .p_3()
             .rounded_lg()
@@ -1114,8 +1201,76 @@ impl RootView {
             .border_1()
             .border_color(cx.theme().border)
             .w_full()
-            .child(Label::new(text).text_color(color))
+            .items_center()
+            .child(Label::new(text).text_color(color).flex_1())
+            .child(log_btn)
             .into_any()
+    }
+
+    /// 渲染底部滑出的日志面板，高度最多占窗口的 50%。
+    fn render_log_panel(&self, viewport_height: f32, cx: &mut Context<Self>) -> AnyElement {
+        let max_height = viewport_height * 0.5;
+        let entries = logger::logger().entries();
+        let log_dir = logger::logger().dir().display().to_string();
+
+        let body = if entries.is_empty() {
+            div()
+                .child(
+                    Label::new("暂无日志")
+                        .text_color(cx.theme().muted_foreground)
+                        .text_sm(),
+                )
+                .into_any_element()
+        } else {
+            // 最新的日志显示在最下方，自动滚动到底部由 overflow_y_scrollbar 处理。
+            v_flex()
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scrollbar()
+                .p_2()
+                .gap_1()
+                .children(entries.iter().map(|entry| {
+                    let color = match entry.level {
+                        LogLevel::Error => cx.theme().danger,
+                        LogLevel::Warn => cx.theme().warning,
+                        LogLevel::Info => cx.theme().foreground,
+                        LogLevel::Debug => cx.theme().muted_foreground,
+                    };
+                    Label::new(entry.format())
+                        .text_size(px(12.))
+                        .text_color(color)
+                        .whitespace_nowrap()
+                        .text_ellipsis()
+                        .into_any_element()
+                }))
+                .into_any_element()
+        };
+
+        v_flex()
+            .id("log-panel")
+            .w_full()
+            .h(px(max_height))
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded_lg()
+            .overflow_hidden()
+            .child(
+                h_flex()
+                    .p_2()
+                    .gap_2()
+                    .items_center()
+                    .bg(cx.theme().muted)
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(Label::new("日志").text_color(cx.theme().foreground).font_semibold())
+                    .child(
+                        Label::new(format!("日志目录：{log_dir}"))
+                            .text_color(cx.theme().muted_foreground)
+                            .text_sm(),
+                    ),
+            )
+            .child(body)
+            .into_any_element()
     }
 }
 
@@ -1125,6 +1280,7 @@ impl Render for RootView {
         let active_tab = self.app.read(cx).state.active_tab;
         let app = self.app.clone();
         let theme_app = self.app.clone();
+        let viewport_height = _window.viewport_size().height.as_f32();
 
         v_flex()
             .size_full()
@@ -1242,6 +1398,22 @@ impl Render for RootView {
                             .into_any_element()
                     }),
             )
+            .children(if self.show_log_panel {
+                vec![div()
+                    .id("log-panel-slide")
+                    .with_animation(
+                        "log-panel-slide-in",
+                        Animation::new(Duration::from_millis(220)),
+                        |this, delta| {
+                            this.opacity(delta)
+                                .mt(px(16.0 * (1.0 - delta)))
+                        },
+                    )
+                    .child(self.render_log_panel(viewport_height, cx))
+                    .into_any_element()]
+            } else {
+                vec![]
+            })
             .child(self.render_status_bar(cx))
     }
 }
