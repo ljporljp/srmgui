@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::config_io::CustomSource;
+
 /// One Cargo registry source.
 #[derive(Debug, Clone)]
 pub struct Registry {
@@ -61,7 +63,7 @@ pub fn builtins() -> Vec<Registry> {
 /// - Custom sources whose id collides with a built-in source are skipped,
 ///   since the built-in block is always emitted first. A duplicate
 ///   `[source.<id>]` section would produce invalid / redundant TOML.
-pub fn build_config(selected: &str, customs: &HashMap<String, String>) -> String {
+pub fn build_config(selected: &str, customs: &HashMap<String, CustomSource>) -> String {
     let mut out = String::new();
     out.push_str("[source.crates-io]\n");
     if selected != "official" {
@@ -80,15 +82,15 @@ pub fn build_config(selected: &str, customs: &HashMap<String, String>) -> String
         out.push_str(&format!("registry = \"{}\"\n\n", r.url));
     }
 
-    for (id, url) in customs {
+    for (id, src) in customs {
         // Skip customs that shadow a built-in id to avoid duplicate sections.
         if builtin_ids.contains(&id.as_str()) {
             continue;
         }
-        let url = if url.starts_with("sparse+") || url.starts_with("http") {
-            url.clone()
+        let url = if src.url.starts_with("sparse+") || src.url.starts_with("http") {
+            src.url.clone()
         } else {
-            format!("sparse+https://{url}/")
+            format!("sparse+https://{}/", src.url)
         };
         out.push_str(&format!("[source.{id}]\n"));
         out.push_str(&format!("registry = \"{url}\"\n\n"));

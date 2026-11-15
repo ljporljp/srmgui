@@ -38,29 +38,31 @@
 
 ### 自定义源
 
-在「自定义源」标签页填写标识名与 Registry URL 后点击「添加」。URL 若未带协议，会自动规范化为 `sparse+https://<host>/`。
+在「自定义源」标签页填写标识名、名称、Registry URL（说明可选）后点击「添加」。URL 若未带协议，会自动规范化为 `sparse+https://<host>/`。
 
 ### 导入 / 导出
 
-- **导出**：将当前所有非内置的自定义源保存为 `.srmgui` 文件（未写扩展名时自动补全）。
+- **导出**：将当前所有非内置的自定义源保存为 `.srmgui` 文件（未写扩展名时自动补全），包含标识名、名称、URL、说明。
 - **导入**：选择 `.srmgui` 文件，按以下规则合并：
   - 跳过与内置源同名的标识；
   - 跳过已存在的标识；
   - 新增项立即参与测速。
 
-`.srmgui` 是 srmgui 自定义的 TOML 格式：
+`.srmgui` 是 srmgui 自定义的 TOML 格式（v2）：
 
 ```toml
 # srmgui 自定义源文件，可通过 srmgui 导入
 format = "srmgui.sources"
-version = 1
+version = 2
 
 [[source]]
-name = "demo-src"
+id = "demo-src"
+name = "演示源"
 url = "sparse+https://demo.example.com/index/"
+description = "这是一个演示源"
 ```
 
-导入时会校验 `format` 与 `version`，`name` / `url` 缺一不可。
+导入时会校验 `format` 与 `version`，`id` / `url` 缺一不可；`name` 缺省时回退为 `id`，`description` 缺省为空。兼容 v1 格式（`name` 作为标识名）。
 
 ## 写入的配置
 
