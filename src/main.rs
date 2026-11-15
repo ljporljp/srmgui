@@ -172,6 +172,22 @@ fn with_sources_extension(path: &Path) -> PathBuf {
     }
 }
 
+/// 用系统文件管理器打开指定目录（跨平台）。
+fn open_in_file_manager(path: &Path) {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("explorer.exe").arg(path).spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(path).spawn();
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+    }
+}
+
 /// 粗估单行文字宽度（ASCII 按半个字宽计），用于判断是否会被截断。
 fn text_width_estimate(text: &str, font_size: f32) -> f32 {
     text.chars()
@@ -1276,11 +1292,27 @@ impl RootView {
                     .border_b_1()
                     .border_color(cx.theme().border)
                     .child(Label::new("日志").text_color(cx.theme().foreground).font_semibold())
-                    .child(
-                        Label::new(format!("日志目录：{log_dir}"))
-                            .text_color(cx.theme().muted_foreground)
-                            .text_sm(),
-                    ),
+                    .child({
+                        let log_dir_for_click = log_dir.clone();
+                        div()
+                            .id("log-dir-link")
+                            .cursor_pointer()
+                            .hover(|style| style.underline())
+                            .tooltip(move |_, cx| {
+                                cx.new(|_| {
+                                    Tooltip::new("点击在文件管理器中打开")
+                                })
+                                .into()
+                            })
+                            .on_click(cx.listener(move |_view, _ev, _window, _cx| {
+                                open_in_file_manager(Path::new(&log_dir_for_click));
+                            }))
+                            .child(
+                                Label::new(format!("日志目录：{log_dir}"))
+                                    .text_color(cx.theme().muted_foreground)
+                                    .text_sm(),
+                            )
+                    }),
             )
             .child(body)
             .into_any_element()
