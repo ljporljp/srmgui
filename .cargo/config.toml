@@ -1,0 +1,3 @@
+# Windows MSVC 目标使用 Rust 自带的 lld 链接器，链接速度明显快于 link.exe
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"

@@ -20,6 +20,14 @@ webpki-roots = "0.26"
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "3"
 
+[profile.dev]
+# 只保留行号级别的调试信息，减少调试信息生成与链接耗时（仍可定位到源码行）
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+# 第三方依赖不生成调试信息，显著缩短依赖编译时间
+debug = false
+
 [profile.release]
 strip = true
 opt-level = "z"
