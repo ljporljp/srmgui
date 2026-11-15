@@ -35,7 +35,7 @@ source:
   delete: 삭제
   tip: "ID: %{id}\n이름: %{name}\n설명: %{description}\n레지스트리 URL: %{url}"
   none: (없음)
-  empty: 사용자 정의 미러가 없습니다. 아래에서 추가하세요.
+  empty: 사용자 정의 미러가 없습니다. 추가하세요.
 
 add:
   label_id: ID

@@ -35,7 +35,7 @@ source:
   delete: Supprimer
   tip: "ID : %{id}\nNom : %{name}\nDescription : %{description}\nURL du registre : %{url}"
   none: (aucun)
-  empty: Aucun miroir personnalisé pour l’instant. Ajoutez-en un ci-dessous.
+  empty: Aucun miroir personnalisé pour l’instant. Veuillez en ajouter un.
 
 add:
   label_id: ID

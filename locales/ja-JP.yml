@@ -35,7 +35,7 @@ source:
   delete: 削除
   tip: "ID：%{id}\n名前：%{name}\n説明：%{description}\nレジストリ URL：%{url}"
   none: （なし）
-  empty: カスタムミラーはまだありません。下から追加してください。
+  empty: カスタムミラーはまだありません。追加してください。
 
 add:
   label_id: ID

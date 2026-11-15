@@ -35,7 +35,7 @@ source:
   delete: Delete
   tip: "ID: %{id}\nName: %{name}\nDescription: %{description}\nRegistry URL: %{url}"
   none: (none)
-  empty: No custom sources yet. Add one below.
+  empty: No custom sources yet. Please add one.
 
 add:
   label_id: ID

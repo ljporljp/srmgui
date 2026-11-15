@@ -35,7 +35,7 @@ source:
   delete: 删除
   tip: "标识名：%{id}\n名称：%{name}\n说明：%{description}\nRegistry URL：%{url}"
   none: （无）
-  empty: 还没有自定义源，在下方添加
+  empty: 还没有自定义源，请添加
 
 add:
   label_id: 标识名

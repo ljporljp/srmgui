@@ -35,7 +35,7 @@ source:
   delete: Eliminar
   tip: "ID: %{id}\nNombre: %{name}\nDescripción: %{description}\nURL del registro: %{url}"
   none: (ninguno)
-  empty: Aún no hay espejos personalizados. Añade uno abajo.
+  empty: Aún no hay espejos personalizados. Añade uno.
 
 add:
   label_id: ID

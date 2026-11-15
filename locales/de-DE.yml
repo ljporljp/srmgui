@@ -35,7 +35,7 @@ source:
   delete: Löschen
   tip: "ID: %{id}\nName: %{name}\nBeschreibung: %{description}\nRegistry-URL: %{url}"
   none: (keine)
-  empty: Noch keine benutzerdefinierten Spiegel. Fügen Sie unten einen hinzu.
+  empty: Noch keine benutzerdefinierten Spiegel. Bitte fügen Sie einen hinzu.
 
 add:
   label_id: ID
