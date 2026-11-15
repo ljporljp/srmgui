@@ -12,7 +12,7 @@ use std::time::Duration;
 use anyhow::Result;
 use config_io::CustomSource;
 use gpui_kit::PathPromptOptions;
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::label::Label;
 use gpui_kit::component::scroll::ScrollableElement;
@@ -370,6 +370,7 @@ fn main() {
 /// The single root view, split into three panels.
 struct RootView {
     app: Entity<CargoMirrorApp>,
+    show_add_form: bool,
     new_id_input: Entity<InputState>,
     new_name_input: Entity<InputState>,
     new_url_input: Entity<InputState>,
@@ -385,6 +386,7 @@ impl RootView {
         let new_desc_input = cx.new(|cx| InputState::new(window, cx).placeholder("可选，源的说明文字"));
         let view = Self {
             app,
+            show_add_form: false,
             new_id_input,
             new_name_input,
             new_url_input,
@@ -890,10 +892,17 @@ impl RootView {
                             .self_stretch()
                             .flex_shrink_0()
                             .items_center()
-                            .child(
+                            .child({
+                                let del_variant = ButtonCustomVariant::new(cx)
+                                    .color(cx.theme().transparent)
+                                    .foreground(cx.theme().foreground)
+                                    .hover(cx.theme().danger)
+                                    .active(cx.theme().danger);
                                 Button::new(format!("del-{id}"))
                                     .label("删除")
-                                    .ghost()
+                                    .custom(del_variant)
+                                    .border_1()
+                                    .border_color(cx.theme().danger)
                                     .on_click(cx.listener({
                                         let delete_id = id.clone();
                                         move |view, _ev, _window, cx| {
@@ -907,8 +916,8 @@ impl RootView {
                                             // 持久化删除后的自定义源
                                             let _ = config_io::write_customs(&view.app.read(cx).state.customs);
                                         }
-                                    })),
-                            ),
+                                    }))
+                            }),
                     )
                     .child(
                         v_flex()
@@ -990,8 +999,66 @@ impl RootView {
     }
 
     fn render_add_form(&self, cx: &mut Context<Self>) -> AnyElement {
+        let confirm_click = cx.listener(|view, _ev, window, cx| {
+            let id: String = view.new_id_input.read(cx).value().trim().to_string();
+            let name: String = view.new_name_input.read(cx).value().trim().to_string();
+            let url: String = view.new_url_input.read(cx).value().trim().to_string();
+            let description: String = view
+                .new_desc_input
+                .read(cx)
+                .value()
+                .trim()
+                .to_string();
+            if id.is_empty() || url.is_empty() {
+                view.app.update(cx, |model, cx| {
+                    model.state.status = Status::Error("标识名和 URL 都不能为空".into());
+                    cx.notify();
+                });
+                return;
+            }
+            if registry::builtins().iter().any(|r| r.id == id) {
+                view.app.update(cx, |model, cx| {
+                    model.state.status =
+                        Status::Error(format!("「{id}」是内置源，不能覆盖").into());
+                    cx.notify();
+                });
+                return;
+            }
+            if view.app.read(cx).state.customs.contains_key(&id) {
+                view.app.update(cx, |model, cx| {
+                    model.state.status =
+                        Status::Error(format!("「{id}」已存在，请勿重复添加").into());
+                    cx.notify();
+                });
+                return;
+            }
+            let display_name = if name.is_empty() { id.clone() } else { name };
+            view.app.update(cx, |model, cx| {
+                let url = normalize_registry_url(&url);
+                model.state.customs.insert(
+                    id.clone(),
+                    CustomSource::new(display_name, url, description),
+                );
+                model.state.selected = id.clone().into();
+                model.state.status = Status::Success("已添加自定义源".into());
+                cx.notify();
+            });
+            let _ = config_io::write_customs(&view.app.read(cx).state.customs);
+            if let Some(src) = view.app.read(cx).state.customs.get(&id).cloned() {
+                view.measure(id.clone(), src.url, cx);
+            }
+            view.new_id_input.update(cx, |s, cx| s.set_value("", window, cx));
+            view.new_name_input.update(cx, |s, cx| s.set_value("", window, cx));
+            view.new_url_input.update(cx, |s, cx| s.set_value("", window, cx));
+            view.new_desc_input.update(cx, |s, cx| s.set_value("", window, cx));
+        });
+
         v_flex()
             .gap_3()
+            .p_3()
+            .rounded_lg()
+            .border_1()
+            .border_color(cx.theme().border)
             .child(
                 h_flex()
                     .gap_2()
@@ -1000,111 +1067,35 @@ impl RootView {
                             .gap_1()
                             .flex_1()
                             .child(Label::new("标识名").text_sm())
-                            .child(Input::new(&self.new_id_input).id("custom-id")),
+                            .child(Input::new(&self.new_id_input).id("custom-id").text_color(cx.theme().foreground)),
                     )
                     .child(
                         v_flex()
                             .gap_1()
                             .flex_1()
                             .child(Label::new("名称").text_sm())
-                            .child(Input::new(&self.new_name_input).id("custom-name")),
+                            .child(Input::new(&self.new_name_input).id("custom-name").text_color(cx.theme().foreground)),
                     )
                     .child(
                         v_flex()
                             .gap_1()
                             .flex_grow(2.0)
                             .child(Label::new("Registry URL").text_sm())
-                            .child(Input::new(&self.new_url_input).id("custom-url")),
+                            .child(Input::new(&self.new_url_input).id("custom-url").text_color(cx.theme().foreground)),
                     ),
             )
             .child(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        v_flex()
-                            .gap_1()
-                            .flex_1()
-                            .child(Label::new("说明（可选）").text_sm())
-                            .child(Input::new(&self.new_desc_input).id("custom-desc")),
-                    )
-                    .child(
-                        v_flex()
-                            .gap_1()
-                            .justify_end()
-                            .child(
-                                Button::new("add-custom")
-                                    .label("添加")
-                                    .primary()
-                                    .on_click(cx.listener(|view, _ev, window, cx| {
-                                        let id: String =
-                                            view.new_id_input.read(cx).value().trim().to_string();
-                                        let name: String =
-                                            view.new_name_input.read(cx).value().trim().to_string();
-                                        let url: String =
-                                            view.new_url_input.read(cx).value().trim().to_string();
-                                        let description: String = view
-                                            .new_desc_input
-                                            .read(cx)
-                                            .value()
-                                            .trim()
-                                            .to_string();
-                                        if id.is_empty() || url.is_empty() {
-                                            view.app.update(cx, |model, cx| {
-                                                model.state.status = Status::Error(
-                                                    "标识名和 URL 都不能为空".into(),
-                                                );
-                                                cx.notify();
-                                            });
-                                            return;
-                                        }
-                                        if registry::builtins().iter().any(|r| r.id == id) {
-                                            view.app.update(cx, |model, cx| {
-                                                model.state.status = Status::Error(
-                                                    format!("「{id}」是内置源，不能覆盖").into(),
-                                                );
-                                                cx.notify();
-                                            });
-                                            return;
-                                        }
-                                        if view.app.read(cx).state.customs.contains_key(&id) {
-                                            view.app.update(cx, |model, cx| {
-                                                model.state.status = Status::Error(
-                                                    format!("「{id}」已存在，请勿重复添加").into(),
-                                                );
-                                                cx.notify();
-                                            });
-                                            return;
-                                        }
-                                        let display_name = if name.is_empty() { id.clone() } else { name };
-                                        view.app.update(cx, |model, cx| {
-                                            let url = normalize_registry_url(&url);
-                                            model.state.customs.insert(
-                                                id.clone(),
-                                                CustomSource::new(display_name, url, description),
-                                            );
-                                            model.state.selected = id.clone().into();
-                                            model.state.status = Status::Success("已添加自定义源".into());
-                                            cx.notify();
-                                        });
-                                        // 持久化新增的自定义源
-                                        let _ = config_io::write_customs(&view.app.read(cx).state.customs);
-                                        // 新增源立即触发一次分层测速。
-                                        if let Some(src) =
-                                            view.app.read(cx).state.customs.get(&id).cloned()
-                                        {
-                                            view.measure(id.clone(), src.url, cx);
-                                        }
-                                        view.new_id_input
-                                            .update(cx, |state, cx| state.set_value("", window, cx));
-                                        view.new_name_input
-                                            .update(cx, |state, cx| state.set_value("", window, cx));
-                                        view.new_url_input
-                                            .update(cx, |state, cx| state.set_value("", window, cx));
-                                        view.new_desc_input
-                                            .update(cx, |state, cx| state.set_value("", window, cx));
-                                    })),
-                            ),
-                    ),
+                v_flex()
+                    .gap_1()
+                    .child(Label::new("说明（可选）").text_sm())
+                    .child(Input::new(&self.new_desc_input).id("custom-desc").text_color(cx.theme().foreground)),
+            )
+            .child(
+                Button::new("confirm-add-custom")
+                    .label("确定")
+                    .primary()
+                    .w_full()
+                    .on_click(confirm_click),
             )
             .into_any()
     }
@@ -1198,6 +1189,23 @@ impl Render for RootView {
                                     .items_center()
                                     .justify_end()
                                     .gap_2()
+                                    .child({
+                                        let add_btn = Button::new("toggle-add-form")
+                                            .label(if self.show_add_form {
+                                                "收起添加"
+                                            } else {
+                                                "添加"
+                                            });
+                                        if self.show_add_form {
+                                            add_btn.primary()
+                                        } else {
+                                            add_btn.secondary()
+                                        }
+                                        .on_click(cx.listener(|view, _ev, _window, cx| {
+                                            view.show_add_form = !view.show_add_form;
+                                            cx.notify();
+                                        }))
+                                    })
                                     .child(
                                         Button::new("import-customs")
                                             .label("导入")
@@ -1216,7 +1224,21 @@ impl Render for RootView {
                                     ),
                             )
                             .child(self.render_custom_list(cx))
-                            .child(self.render_add_form(cx))
+                            .children(if self.show_add_form {
+                                vec![div()
+                                    .with_animation(
+                                        "add-form-slide-in",
+                                        Animation::new(Duration::from_millis(200)),
+                                        |this, delta| {
+                                            this.opacity(delta)
+                                                .mt(px(-8.0 * (1.0 - delta)))
+                                        },
+                                    )
+                                    .child(self.render_add_form(cx))
+                                    .into_any_element()]
+                            } else {
+                                vec![]
+                            })
                             .into_any_element()
                     }),
             )
