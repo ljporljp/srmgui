@@ -147,3 +147,13 @@ srmgui/
 - Rust 2024 + [GPUI](https://gpui.rs) / [gpui-kit](https://crates.io/crates/gpui-kit)（含 gpui-component）
 - `rustls` + `webpki-roots` 发起 HTTPS 探测
 - `toml` 解析与生成配置
+
+## 关于
+
+- **作者**：liujinpeng
+- **邮箱**：[imljp@foxmail.com](mailto:imljp@foxmail.com)
+- **GitHub**：[https://github.com/ljporljp/srmgui](https://github.com/ljporljp/srmgui)
+- **Crates.io**：[https://crates.io/crates/srmgui](https://crates.io/crates/srmgui)
+- **协议**：MIT
+
+本项目（srmgui）及其源代码的所有权归作者 liujinpeng 所有。在 MIT 协议条款下，任何人可自由使用、复制、修改、合并、出版、分发、再许可本软件，但须在所有副本或重要部分中保留上述版权声明与本许可声明。
