@@ -1,0 +1,212 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+            bin: srmgui.exe
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+            bin: srmgui
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive: tar.gz
+            bin: srmgui
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+            bin: srmgui
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc g++ clang pkg-config cmake \
+            libfontconfig1-dev libfreetype6-dev \
+            libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev \
+            libwebkit2gtk-4.1-dev libssl-dev libzstd-dev \
+            libasound2-dev libvulkan-dev vulkan-validationlayers libvulkan1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry and build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+          cache-on-failure: true
+
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $target = "${{ matrix.target }}"
+          $stage = "srmgui-$target"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item "target/$target/release/${{ matrix.bin }}" "$stage/"
+          Copy-Item README.md "$stage/"
+          Copy-Item LICENSE "$stage/"
+          Compress-Archive -Path "$stage/*" -DestinationPath "$stage.zip" -Force
+
+      - name: Package (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          target="${{ matrix.target }}"
+          stage="srmgui-$target"
+          mkdir -p "$stage"
+          cp "target/$target/release/${{ matrix.bin }}" "$stage/"
+          cp README.md "$stage/"
+          cp LICENSE "$stage/"
+          tar -czf "$stage.tar.gz" "$stage"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: srmgui-${{ matrix.target }}
+          path: srmgui-${{ matrix.target }}.${{ matrix.archive }}
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten and generate checksums
+        run: |
+          mkdir -p dist
+          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} dist/ \;
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # 确定上一个 tag（用于截取本次发布的提交范围）
+          PREV_TAG=$(git describe --tags --abbrev=0 "HEAD~1" 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="$PREV_TAG..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+
+          echo "## 变更说明" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "本次发布包含以下改动（按类型分组）：" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+
+          # 按 conventional commit 类型分组输出
+          for TYPE in feat fix refactor perf docs chore test ci; do
+            COMMITS=$(git log --oneline --no-merges "$RANGE" 2>/dev/null | grep -iE "^[a-f0-9]+ +${TYPE}:" || true)
+            if [ -n "$COMMITS" ]; then
+              case "$TYPE" in
+                feat) LABEL="新功能" ;;
+                fix) LABEL="修复" ;;
+                refactor) LABEL="重构" ;;
+                perf) LABEL="性能" ;;
+                docs) LABEL="文档" ;;
+                chore) LABEL="杂项" ;;
+                test) LABEL="测试" ;;
+                ci) LABEL="构建" ;;
+                *) LABEL="$TYPE" ;;
+              esac
+              echo "### $LABEL" >> CHANGELOG.md
+              echo "" >> CHANGELOG.md
+              echo "$COMMITS" | while read -r line; do
+                HASH=$(echo "$line" | awk '{print $1}')
+                MSG=$(echo "$line" | cut -d' ' -f2-)
+                # 去掉 conventional commit 的类型前缀
+                MSG=$(echo "$MSG" | sed -E "s/^${TYPE}:? *//I")
+                echo "- $MSG (\`$HASH\`)" >> CHANGELOG.md
+              done
+              echo "" >> CHANGELOG.md
+            fi
+          done
+
+          # 未匹配到类型的提交
+          OTHERS=$(git log --oneline --no-merges "$RANGE" 2>/dev/null | grep -ivE "^[a-f0-9]+ +(feat|fix|refactor|perf|docs|chore|test|ci):" || true)
+          if [ -n "$OTHERS" ]; then
+            echo "### 其他" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "$OTHERS" | while read -r line; do
+              HASH=$(echo "$line" | awk '{print $1}')
+              MSG=$(echo "$line" | cut -d' ' -f2-)
+              echo "- $MSG (\`$HASH\`)" >> CHANGELOG.md
+            done
+            echo "" >> CHANGELOG.md
+          fi
+
+          cat CHANGELOG.md
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          # 确保 tag 以 v 开头
+          case "$TAG" in
+            v*) ;;
+            *) TAG="v$TAG" ;;
+          esac
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: srmgui ${{ steps.tag.outputs.tag }}
+          body_path: CHANGELOG.md
+          files: |
+            dist/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
