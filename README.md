@@ -91,15 +91,39 @@ cargo build --release
 cargo test --bins    # 单元测试
 ```
 
-- 主要面向 Windows 桌面：构建脚本会通过 `embed-resource` + `rc.exe` 将 `assets/logo.ico` 嵌入可执行文件，用于窗口 / 任务栏图标（需要 Windows SDK）。
-- 应用内标题旁的 logo 通过 `include_bytes!` 内嵌 `assets/logo.png`，不依赖运行时资源目录。
+### 平台支持
+
+支持 Windows、Linux、macOS 三端，UI 与功能保持一致。
+
+**Windows**：构建脚本会通过 `embed-resource` + `rc.exe` 将 `assets/logo.ico` 嵌入可执行文件，用于窗口 / 任务栏图标（需要 Windows SDK）。
+
+**Linux（Debian/Ubuntu）**：需先安装系统依赖：
+
+```bash
+sudo apt update
+sudo apt install -y gcc g++ clang pkg-config cmake \
+  libfontconfig-dev libfreetype6-dev \
+  libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev \
+  libwebkit2gtk-4.1-dev libssl-dev libzstd-dev \
+  libasound2-dev vulkan-validationlayers libvulkan1
+```
+
+其他发行版请安装对应的开发库包。
+
+**macOS**：需安装 Xcode Command Line Tools：
+
+```bash
+xcode-select --install
+```
+
+应用内标题旁的 logo 通过 `include_bytes!` 内嵌 `assets/logo.png`，不依赖运行时资源目录。
 
 ## 项目结构
 
 ```
 srmgui/
 ├── assets/           # logo 源文件（svg）、界面用 png、exe 图标 ico、资源脚本 rc
-├── build.rs          # 将 ico 嵌入 Windows 可执行文件
+├── build.rs          # Windows 下将 ico 嵌入可执行文件（Linux/macOS 跳过）
 ├── src/
 │   ├── main.rs       # UI、状态、主题、导入导出交互
 │   ├── registry.rs   # 内置源列表与 config.toml 内容生成
