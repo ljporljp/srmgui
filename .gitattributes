@@ -1,2 +1,4 @@
 # Inno Setup 编译器对脚本换行敏感，强制以 CRLF 检出
 *.iss text eol=crlf
+# 发布/签名脚本需在 macOS、Linux 上执行，强制 LF
+*.sh text eol=lf
