@@ -5,6 +5,7 @@ use gpui_kit::{App, AppContext as _, Entity, SharedString};
 use crate::config_io;
 use crate::config_io::CustomSource;
 use crate::model::{Language, Probe, Status, ThemeChoice};
+use crate::update::UpdateState;
 
 /// Source of truth for the whole UI.
 #[derive(Debug, Clone)]
@@ -17,6 +18,7 @@ pub(crate) struct State {
     pub(crate) probes: HashMap<String, Probe>,
     pub(crate) theme: ThemeChoice,
     pub(crate) language: Language,
+    pub(crate) update: UpdateState,
 }
 
 impl State {
@@ -35,6 +37,7 @@ impl State {
             probes: HashMap::new(),
             theme: ThemeChoice::System,
             language,
+            update: UpdateState::Idle,
         }
     }
 }

@@ -5951,6 +5951,7 @@ dependencies = [
  "gpui-kit",
  "rust-i18n",
  "rustls",
+ "rustls-native-certs",
  "toml 0.8.23",
  "webpki-roots 0.26.11",
 ]

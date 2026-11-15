@@ -1,5 +1,6 @@
 use std::io::Read;
 use std::io::Write;
+use std::net::TcpStream;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -12,6 +13,8 @@ const TIMEOUT: Duration = Duration::from_secs(8);
 const DOWNLOAD_MAX_BYTES: usize = 512 * 1024;
 /// 最多的重定向跟随次数。
 const MAX_REDIRECTS: usize = 5;
+/// 更新安装包允许的最大下载字节数。
+const MAX_INSTALLER_BYTES: usize = 256 * 1024 * 1024;
 /// 用于索引解析与下载测速的示例 crate。
 const SAMPLE_CRATE: &str = "serde";
 
@@ -200,11 +203,31 @@ fn parse_latest_version(body: &str) -> Option<String> {
         .find_map(|line| json_string_field(line, "vers"))
 }
 
+/// 获取任意 URL 的响应（状态码 + 正文），供更新检查等通用场景使用。
+pub fn fetch(url: &str, accept: &str, max_bytes: usize) -> std::io::Result<(String, Vec<u8>)> {
+    let target = parse(url)?;
+    let resp = http_get(&target, &target.path, accept, max_bytes)?;
+    Ok((resp.status, resp.body))
+}
+
+/// 下载 URL 到本地文件，返回写入的字节数。
+pub fn download(url: &str, path: &std::path::Path) -> std::io::Result<u64> {
+    let (status, body) = fetch(url, "*/*", MAX_INSTALLER_BYTES)?;
+    ensure_success(&status)?;
+    if body.is_empty() {
+        return Err(std::io::Error::other(
+            rust_i18n::t!("net.empty_download").to_string(),
+        ));
+    }
+    std::fs::write(path, &body)?;
+    Ok(body.len() as u64)
+}
+
 /// 极简 JSON 字符串字段提取（仅用于我们已知结构的响应）。
 ///
 /// registry 的 `config.json` 带缩进（官方源即为多行格式），因此这里按
 /// JSON 语法容忍键、冒号、值之间的空白，而不是只匹配紧凑格式。
-fn json_string_field(json: &str, key: &str) -> Option<String> {
+pub(crate) fn json_string_field(json: &str, key: &str) -> Option<String> {
     let needle = format!("\"{key}\"");
     let mut from = 0;
     while let Some(pos) = json[from..].find(&needle) {
@@ -236,12 +259,18 @@ fn json_bool_field(json: &str, key: &str) -> Option<bool> {
 
 /// 读取 JSON 字符串内容（入参不含起始引号），并处理转义。
 fn parse_json_string(raw: &str) -> Option<String> {
+    scan_json_string(raw).map(|(value, _)| value)
+}
+
+/// 读取 JSON 字符串内容（入参不含起始引号），返回内容与消耗的字节数
+/// （包含结束引号），便于调用方继续扫描后续字段。
+pub(crate) fn scan_json_string(raw: &str) -> Option<(String, usize)> {
     let mut out = String::new();
-    let mut chars = raw.chars();
-    while let Some(c) = chars.next() {
+    let mut chars = raw.char_indices();
+    while let Some((index, c)) = chars.next() {
         match c {
-            '"' => return Some(out),
-            '\\' => match chars.next()? {
+            '"' => return Some((out, index + 1)),
+            '\\' => match chars.next()?.1 {
                 '"' => out.push('"'),
                 '\\' => out.push('\\'),
                 '/' => out.push('/'),
@@ -249,7 +278,7 @@ fn parse_json_string(raw: &str) -> Option<String> {
                 'r' => out.push('\r'),
                 't' => out.push('\t'),
                 'u' => {
-                    let hex: String = chars.by_ref().take(4).collect();
+                    let hex: String = (0..4).filter_map(|_| chars.next().map(|(_, c)| c)).collect();
                     out.push(char::from_u32(u32::from_str_radix(&hex, 16).ok()?)?);
                 }
                 _ => return None,
@@ -283,6 +312,9 @@ fn tls_config() -> Arc<ClientConfig> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let mut roots = RootCertStore::empty();
     roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    // 追加系统证书库，兼容企业代理/自建根证书（GitHub API 等可能被其拦截）。
+    let native = rustls_native_certs::load_native_certs();
+    roots.add_parsable_certificates(native.certs);
     Arc::new(
         ClientConfig::builder_with_provider(provider)
             .with_safe_default_protocol_versions()
@@ -369,10 +401,6 @@ fn http_get_once(
     accept: &str,
     max_bytes: usize,
 ) -> std::io::Result<Response> {
-    let tcp = connect(host, port, TIMEOUT)?;
-    tcp.set_read_timeout(Some(TIMEOUT))?;
-    tcp.set_write_timeout(Some(TIMEOUT))?;
-
     let host_header = if (https && port == 443) || (!https && port == 80) {
         host.to_string()
     } else {
@@ -388,21 +416,37 @@ fn http_get_once(
     );
 
     let raw = if https {
-        let config = tls_config();
-        let server_name = ServerName::try_from(host)
-            .map_err(std::io::Error::other)?
-            .to_owned();
-        let conn = ClientConnection::new(config, server_name).map_err(std::io::Error::other)?;
-        let mut stream = StreamOwned::new(conn, tcp);
-        stream.write_all(request.as_bytes())?;
-        read_all(&mut stream, max_bytes)?
+        https_get(host, port, &request, max_bytes)?
     } else {
-        let mut stream = tcp;
+        let mut stream = tcp_stream(host, port)?;
         stream.write_all(request.as_bytes())?;
         read_all(&mut stream, max_bytes)?
     };
 
     parse_response(&raw)
+}
+
+fn tcp_stream(host: &str, port: u16) -> std::io::Result<TcpStream> {
+    let tcp = connect(host, port, TIMEOUT)?;
+    tcp.set_read_timeout(Some(TIMEOUT))?;
+    tcp.set_write_timeout(Some(TIMEOUT))?;
+    Ok(tcp)
+}
+
+fn https_get(
+    host: &str,
+    port: u16,
+    request: &str,
+    max_bytes: usize,
+) -> std::io::Result<Vec<u8>> {
+    let tcp = tcp_stream(host, port)?;
+    let server_name = ServerName::try_from(host)
+        .map_err(std::io::Error::other)?
+        .to_owned();
+    let conn = ClientConnection::new(tls_config(), server_name).map_err(std::io::Error::other)?;
+    let mut stream = StreamOwned::new(conn, tcp);
+    stream.write_all(request.as_bytes())?;
+    read_all(&mut stream, max_bytes)
 }
 
 fn read_all(stream: &mut impl Read, max_bytes: usize) -> std::io::Result<Vec<u8>> {
@@ -418,6 +462,13 @@ fn read_all(stream: &mut impl Read, max_bytes: usize) -> std::io::Result<Vec<u8>
                 }
             }
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            // 部分服务端（如 GitHub API 前置代理）不发送 TLS close_notify 就断开，
+            // 此时已收到的数据是完整的，按正常结束处理。
+            Err(e)
+                if e.kind() == std::io::ErrorKind::UnexpectedEof && !buf.is_empty() =>
+            {
+                break;
+            }
             Err(e) => return Err(e),
         }
     }

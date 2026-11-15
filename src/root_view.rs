@@ -34,6 +34,7 @@ use crate::source_list::{SourceItem, SourceList};
 use crate::ui::{
     STEP_WIDTH, level_tip, logo_icon, open_about_dialog, v_separator,
 };
+use crate::update::{self, Available, UpdateState};
 use crate::util::{normalize_registry_url, with_sources_extension};
 
 /// 底部共享面板的当前内容：添加表单 / 日志面板 / 无。
@@ -103,6 +104,17 @@ impl RootView {
             loop {
                 let _ = view.update(cx, |view, cx| view.measure_all(cx));
                 cx.background_executor().timer(PROBE_INTERVAL).await;
+            }
+        })
+        .detach();
+
+        // 后台自动检查更新，发现新版本后在窗口右上角提示。
+        cx.spawn(async move |view, cx| {
+            loop {
+                let _ = view.update(cx, |view, cx| view.check_for_updates(cx));
+                cx.background_executor()
+                    .timer(update::UPDATE_INTERVAL)
+                    .await;
             }
         })
         .detach();
@@ -242,6 +254,174 @@ impl RootView {
             });
         })
         .detach();
+    }
+
+    /// 后台检查是否有新版本，结果同步到界面右上角的更新提示。
+    fn check_for_updates(&mut self, cx: &mut Context<Self>) {
+        // 下载过程中不打断当前更新流程。
+        if matches!(self.app.read(cx).state.update, UpdateState::Downloading(_)) {
+            return;
+        }
+        self.app.update(cx, |model, cx| {
+            model.state.update = UpdateState::Checking;
+            cx.notify();
+        });
+
+        cx.spawn(async move |view, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async { update::check() })
+                .await;
+            let _ = view.update(cx, |view, cx| view.finish_check(result, cx));
+        })
+        .detach();
+    }
+
+    /// 处理检查结果：有新版本时展示提示，失败时仅记录日志。
+    fn finish_check(
+        &mut self,
+        result: Result<Option<Available>, String>,
+        cx: &mut Context<Self>,
+    ) {
+        let current = env!("CARGO_PKG_VERSION");
+        match result {
+            Ok(Some(available)) => {
+                logger::info(
+                    "update",
+                    rust_i18n::t!(
+                        "update.log_found",
+                        version = available.version.as_str(),
+                        current = current
+                    )
+                    .to_string(),
+                );
+                self.app.update(cx, |model, cx| {
+                    model.state.update = UpdateState::Available(available);
+                    cx.notify();
+                });
+            }
+            Ok(None) => {
+                logger::info(
+                    "update",
+                    rust_i18n::t!("update.log_none", version = current).to_string(),
+                );
+                self.app.update(cx, |model, cx| {
+                    model.state.update = UpdateState::Idle;
+                    cx.notify();
+                });
+            }
+            Err(error) => {
+                logger::warn(
+                    "update",
+                    rust_i18n::t!("update.log_check_failed", error = error.as_str()).to_string(),
+                );
+                self.app.update(cx, |model, cx| {
+                    model.state.update = UpdateState::Idle;
+                    cx.notify();
+                });
+            }
+        }
+    }
+
+    /// 点击右上角更新提示：下载安装包并启动安装程序。
+    fn start_update(&mut self, cx: &mut Context<Self>) {
+        let Some(available) = self.app.read(cx).state.update.available().cloned() else {
+            return;
+        };
+        if matches!(self.app.read(cx).state.update, UpdateState::Downloading(_)) {
+            return;
+        }
+
+        logger::info(
+            "update",
+            rust_i18n::t!(
+                "update.log_download_start",
+                url = available.asset_url.as_str()
+            )
+            .to_string(),
+        );
+        self.app.update(cx, |model, cx| {
+            model.state.status = Status::Info(
+                rust_i18n::t!("update.downloading", version = available.version.as_str())
+                    .to_string()
+                    .into(),
+            );
+            model.state.update = UpdateState::Downloading(available.clone());
+            cx.notify();
+        });
+
+        cx.spawn(async move |view, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { update::download(&available) })
+                .await;
+            let _ = view.update(cx, |view, cx| view.finish_download(result, cx));
+        })
+        .detach();
+    }
+
+    /// 下载完成后启动安装程序，并退出当前实例以便覆盖安装文件。
+    fn finish_download(
+        &mut self,
+        result: Result<PathBuf, String>,
+        cx: &mut Context<Self>,
+    ) {
+        match result {
+            Ok(path) => {
+                logger::info(
+                    "update",
+                    rust_i18n::t!("update.log_install", path = path.display().to_string())
+                        .to_string(),
+                );
+                self.app.update(cx, |model, cx| {
+                    model.state.status =
+                        Status::Info(rust_i18n::t!("update.install_start").to_string().into());
+                    cx.notify();
+                });
+                match update::launch(&path) {
+                    // 安装程序已启动，退出本实例，避免安装包写入文件时被占用。
+                    Ok(()) => cx.quit(),
+                    Err(error) => {
+                        logger::error(
+                            "update",
+                            rust_i18n::t!("update.log_install_failed", error = error.as_str())
+                                .to_string(),
+                        );
+                        self.app.update(cx, |model, cx| {
+                            model.state.update = match &model.state.update {
+                                UpdateState::Downloading(available) => {
+                                    UpdateState::Available(available.clone())
+                                }
+                                other => other.clone(),
+                            };
+                            model.state.status = Status::Error(error.clone().into());
+                            cx.notify();
+                        });
+                    }
+                }
+            }
+            Err(error) => {
+                logger::warn(
+                    "update",
+                    rust_i18n::t!("update.log_download_failed", error = error.as_str())
+                        .to_string(),
+                );
+                self.app.update(cx, |model, cx| {
+                    model.state.update = match &model.state.update {
+                        UpdateState::Downloading(available) => {
+                            UpdateState::Available(available.clone())
+                        }
+                        other => other.clone(),
+                    };
+                    model.state.status = Status::Error(
+                        rust_i18n::t!("update.download_failed", error = error.as_str())
+                            .to_string()
+                            .into(),
+                    );
+                    cx.notify();
+                });
+            }
+        }
     }
 
     /// 选择 srmgui 源文件并导入。
@@ -685,8 +865,38 @@ impl Render for RootView {
         let theme = self.app.read(cx).state.theme;
         let language = self.app.read(cx).state.language;
         let active_tab = self.app.read(cx).state.active_tab;
+        let update_state = self.app.read(cx).state.update.clone();
         let theme_app = self.app.clone();
         let viewport_height = _window.viewport_size().height.as_f32();
+
+        // 右上角更新提示：仅在发现新版本时出现，点击后下载并启动安装程序。
+        let update_button = match &update_state {
+            UpdateState::Available(available) => {
+                let version = available.version.clone();
+                Some(
+                    Button::new("update-available")
+                        .label(
+                            rust_i18n::t!("update.available", version = version.as_str())
+                                .to_string(),
+                        )
+                        .tooltip(rust_i18n::t!("update.tip").to_string())
+                        .small()
+                        .primary()
+                        .on_click(cx.listener(|view, _ev, _window, cx| view.start_update(cx))),
+                )
+            }
+            UpdateState::Downloading(available) => Some(
+                Button::new("update-downloading")
+                    .label(
+                        rust_i18n::t!("update.downloading", version = available.version.as_str())
+                            .to_string(),
+                    )
+                    .tooltip(rust_i18n::t!("update.tip").to_string())
+                    .small()
+                    .secondary(),
+            ),
+            _ => None,
+        };
 
         v_flex()
             .size_full()
@@ -791,7 +1001,8 @@ impl Render for RootView {
                                             .child(Tab::new().label(
                                                 rust_i18n::t!("theme.dark").to_string(),
                                             )),
-                                    ),
+                                    )
+                                    .children(update_button),
                             ),
                     )
                 // Main: independent preset and custom source tabs

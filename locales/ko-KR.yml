@@ -156,3 +156,21 @@ registry:
   official:
     name: 공식 crates.io
     description: 기본 미러, cargo publish 전에 되돌리는 것을 권장
+
+update:
+  available: 새 버전 %{version} 사용 가능
+  tip: 클릭하여 다운로드 및 설치
+  downloading: "%{version} 다운로드 중…"
+  install_start: 설치 파일 다운로드 완료, 설치를 시작합니다
+  download_failed: "설치 파일 다운로드 실패: %{error}"
+  install_failed: "설치 프로그램 실행 실패: %{error}"
+  no_asset: 버전 %{version}에는 이 플랫폼용 설치 파일이 없습니다
+  bad_response: 버전 정보를 해석할 수 없습니다
+  log_found: "새 버전 %{version} 발견 (현재 %{current})"
+  log_none: "최신 버전입니다 (%{version})"
+  log_check_failed: "업데이트 확인 실패: %{error}"
+  log_download_start: "설치 파일 다운로드 시작: %{url}"
+  log_downloaded: "설치 파일 다운로드 완료: %{path}"
+  log_download_failed: "설치 파일 다운로드 실패: %{error}"
+  log_install: "설치 프로그램 실행: %{path}"
+  log_install_failed: "설치 프로그램 실행 실패: %{error}"

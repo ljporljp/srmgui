@@ -156,3 +156,21 @@ registry:
   official:
     name: crates.io oficial
     description: Espejo predeterminado; vuelve a él antes de cargo publish
+
+update:
+  available: Nueva versión %{version} disponible
+  tip: Haga clic para descargar e instalar
+  downloading: "Descargando %{version}…"
+  install_start: Instalador descargado, iniciando la instalación
+  download_failed: "Error al descargar el instalador: %{error}"
+  install_failed: "Error al iniciar el instalador: %{error}"
+  no_asset: La versión %{version} no tiene instalador para esta plataforma
+  bad_response: No se pudo analizar la información de la versión
+  log_found: "Nueva versión %{version} encontrada (actual %{current})"
+  log_none: "Ya está actualizado (%{version})"
+  log_check_failed: "Error al comprobar actualizaciones: %{error}"
+  log_download_start: "Descargando instalador: %{url}"
+  log_downloaded: "Instalador descargado: %{path}"
+  log_download_failed: "Error al descargar el instalador: %{error}"
+  log_install: "Iniciando instalador: %{path}"
+  log_install_failed: "Error al iniciar el instalador: %{error}"

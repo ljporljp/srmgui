@@ -156,3 +156,21 @@ registry:
   official:
     name: crates.io officiel
     description: Miroir par défaut ; revenez-y avant cargo publish
+
+update:
+  available: Nouvelle version %{version} disponible
+  tip: Cliquez pour télécharger et installer
+  downloading: "Téléchargement de %{version}…"
+  install_start: Installateur téléchargé, démarrage de l'installation
+  download_failed: "Échec du téléchargement de l'installateur : %{error}"
+  install_failed: "Échec du lancement de l'installateur : %{error}"
+  no_asset: La version %{version} n'a pas d'installateur pour cette plateforme
+  bad_response: Impossible d'analyser les informations de version
+  log_found: "Nouvelle version %{version} détectée (actuelle %{current})"
+  log_none: "Déjà à jour (%{version})"
+  log_check_failed: "Échec de la vérification des mises à jour : %{error}"
+  log_download_start: "Téléchargement de l'installateur : %{url}"
+  log_downloaded: "Installateur téléchargé : %{path}"
+  log_download_failed: "Échec du téléchargement de l'installateur : %{error}"
+  log_install: "Lancement de l'installateur : %{path}"
+  log_install_failed: "Échec du lancement de l'installateur : %{error}"

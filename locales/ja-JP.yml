@@ -156,3 +156,21 @@ registry:
   official:
     name: 公式 crates.io
     description: デフォルトのミラー。cargo publish の前に戻すことを推奨
+
+update:
+  available: 新しいバージョン %{version} があります
+  tip: クリックしてダウンロードとインストール
+  downloading: バージョン %{version} をダウンロード中…
+  install_start: インストーラーのダウンロードが完了しました。インストールを開始します
+  download_failed: インストーラーのダウンロードに失敗しました：%{error}
+  install_failed: インストーラーの起動に失敗しました：%{error}
+  no_asset: バージョン %{version} にはこのプラットフォーム向けのインストーラーがありません
+  bad_response: バージョン情報を解析できません
+  log_found: 新しいバージョン %{version} を検出（現在 %{current}）
+  log_none: 最新バージョンです（%{version}）
+  log_check_failed: アップデートの確認に失敗しました：%{error}
+  log_download_start: インストーラーのダウンロードを開始：%{url}
+  log_downloaded: インストーラーをダウンロードしました：%{path}
+  log_download_failed: インストーラーのダウンロードに失敗しました：%{error}
+  log_install: インストーラーを起動：%{path}
+  log_install_failed: インストーラーの起動に失敗しました：%{error}

@@ -156,3 +156,21 @@ registry:
   official:
     name: Official crates.io
     description: Default source; switch back before cargo publish
+
+update:
+  available: New version %{version} available
+  tip: Click to download and install
+  downloading: Downloading %{version}…
+  install_start: Installer downloaded, starting installation
+  download_failed: "Failed to download the installer: %{error}"
+  install_failed: "Failed to start the installer: %{error}"
+  no_asset: Version %{version} has no installer for this platform
+  bad_response: Failed to parse version information
+  log_found: "Update found: %{version} (current %{current})"
+  log_none: Already up to date (%{version})
+  log_check_failed: "Update check failed: %{error}"
+  log_download_start: "Downloading installer: %{url}"
+  log_downloaded: "Installer downloaded: %{path}"
+  log_download_failed: "Failed to download installer: %{error}"
+  log_install: "Starting installer: %{path}"
+  log_install_failed: "Failed to start installer: %{error}"

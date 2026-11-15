@@ -13,6 +13,7 @@ mod registry;
 mod root_view;
 mod source_list;
 mod ui;
+mod update;
 mod util;
 
 use app::CargoMirrorApp;

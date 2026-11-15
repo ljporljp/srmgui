@@ -156,3 +156,21 @@ registry:
   official:
     name: Offizielles crates.io
     description: Standardspiegel; vor cargo publish zurückwechseln
+
+update:
+  available: Neue Version %{version} verfügbar
+  tip: Klicken zum Herunterladen und Installieren
+  downloading: "%{version} wird heruntergeladen…"
+  install_start: Installer heruntergeladen, Installation wird gestartet
+  download_failed: "Installer konnte nicht heruntergeladen werden: %{error}"
+  install_failed: "Installer konnte nicht gestartet werden: %{error}"
+  no_asset: Für Version %{version} gibt es keinen Installer für diese Plattform
+  bad_response: Versionsinformationen konnten nicht gelesen werden
+  log_found: "Neue Version %{version} gefunden (aktuell %{current})"
+  log_none: "Bereits aktuell (%{version})"
+  log_check_failed: "Update-Prüfung fehlgeschlagen: %{error}"
+  log_download_start: "Installer-Download gestartet: %{url}"
+  log_downloaded: "Installer heruntergeladen: %{path}"
+  log_download_failed: "Installer-Download fehlgeschlagen: %{error}"
+  log_install: "Installer wird gestartet: %{path}"
+  log_install_failed: "Installer konnte nicht gestartet werden: %{error}"

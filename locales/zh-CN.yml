@@ -156,3 +156,21 @@ registry:
   official:
     name: 官方 crates.io
     description: 默认源，cargo publish 前建议切回
+
+update:
+  available: 发现新版本 %{version}
+  tip: 点击下载并安装新版本
+  downloading: 正在下载 %{version}…
+  install_start: 安装包已下载，正在启动安装程序
+  download_failed: 下载安装包失败：%{error}
+  install_failed: 启动安装程序失败：%{error}
+  no_asset: 新版本 %{version} 没有适配当前平台的安装包
+  bad_response: 无法解析版本信息
+  log_found: 发现新版本 %{version}（当前 %{current}）
+  log_none: 已是最新版本 %{version}
+  log_check_failed: 检查更新失败：%{error}
+  log_download_start: 开始下载安装包：%{url}
+  log_downloaded: 安装包已下载：%{path}
+  log_download_failed: 下载安装包失败：%{error}
+  log_install: 启动安装程序：%{path}
+  log_install_failed: 启动安装程序失败：%{error}

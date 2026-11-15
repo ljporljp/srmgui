@@ -156,3 +156,21 @@ registry:
   official:
     name: Официальный crates.io
     description: Зеркало по умолчанию; переключитесь обратно перед cargo publish
+
+update:
+  available: Доступна новая версия %{version}
+  tip: Нажмите, чтобы скачать и установить
+  downloading: "Загрузка %{version}…"
+  install_start: Установщик загружен, запуск установки
+  download_failed: "Не удалось скачать установщик: %{error}"
+  install_failed: "Не удалось запустить установщик: %{error}"
+  no_asset: Для версии %{version} нет установщика для этой платформы
+  bad_response: Не удалось разобрать информацию о версии
+  log_found: "Найдена новая версия %{version} (текущая %{current})"
+  log_none: "Установлена последняя версия (%{version})"
+  log_check_failed: "Ошибка проверки обновлений: %{error}"
+  log_download_start: "Загрузка установщика: %{url}"
+  log_downloaded: "Установщик загружен: %{path}"
+  log_download_failed: "Не удалось скачать установщик: %{error}"
+  log_install: "Запуск установщика: %{path}"
+  log_install_failed: "Не удалось запустить установщик: %{error}"

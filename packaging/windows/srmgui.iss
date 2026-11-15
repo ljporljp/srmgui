@@ -42,6 +42,9 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 LicenseFile={#SourceDir}\LICENSE
+; 覆盖安装时由 Restart Manager 检测占用文件的进程并要求关闭
+CloseApplications=yes
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -61,3 +64,42 @@ Name: "{autodesktop}\srmgui"; Filename: "{app}\srmgui.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\srmgui.exe"; Description: "{cm:LaunchProgram,srmgui}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+const
+  AppExeName = 'srmgui.exe';
+
+{ 检测 srmgui 是否仍在运行，避免覆盖写入时因文件被占用而失败。 }
+function IsAppRunning(): Boolean;
+var
+  ResultCode: Integer;
+  TempFile: String;
+  Output: AnsiString;
+begin
+  Result := False;
+  TempFile := ExpandConstant('{tmp}\srmgui-tasklist.txt');
+  if Exec(ExpandConstant('{cmd}'),
+    '/C tasklist /FI "IMAGENAME eq ' + AppExeName + '" /NH > "' + TempFile + '"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    if LoadStringFromFile(TempFile, Output) then
+      Result := Pos(AppExeName, String(Output)) > 0;
+    DeleteFile(TempFile);
+  end;
+end;
+
+{ 写入文件前确认程序已退出；用户选择取消时中止安装。 }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  while IsAppRunning() do
+  begin
+    if MsgBox('srmgui is still running. Please close it, then click Retry to continue.'
+      + #13#10 + #13#10 + 'Click Cancel to abort the installation.',
+      mbError, MB_RETRYCANCEL) <> IDRETRY then
+    begin
+      Result := 'srmgui is still running. Installation was cancelled to avoid file write failures.';
+      Exit;
+    end;
+  end;
+end;
