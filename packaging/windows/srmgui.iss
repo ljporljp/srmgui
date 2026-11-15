@@ -1,6 +1,6 @@
 ; srmgui Windows installer script (Inno Setup 6)
 ; 编译示例：
-;   ISCC.exe /DAppVersion=1.2.1 /DSourceDir="C:\path\to\srmgui" ^
+;   ISCC.exe /DAppVersion=1.2.2 /DSourceDir="C:\path\to\srmgui" ^
 ;            /DSourceExe="C:\path\to\srmgui\target\release\srmgui.exe" ^
 ;            /DOutputDir="C:\path\to\srmgui\dist" packaging\windows\srmgui.iss
 
