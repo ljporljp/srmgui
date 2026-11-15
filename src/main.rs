@@ -22,7 +22,7 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, h_flex, v_flex};
-use gpui_kit::component::{Theme, ThemeMode};
+use gpui_kit::component::{IconName, Theme, ThemeMode, TitleBar, WindowExt as _};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Animation, AnimationExt as _, AnyElement, App, Entity, Hsla, Image, ImageFormat, SharedString,
@@ -273,6 +273,93 @@ fn logo_icon(size: f32) -> AnyElement {
         .into_any_element()
 }
 
+/// 「关于」模态窗口：展示应用名称、版本、说明与项目信息。
+fn open_about_dialog(window: &mut Window, cx: &mut App) {
+    window.open_dialog(cx, |dialog, _window, cx| {
+        let muted = cx.theme().muted_foreground;
+        dialog
+            .title("关于")
+            .w(px(420.))
+            .child(
+                v_flex()
+                    .w_full()
+                    .items_center()
+                    .gap_3()
+                    .pt_2()
+                    .child(logo_icon(56.))
+                    .child(Label::new("Cargo 镜像源切换工具").text_lg().font_semibold())
+                    .child(
+                        Label::new(format!("版本 {}", env!("CARGO_PKG_VERSION")))
+                            .text_sm()
+                            .text_color(muted),
+                    )
+                    .child(
+                        Label::new("用于切换 Rust Cargo 镜像源的桌面小工具")
+                            .text_sm()
+                            .text_color(muted)
+                            .text_center(),
+                    )
+                    .child(
+                        v_flex()
+                            .w_full()
+                            .gap_2()
+                            .mt_2()
+                            .p_3()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .bg(cx.theme().muted)
+                            .child(about_row("作者", env!("CARGO_PKG_AUTHORS"), muted))
+                            .child(about_row("许可证", env!("CARGO_PKG_LICENSE"), muted))
+                            .child(
+                                h_flex()
+                                    .w_full()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(
+                                        Label::new("项目主页")
+                                            .text_sm()
+                                            .text_color(muted)
+                                            .w(px(64.)),
+                                    )
+                                    .child(
+                                        div()
+                                            .id("about-repo-link")
+                                            .flex_1()
+                                            .text_sm()
+                                            .text_color(cx.theme().link)
+                                            .underline()
+                                            .cursor_pointer()
+                                            .child("github.com/ljporljp/srmgui")
+                                            .on_click(|_, _, cx| {
+                                                cx.open_url("https://github.com/ljporljp/srmgui")
+                                            }),
+                                    ),
+                            ),
+                    ),
+            )
+            .footer(
+                h_flex().w_full().justify_end().child(
+                    Button::new("about-close")
+                        .label("确定")
+                        .primary()
+                        .on_click(|_, window, cx| window.close_dialog(cx)),
+                ),
+            )
+    });
+}
+
+/// 「关于」窗口中的信息行。
+fn about_row(label: &'static str, value: &'static str, muted: Hsla) -> AnyElement {
+    h_flex()
+        .w_full()
+        .items_center()
+        .gap_2()
+        .child(Label::new(label).text_sm().text_color(muted).w(px(64.)))
+        .child(div().flex_1().text_sm().child(value))
+        .into_any_element()
+}
+
 /// 贯通列表项上下的竖直分隔线（负外边距延伸进行内边距）。
 fn v_separator(color: Hsla) -> AnyElement {
     div()
@@ -400,24 +487,28 @@ impl CargoMirrorApp {
 }
 
 fn main() {
-    gpui_kit::application().run(|cx| {
-        gpui_kit::init(cx);
-        let app = CargoMirrorApp::new(cx);
-        let _ = cx.open_window(
-            WindowOptions {
-                titlebar: Some(gpui_kit::TitlebarOptions {
-                    title: Some("Cargo 镜像源切换工具".into()),
+    gpui_kit::application()
+        .with_assets(gpui_kit::assets::Assets)
+        .run(|cx| {
+            gpui_kit::init(cx);
+            let app = CargoMirrorApp::new(cx);
+            let _ = gpui_kit::open_window(
+                WindowOptions {
+                    titlebar: Some(gpui_kit::TitlebarOptions {
+                        title: Some("Cargo 镜像源切换工具".into()),
+                        ..TitleBar::title_bar_options()
+                    }),
+                    app_owns_titlebar_drag: true,
+                    window_bounds: Some(gpui_kit::WindowBounds::Windowed(gpui_kit::Bounds {
+                        origin: gpui_kit::point(gpui_kit::px(200.), gpui_kit::px(200.)),
+                        size: gpui_kit::size(gpui_kit::px(760.), gpui_kit::px(560.)),
+                    })),
                     ..Default::default()
-                }),
-                window_bounds: Some(gpui_kit::WindowBounds::Windowed(gpui_kit::Bounds {
-                    origin: gpui_kit::point(gpui_kit::px(200.), gpui_kit::px(200.)),
-                    size: gpui_kit::size(gpui_kit::px(760.), gpui_kit::px(560.)),
-                })),
-                ..Default::default()
-            },
-            |window, cx| cx.new(|cx| RootView::new(window, cx, app)),
-        );
-    });
+                },
+                cx,
+                move |window, cx| cx.new(|cx| RootView::new(window, cx, app)),
+            );
+        });
 }
 
 /// The single root view, split into three panels.
@@ -1329,137 +1420,158 @@ impl Render for RootView {
 
         v_flex()
             .size_full()
-            .p_4()
-            .gap_4()
             .bg(cx.theme().background)
             .child(
-                // Header
-                h_flex()
-                    .items_center()
-                    .gap_2()
-                    .child(logo_icon(30.))
-                    .child(Label::new("Cargo 镜像源切换工具").text_xl().font_bold())
-                    .child(
-                        div().ml_auto().child(
-                            TabBar::new("theme-tabs")
-                                .segmented()
-                                .selected_index(theme.index())
-                                .on_click(move |index, _window, cx| {
-                                    let choice = ThemeChoice::from_index(*index);
-                                    theme_app.update(cx, |model, cx| {
-                                        model.state.theme = choice;
-                                        cx.notify();
-                                    });
-                                    apply_theme(choice, cx);
-                                })
-                                .child(Tab::new().label("跟随系统"))
-                                .child(Tab::new().label("浅色"))
-                                .child(Tab::new().label("深色")),
-                        ),
-                    ),
+                // 自绘标题栏，跟随主题配色
+                TitleBar::new().child(
+                    h_flex()
+                        .items_center()
+                        .gap_2()
+                        .child(logo_icon(18.))
+                        .child(Label::new("Cargo 镜像源切换工具").text_sm().font_semibold()),
+                ),
             )
-            // Main: independent preset and custom source tabs
             .child(
                 v_flex()
                     .flex_1()
                     .min_h_0()
-                    .gap_3()
+                    .p_4()
+                    .gap_4()
                     .child(
-                        TabBar::new("registry-tabs")
-                            .w_full()
-                            .segmented()
-                            .selected_index(active_tab)
-                            .on_click(move |index, _window, cx| {
-                                app.update(cx, |model, cx| {
-                                    model.state.active_tab = *index;
-                                    cx.notify();
-                                });
-                            })
-                            .child(Tab::new().flex_1().label("内置源"))
-                            .child(Tab::new().flex_1().label("自定义源")),
-                    )
-                    .child(if active_tab == 0 {
-                        self.render_preset_list(cx)
-                    } else {
-                        v_flex()
-                            .flex_1()
-                            .min_h_0()
-                            .gap_3()
+                        // Header: 关于与主题切换
+                        h_flex()
+                            .items_center()
+                            .gap_2()
                             .child(
-                                h_flex()
-                                    .items_center()
-                                    .justify_end()
-                                    .gap_2()
-                                    .child({
-                                        let is_add_active = self.bottom_panel == BottomPanel::AddForm;
-                                        let add_btn = Button::new("toggle-add-form")
-                                            .label(if is_add_active {
-                                                "收起添加"
-                                            } else {
-                                                "添加"
-                                            });
-                                        if is_add_active {
-                                            add_btn.primary()
-                                        } else {
-                                            add_btn.secondary()
-                                        }
-                                        .on_click(cx.listener(|view, _ev, _window, cx| {
-                                            view.bottom_panel = match view.bottom_panel {
-                                                BottomPanel::AddForm => BottomPanel::None,
-                                                _ => BottomPanel::AddForm,
-                                            };
-                                            cx.notify();
-                                        }))
-                                    })
-                                    .child(
-                                        Button::new("import-customs")
-                                            .label("导入")
-                                            .secondary()
-                                            .on_click(cx.listener(|view, _ev, _window, cx| {
-                                                view.import_customs(cx);
-                                            })),
-                                    )
-                                    .child(
-                                        Button::new("export-customs")
-                                            .label("导出")
-                                            .secondary()
-                                            .on_click(cx.listener(|view, _ev, _window, cx| {
-                                                view.export_customs(cx);
-                                            })),
-                                    ),
+                                Button::new("about-button")
+                                    .icon(IconName::Info)
+                                    .tooltip("关于")
+                                    .small()
+                                    .secondary()
+                                    .on_click(|_, window, cx| open_about_dialog(window, cx)),
                             )
-                            .child(self.render_custom_list(cx))
-                            .into_any_element()
-                    }),
+                            .child(
+                                div().ml_auto().child(
+                                    TabBar::new("theme-tabs")
+                                        .segmented()
+                                        .selected_index(theme.index())
+                                        .on_click(move |index, _window, cx| {
+                                            let choice = ThemeChoice::from_index(*index);
+                                            theme_app.update(cx, |model, cx| {
+                                                model.state.theme = choice;
+                                                cx.notify();
+                                            });
+                                            apply_theme(choice, cx);
+                                        })
+                                        .child(Tab::new().label("跟随系统"))
+                                        .child(Tab::new().label("浅色"))
+                                        .child(Tab::new().label("深色")),
+                                ),
+                            ),
+                    )
+                // Main: independent preset and custom source tabs
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_h_0()
+                        .gap_3()
+                        .child(
+                            TabBar::new("registry-tabs")
+                                .w_full()
+                                .segmented()
+                                .selected_index(active_tab)
+                                .on_click(move |index, _window, cx| {
+                                    app.update(cx, |model, cx| {
+                                        model.state.active_tab = *index;
+                                        cx.notify();
+                                    });
+                                })
+                                .child(Tab::new().flex_1().label("内置源"))
+                                .child(Tab::new().flex_1().label("自定义源")),
+                        )
+                        .child(if active_tab == 0 {
+                            self.render_preset_list(cx)
+                        } else {
+                            v_flex()
+                                .flex_1()
+                                .min_h_0()
+                                .gap_3()
+                                .child(
+                                    h_flex()
+                                        .items_center()
+                                        .justify_end()
+                                        .gap_2()
+                                        .child({
+                                            let is_add_active = self.bottom_panel == BottomPanel::AddForm;
+                                            let add_btn = Button::new("toggle-add-form")
+                                                .label(if is_add_active {
+                                                    "收起添加"
+                                                } else {
+                                                    "添加"
+                                                });
+                                            if is_add_active {
+                                                add_btn.primary()
+                                            } else {
+                                                add_btn.secondary()
+                                            }
+                                            .on_click(cx.listener(|view, _ev, _window, cx| {
+                                                view.bottom_panel = match view.bottom_panel {
+                                                    BottomPanel::AddForm => BottomPanel::None,
+                                                    _ => BottomPanel::AddForm,
+                                                };
+                                                cx.notify();
+                                            }))
+                                        })
+                                        .child(
+                                            Button::new("import-customs")
+                                                .label("导入")
+                                                .secondary()
+                                                .on_click(cx.listener(|view, _ev, _window, cx| {
+                                                    view.import_customs(cx);
+                                                })),
+                                        )
+                                        .child(
+                                            Button::new("export-customs")
+                                                .label("导出")
+                                                .secondary()
+                                                .on_click(cx.listener(|view, _ev, _window, cx| {
+                                                    view.export_customs(cx);
+                                                })),
+                                        ),
+                                )
+                                .child(self.render_custom_list(cx))
+                                .into_any_element()
+                        }),
+                )
+                .children(match self.bottom_panel {
+                    BottomPanel::None => vec![],
+                    BottomPanel::AddForm => vec![div()
+                        .id("bottom-panel-slide")
+                        .with_animation(
+                            "bottom-panel-slide-in",
+                            Animation::new(Duration::from_millis(220)),
+                            |this, delta| {
+                                this.opacity(delta)
+                                    .mt(px(16.0 * (1.0 - delta)))
+                            },
+                        )
+                        .child(self.render_add_form(cx))
+                        .into_any_element()],
+                    BottomPanel::LogPanel => vec![div()
+                        .id("bottom-panel-slide")
+                        .with_animation(
+                            "bottom-panel-slide-in",
+                            Animation::new(Duration::from_millis(220)),
+                            |this, delta| {
+                                this.opacity(delta)
+                                    .mt(px(16.0 * (1.0 - delta)))
+                            },
+                        )
+                        .child(self.render_log_panel(viewport_height, cx))
+                        .into_any_element()],
+                })
+                .child(self.render_status_bar(cx)),
             )
-            .children(match self.bottom_panel {
-                BottomPanel::None => vec![],
-                BottomPanel::AddForm => vec![div()
-                    .id("bottom-panel-slide")
-                    .with_animation(
-                        "bottom-panel-slide-in",
-                        Animation::new(Duration::from_millis(220)),
-                        |this, delta| {
-                            this.opacity(delta)
-                                .mt(px(16.0 * (1.0 - delta)))
-                        },
-                    )
-                    .child(self.render_add_form(cx))
-                    .into_any_element()],
-                BottomPanel::LogPanel => vec![div()
-                    .id("bottom-panel-slide")
-                    .with_animation(
-                        "bottom-panel-slide-in",
-                        Animation::new(Duration::from_millis(220)),
-                        |this, delta| {
-                            this.opacity(delta)
-                                .mt(px(16.0 * (1.0 - delta)))
-                        },
-                    )
-                    .child(self.render_log_panel(viewport_height, cx))
-                    .into_any_element()],
-            })
-            .child(self.render_status_bar(cx))
     }
 }
 
