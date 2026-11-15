@@ -1414,7 +1414,6 @@ impl Render for RootView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.app.read(cx).state.theme;
         let active_tab = self.app.read(cx).state.active_tab;
-        let app = self.app.clone();
         let theme_app = self.app.clone();
         let viewport_height = _window.viewport_size().height.as_f32();
 
@@ -1480,12 +1479,17 @@ impl Render for RootView {
                                 .w_full()
                                 .segmented()
                                 .selected_index(active_tab)
-                                .on_click(move |index, _window, cx| {
-                                    app.update(cx, |model, cx| {
+                                .on_click(cx.listener(|view, index: &usize, _window, cx| {
+                                    view.app.update(cx, |model, cx| {
                                         model.state.active_tab = *index;
                                         cx.notify();
                                     });
-                                })
+                                    // 切换到内置源时收起添加页面
+                                    if *index == 0 && view.bottom_panel == BottomPanel::AddForm {
+                                        view.bottom_panel = BottomPanel::None;
+                                    }
+                                    cx.notify();
+                                }))
                                 .child(Tab::new().flex_1().label("内置源"))
                                 .child(Tab::new().flex_1().label("自定义源")),
                         )
