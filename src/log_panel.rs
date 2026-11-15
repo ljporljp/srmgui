@@ -20,7 +20,7 @@ pub(crate) fn render_log_panel(viewport_height: f32, cx: &mut Context<RootView>)
     let body = if entries.is_empty() {
         div()
             .child(
-                Label::new("暂无日志")
+                Label::new(rust_i18n::t!("log.empty").to_string())
                     .text_color(cx.theme().muted_foreground)
                     .text_sm(),
             )
@@ -66,7 +66,11 @@ pub(crate) fn render_log_panel(viewport_height: f32, cx: &mut Context<RootView>)
                 .bg(cx.theme().muted)
                 .border_b_1()
                 .border_color(cx.theme().border)
-                .child(Label::new("日志").text_color(cx.theme().foreground).font_semibold())
+                .child(
+                    Label::new(rust_i18n::t!("log.title").to_string())
+                        .text_color(cx.theme().foreground)
+                        .font_semibold(),
+                )
                 .child({
                     let log_dir_for_click = log_dir.clone();
                     div()
@@ -75,7 +79,7 @@ pub(crate) fn render_log_panel(viewport_height: f32, cx: &mut Context<RootView>)
                         .hover(|style| style.underline())
                         .tooltip(move |_, cx| {
                             cx.new(|_| {
-                                Tooltip::new("点击在文件管理器中打开")
+                                Tooltip::new(rust_i18n::t!("log.open").to_string())
                             })
                             .into()
                         })
@@ -83,9 +87,11 @@ pub(crate) fn render_log_panel(viewport_height: f32, cx: &mut Context<RootView>)
                             open_in_file_manager(Path::new(&log_dir_for_click));
                         }))
                         .child(
-                            Label::new(format!("日志目录：{log_dir}"))
-                                .text_color(cx.theme().muted_foreground)
-                                .text_sm(),
+                            Label::new(
+                                rust_i18n::t!("log.dir", dir = log_dir.as_str()).to_string(),
+                            )
+                            .text_color(cx.theme().muted_foreground)
+                            .text_sm(),
                         )
                 }),
         )

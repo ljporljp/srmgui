@@ -1,5 +1,7 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
+rust_i18n::i18n!("locales", fallback = "zh-CN");
+
 mod add_form;
 mod app;
 mod config_io;
@@ -31,7 +33,7 @@ fn main() {
             let _ = gpui_kit::open_window(
                 WindowOptions {
                     titlebar: Some(gpui_kit::TitlebarOptions {
-                        title: Some("Cargo 镜像源切换工具".into()),
+                        title: Some(rust_i18n::t!("app.title").to_string().into()),
                         ..TitleBar::title_bar_options()
                     }),
                     app_owns_titlebar_drag: true,

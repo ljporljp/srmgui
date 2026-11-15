@@ -5949,6 +5949,7 @@ dependencies = [
  "anyhow",
  "embed-resource",
  "gpui-kit",
+ "rust-i18n",
  "rustls",
  "toml 0.8.23",
  "webpki-roots 0.26.11",

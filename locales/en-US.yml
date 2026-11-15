@@ -1,0 +1,159 @@
+app:
+  title: Cargo Registry Switcher
+
+about:
+  title: About
+  version: Version %{version}
+  description: A tiny desktop tool for switching Rust Cargo registry mirrors
+  author: Author
+  license: License
+  homepage: Homepage
+  ok: OK
+
+language:
+  zh: 中文
+  en: English
+
+theme:
+  system: System
+  light: Light
+  dark: Dark
+
+tab:
+  builtin: Built-in
+  custom: Custom
+
+button:
+  about_tip: About
+  log: Logs
+  log_collapse: Hide logs
+  add: Add
+  add_collapse: Hide form
+  import: Import
+  export: Export
+
+source:
+  current: In use
+  apply: Apply
+  delete: Delete
+  tip: "ID: %{id}\nName: %{name}\nDescription: %{description}\nRegistry URL: %{url}"
+  none: (none)
+  empty: No custom sources yet. Add one below.
+
+add:
+  label_id: ID
+  label_name: Name
+  label_url: Registry URL
+  label_description: Description (optional)
+  placeholder_id: e.g. my-mirror
+  placeholder_name: e.g. My mirror
+  placeholder_url: sparse+https://example.com/index/
+  placeholder_description: Optional description
+  ok: OK
+  error_empty: ID and URL are required
+  error_builtin: '"%{id}" is a built-in source and cannot be overridden'
+  error_exists: '"%{id}" already exists'
+  success: Custom source added
+
+status:
+  hint: Select a source, then click "Apply" to write ~/.cargo/config.toml
+  applied: Switched to %{source}. Config written (backup at config.toml.bak).
+  imported: Imported %{count} custom source(s)
+  imported_skipped: Imported %{count} custom source(s), skipped %{skipped} built-in or duplicate item(s)
+  import_empty: Nothing imported (skipped %{skipped} built-in or duplicate item(s))
+  import_failed: "Import failed: %{error}"
+  read_failed: "Failed to read %{path}: %{error}"
+  import_picker_failed: "Failed to open file picker: %{error}"
+  export_empty: No custom sources to export
+  export_picker_failed: "Failed to open save dialog: %{error}"
+  exported: Exported %{count} custom source(s) to %{path}
+  export_failed: "Failed to write %{path}: %{error}"
+
+dialog:
+  import_title: Select a srmgui custom sources file
+
+log:
+  title: Logs
+  empty: No logs yet
+  dir: "Log directory: %{dir}"
+  open: Click to open in file manager
+  app_start: srmgui started
+  switch: "Switching to source: %{source}"
+  config_written: Config written, source %{source} is now active
+  config_write_failed: "Failed to write config: %{error}"
+  probe_start: Probing %{id} (%{url})
+  probe_done: "Probe finished for %{id}: %{summary}"
+  import_start: "Importing file: %{path}"
+  import_failed: "Import failed: %{error}"
+  import_done: "Import finished: %{added} added, %{skipped} skipped"
+  exported: Exported %{count} custom source(s) to %{path}
+  export_failed: "Failed to write %{path}: %{error}"
+  custom_delete: "Deleted custom source: %{id}"
+  add_empty: "Add custom source failed: ID or URL is empty"
+  add_builtin: 'Add failed: "%{id}" is a built-in source'
+  add_exists: 'Add failed: "%{id}" already exists'
+  add: "Added custom source: %{id} (%{url})"
+
+probe:
+  tcp: TCP
+  http: HTTP index
+  parse: Index parse
+  download: Download speed
+  tip_running: "%{title}: probing…"
+  tip_skipped: "%{title}: skipped (previous step failed)"
+  tip_passed: "%{title}: passed · %{detail}"
+  tip_failed: "%{title}: failed · %{error}"
+  summary_download: Download
+  summary_skipped: skipped
+  summary_running: running
+  summary_failed: "failed:%{error}"
+
+net:
+  url_invalid: "Invalid URL: %{error}"
+  missing_dl: config.json is missing the dl/api field
+  index_parse_failed: Failed to parse index file
+  empty_download: Downloaded content is empty
+  missing_location: Redirect is missing Location
+  too_many_redirects: Exceeded %{max} redirects
+  bad_response: Malformed HTTP response
+
+error:
+  home: Cannot find home directory
+  parse_cargo_config: Failed to parse cargo config
+  read_file: Failed to read %{path}
+  create_dir: Failed to create directory %{path}
+  write_file: Failed to write %{path}
+  parse_metadata: Failed to parse srmgui metadata file
+  metadata_entry: "Metadata entry %{index} is malformed"
+  metadata_missing_id: "Metadata entry %{index} is missing id"
+  metadata_missing_url: 'Metadata for "%{id}" is missing url'
+  parse_sources: Failed to parse srmgui file
+  bad_format: 'Not a srmgui sources file (missing format = "%{format}")'
+  missing_version: srmgui file is missing the version field
+  unsupported_version: "Unsupported srmgui file version: %{version}"
+  no_sources: srmgui file contains no source entries
+  source_entry_format: "Source entry %{index} is malformed"
+  source_missing_name: "Source entry %{index} is missing name"
+  source_missing_id: "Source entry %{index} is missing id"
+  source_missing_url: 'Source "%{id}" is missing url'
+  no_valid_sources: srmgui file contains no valid source entries
+
+registry:
+  rsproxy:
+    name: RsProxy (ByteDance)
+    description: Most stable in China, recommended for daily use
+  aliyun:
+    name: Alibaba Cloud
+    description: Backup source; index sometimes works but downloads may 404
+  ustc:
+    name: USTC
+    description: Docs still online; connectivity fluctuates
+  tuna:
+    name: Tsinghua TUNA
+    description: Docs still online; occasionally unresponsive
+  sjtu:
+    name: SJTUG (Shanghai Jiao Tong University)
+    description: University mirror, good for emergencies
+  official:
+    name: Official crates.io
+    description: Default source; switch back before cargo publish

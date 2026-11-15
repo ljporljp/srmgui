@@ -111,7 +111,7 @@ pub(crate) fn open_about_dialog(window: &mut Window, cx: &mut App) {
     window.open_dialog(cx, |dialog, _window, cx| {
         let muted = cx.theme().muted_foreground;
         dialog
-            .title("关于")
+            .title(rust_i18n::t!("about.title").to_string())
             .w(px(420.))
             .child(
                 v_flex()
@@ -120,14 +120,21 @@ pub(crate) fn open_about_dialog(window: &mut Window, cx: &mut App) {
                     .gap_3()
                     .pt_2()
                     .child(logo_icon(56.))
-                    .child(Label::new("Cargo 镜像源切换工具").text_lg().font_semibold())
                     .child(
-                        Label::new(format!("版本 {}", env!("CARGO_PKG_VERSION")))
-                            .text_sm()
-                            .text_color(muted),
+                        Label::new(rust_i18n::t!("app.title").to_string())
+                            .text_lg()
+                            .font_semibold(),
                     )
                     .child(
-                        Label::new("用于切换 Rust Cargo 镜像源的桌面小工具")
+                        Label::new(
+                            rust_i18n::t!("about.version", version = env!("CARGO_PKG_VERSION"))
+                                .to_string(),
+                        )
+                        .text_sm()
+                        .text_color(muted),
+                    )
+                    .child(
+                        Label::new(rust_i18n::t!("about.description").to_string())
                             .text_sm()
                             .text_color(muted)
                             .text_center(),
@@ -142,15 +149,23 @@ pub(crate) fn open_about_dialog(window: &mut Window, cx: &mut App) {
                             .border_1()
                             .border_color(cx.theme().border)
                             .bg(cx.theme().muted)
-                            .child(about_row("作者", env!("CARGO_PKG_AUTHORS"), muted))
-                            .child(about_row("许可证", env!("CARGO_PKG_LICENSE"), muted))
+                            .child(about_row(
+                                rust_i18n::t!("about.author").to_string(),
+                                env!("CARGO_PKG_AUTHORS"),
+                                muted,
+                            ))
+                            .child(about_row(
+                                rust_i18n::t!("about.license").to_string(),
+                                env!("CARGO_PKG_LICENSE"),
+                                muted,
+                            ))
                             .child(
                                 h_flex()
                                     .w_full()
                                     .items_center()
                                     .gap_2()
                                     .child(
-                                        Label::new("项目主页")
+                                        Label::new(rust_i18n::t!("about.homepage").to_string())
                                             .text_sm()
                                             .text_color(muted)
                                             .w(px(64.)),
@@ -174,7 +189,7 @@ pub(crate) fn open_about_dialog(window: &mut Window, cx: &mut App) {
             .footer(
                 h_flex().w_full().justify_end().child(
                     Button::new("about-close")
-                        .label("确定")
+                        .label(rust_i18n::t!("about.ok").to_string())
                         .primary()
                         .on_click(|_, window, cx| window.close_dialog(cx)),
                 ),
@@ -183,7 +198,7 @@ pub(crate) fn open_about_dialog(window: &mut Window, cx: &mut App) {
 }
 
 /// 「关于」窗口中的信息行。
-fn about_row(label: &'static str, value: &'static str, muted: Hsla) -> AnyElement {
+fn about_row(label: String, value: &'static str, muted: Hsla) -> AnyElement {
     h_flex()
         .w_full()
         .items_center()
@@ -207,9 +222,17 @@ pub(crate) fn v_separator(color: Hsla) -> AnyElement {
 /// 步骤悬停提示：说明该步骤的含义与当前状态。
 pub(crate) fn level_tip(title: &str, level: &Level) -> String {
     match level {
-        Level::Running => format!("{title}：测速中…"),
-        Level::Skipped => format!("{title}：已跳过（前序步骤未通过）"),
-        Level::Passed(detail) => format!("{title}：通过 · {detail}"),
-        Level::Failed(error) => format!("{title}：不通过 · {error}"),
+        Level::Running => {
+            rust_i18n::t!("probe.tip_running", title = title).to_string()
+        }
+        Level::Skipped => {
+            rust_i18n::t!("probe.tip_skipped", title = title).to_string()
+        }
+        Level::Passed(detail) => {
+            rust_i18n::t!("probe.tip_passed", title = title, detail = detail.as_ref()).to_string()
+        }
+        Level::Failed(error) => {
+            rust_i18n::t!("probe.tip_failed", title = title, error = error.as_ref()).to_string()
+        }
     }
 }

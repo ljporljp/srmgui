@@ -59,7 +59,9 @@ pub fn probe(registry_url: &str) -> ProbeReport {
     let target = match parse(registry_url) {
         Ok(t) => t,
         Err(e) => {
-            report.tcp = Layer::Failed(format!("URL 无效：{e}"));
+            report.tcp = Layer::Failed(
+                rust_i18n::t!("net.url_invalid", error = e.to_string()).to_string(),
+            );
             return report;
         }
     };
@@ -88,7 +90,7 @@ pub fn probe(registry_url: &str) -> ProbeReport {
     let dl = match download_base(&config_body) {
         Some(dl) => dl,
         None => {
-            report.parse = Layer::Failed("config.json 缺少 dl/api 字段".into());
+            report.parse = Layer::Failed(rust_i18n::t!("net.missing_dl").to_string());
             return report;
         }
     };
@@ -140,7 +142,9 @@ fn probe_index_version(target: &Target, krate: &str) -> std::io::Result<String> 
     )?;
     ensure_success(&resp.status)?;
     let body = String::from_utf8_lossy(&resp.body);
-    parse_latest_version(&body).ok_or_else(|| std::io::Error::other("索引文件解析失败"))
+    parse_latest_version(&body).ok_or_else(|| {
+        std::io::Error::other(rust_i18n::t!("net.index_parse_failed").to_string())
+    })
 }
 
 /// 从下载端点拉取示例 crate，返回（耗时, 吞吐 字节/秒）。
@@ -152,7 +156,9 @@ fn download_speed(dl: &str, krate: &str, version: &str) -> std::io::Result<(Dura
     let elapsed = started.elapsed();
     ensure_success(&resp.status)?;
     if resp.body.is_empty() {
-        return Err(std::io::Error::other("下载内容为空"));
+        return Err(std::io::Error::other(
+            rust_i18n::t!("net.empty_download").to_string(),
+        ));
     }
     let secs = elapsed.as_secs_f64().max(0.001);
     Ok((elapsed, resp.body.len() as f64 / secs))
@@ -312,7 +318,9 @@ fn http_get(
         let location = resp
             .location
             .as_deref()
-            .ok_or_else(|| std::io::Error::other("重定向缺少 Location"))?;
+            .ok_or_else(|| {
+                std::io::Error::other(rust_i18n::t!("net.missing_location").to_string())
+            })?;
         let (next_host, next_port, next_https, next_path) =
             resolve_location(&host, port, https, &path, location)?;
         host = next_host;
@@ -320,9 +328,9 @@ fn http_get(
         https = next_https;
         path = next_path;
     }
-    Err(std::io::Error::other(format!(
-        "重定向次数超过 {MAX_REDIRECTS} 次"
-    )))
+    Err(std::io::Error::other(
+        rust_i18n::t!("net.too_many_redirects", max = MAX_REDIRECTS).to_string(),
+    ))
 }
 
 fn is_redirect(status: &str) -> bool {
@@ -417,8 +425,9 @@ fn read_all(stream: &mut impl Read, max_bytes: usize) -> std::io::Result<Vec<u8>
 }
 
 fn parse_response(raw: &[u8]) -> std::io::Result<Response> {
-    let split = find_subsequence(raw, b"\r\n\r\n")
-        .ok_or_else(|| std::io::Error::other("HTTP 响应格式错误"))?;
+    let split = find_subsequence(raw, b"\r\n\r\n").ok_or_else(|| {
+        std::io::Error::other(rust_i18n::t!("net.bad_response").to_string())
+    })?;
     let head = String::from_utf8_lossy(&raw[..split]);
     let mut body = raw[split + 4..].to_vec();
     let status = head

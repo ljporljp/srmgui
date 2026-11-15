@@ -26,7 +26,7 @@ pub(crate) struct SourceItem {
 pub(crate) struct SourceList {
     container_id: &'static str,
     kind: &'static str,
-    empty_hint: Option<&'static str>,
+    empty_hint: Option<SharedString>,
     items: Vec<SourceItem>,
 }
 
@@ -40,8 +40,8 @@ impl SourceList {
         }
     }
 
-    pub(crate) fn empty_hint(mut self, hint: &'static str) -> Self {
-        self.empty_hint = Some(hint);
+    pub(crate) fn empty_hint(mut self, hint: impl Into<SharedString>) -> Self {
+        self.empty_hint = Some(hint.into());
         self
     }
 
@@ -137,14 +137,18 @@ fn source_row(
                         .hover(cx.theme().danger)
                         .active(cx.theme().danger);
                     Button::new(format!("{kind}-del-{id}"))
-                        .label("删除")
+                        .label(rust_i18n::t!("source.delete").to_string())
                         .custom(del_variant)
                         .border_1()
                         .border_color(cx.theme().danger)
                         .on_click(cx.listener({
                             let delete_id = id.clone();
                             move |view, _ev, _window, cx| {
-                                logger::info("custom", format!("删除自定义源：{delete_id}"));
+                                logger::info(
+                                    "custom",
+                                    rust_i18n::t!("log.custom_delete", id = delete_id.as_str())
+                                        .to_string(),
+                                );
                                 view.app.update(cx, |model, cx| {
                                     model.state.customs.remove(&delete_id);
                                     if model.state.selected.as_ref() == delete_id {
@@ -200,7 +204,7 @@ fn source_row(
                         .items_center()
                         .gap_1()
                         .child(
-                            Label::new("当前生效")
+                            Label::new(rust_i18n::t!("source.current").to_string())
                                 .text_color(cx.theme().success)
                                 .text_sm(),
                         )
@@ -208,7 +212,7 @@ fn source_row(
                         .into_any_element()
                 } else {
                     Button::new(format!("{kind}-apply-{id}"))
-                        .label("应用")
+                        .label(rust_i18n::t!("source.apply").to_string())
                         .when(is_selected, |b| b.primary().large())
                         .when(!is_selected, |b| b.secondary())
                         .on_click(cx.listener({

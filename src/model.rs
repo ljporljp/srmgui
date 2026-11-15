@@ -71,25 +71,23 @@ impl Probe {
 
 /// 生成探测结果的单行摘要，用于日志记录。
 pub(crate) fn probe_summary(probe: &Probe) -> String {
-    let tcp = match &probe.tcp {
+    let skipped = rust_i18n::t!("probe.summary_skipped").to_string();
+    let running = rust_i18n::t!("probe.summary_running").to_string();
+    let level_text = |level: &Level| match level {
         Level::Passed(d) => d.to_string(),
-        Level::Failed(e) => format!("失败:{e}"),
-        Level::Skipped => "跳过".into(),
-        Level::Running => "进行中".into(),
+        Level::Failed(e) => {
+            rust_i18n::t!("probe.summary_failed", error = e.as_ref()).to_string()
+        }
+        Level::Skipped => skipped.clone(),
+        Level::Running => running.clone(),
     };
-    let http = match &probe.http {
-        Level::Passed(d) => d.to_string(),
-        Level::Failed(e) => format!("失败:{e}"),
-        Level::Skipped => "跳过".into(),
-        Level::Running => "进行中".into(),
-    };
-    let download = match &probe.download {
-        Level::Passed(d) => d.to_string(),
-        Level::Failed(e) => format!("失败:{e}"),
-        Level::Skipped => "跳过".into(),
-        Level::Running => "进行中".into(),
-    };
-    format!("TCP={tcp} | HTTP={http} | 下载={download}")
+    format!(
+        "TCP={} | HTTP={} | {}={}",
+        level_text(&probe.tcp),
+        level_text(&probe.http),
+        rust_i18n::t!("probe.summary_download"),
+        level_text(&probe.download)
+    )
 }
 
 /// 单个步骤的展示文字与语义状态。
@@ -133,6 +131,47 @@ pub(crate) enum ThemeChoice {
     System,
     Light,
     Dark,
+}
+
+/// 界面语言。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum Language {
+    #[default]
+    Zh,
+    En,
+}
+
+impl Language {
+    /// rust-i18n 使用的 locale 标识。
+    pub(crate) fn code(self) -> &'static str {
+        match self {
+            Self::Zh => "zh-CN",
+            Self::En => "en-US",
+        }
+    }
+
+    /// 从持久化的语言标识解析，无法识别时回退中文。
+    pub(crate) fn from_code(code: &str) -> Self {
+        if code.to_ascii_lowercase().starts_with("en") {
+            Self::En
+        } else {
+            Self::Zh
+        }
+    }
+
+    pub(crate) fn index(self) -> usize {
+        match self {
+            Self::Zh => 0,
+            Self::En => 1,
+        }
+    }
+
+    pub(crate) fn from_index(index: usize) -> Self {
+        match index {
+            1 => Self::En,
+            _ => Self::Zh,
+        }
+    }
 }
 
 impl ThemeChoice {

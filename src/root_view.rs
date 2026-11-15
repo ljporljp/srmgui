@@ -22,8 +22,8 @@ use crate::config_io::CustomSource;
 use crate::logger;
 use crate::log_panel::render_log_panel;
 use crate::model::{
-    Level, LevelTone, PROBE_INTERVAL, Probe, Status, ThemeChoice, apply_theme, level_display,
-    probe_summary,
+    Language, Level, LevelTone, PROBE_INTERVAL, Probe, Status, ThemeChoice, apply_theme,
+    level_display, probe_summary,
 };
 use crate::net;
 use crate::registry;
@@ -60,11 +60,20 @@ impl RootView {
         cx: &mut Context<Self>,
         app: Entity<CargoMirrorApp>,
     ) -> Self {
-        let new_id_input = cx.new(|cx| InputState::new(window, cx).placeholder("如 my-mirror"));
-        let new_name_input = cx.new(|cx| InputState::new(window, cx).placeholder("如 我的镜像源"));
-        let new_url_input = cx
-            .new(|cx| InputState::new(window, cx).placeholder("sparse+https://example.com/index/"));
-        let new_desc_input = cx.new(|cx| InputState::new(window, cx).placeholder("可选，源的说明文字"));
+        let new_id_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(rust_i18n::t!("add.placeholder_id").to_string())
+        });
+        let new_name_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("add.placeholder_name").to_string())
+        });
+        let new_url_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(rust_i18n::t!("add.placeholder_url").to_string())
+        });
+        let new_desc_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("add.placeholder_description").to_string())
+        });
         let view = Self {
             app,
             bottom_panel: BottomPanel::None,
@@ -74,7 +83,7 @@ impl RootView {
             new_desc_input,
         };
 
-        logger::info("app", "srmgui 启动");
+        logger::info("app", rust_i18n::t!("log.app_start").to_string());
 
         // 启动时按当前选择应用主题，并在「跟随系统」时响应系统外观变化。
         let theme = view.app.read(cx).state.theme;
@@ -98,14 +107,32 @@ impl RootView {
         view
     }
 
+    /// 语言切换后刷新输入框占位文字。
+    fn update_placeholders(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let inputs = [
+            (&self.new_id_input, "add.placeholder_id"),
+            (&self.new_name_input, "add.placeholder_name"),
+            (&self.new_url_input, "add.placeholder_url"),
+            (&self.new_desc_input, "add.placeholder_description"),
+        ];
+        for (input, key) in inputs {
+            let text = rust_i18n::t!(key).to_string();
+            input.update(cx, |state, cx| state.set_placeholder(text, window, cx));
+        }
+    }
+
     pub(crate) fn apply(&mut self, cx: &mut Context<Self>) {
         let selected: String = self.app.read(cx).state.selected.clone().into();
         let customs = self.app.read(cx).state.customs.clone();
 
-        logger::info("apply", format!("切换到源：{selected}"));
+        logger::info(
+            "apply",
+            rust_i18n::t!("log.switch", source = selected.as_str()).to_string(),
+        );
 
         // Offload config write to a thread so we never block the UI.
         let selected_for_write = selected.clone();
+        let selected_for_log = selected.clone();
         thread::spawn(move || {
             let result = (|| -> Result<_> {
                 let content = registry::build_config(&selected_for_write, &customs);
@@ -115,8 +142,15 @@ impl RootView {
                 Ok(())
             })();
             match result {
-                Ok(_) => logger::info("apply", format!("配置已写入，源 {selected_for_write} 生效")),
-                Err(e) => logger::error("apply", format!("写入配置失败：{e:#}")),
+                Ok(_) => logger::info(
+                    "apply",
+                    rust_i18n::t!("log.config_written", source = selected_for_write.as_str())
+                        .to_string(),
+                ),
+                Err(e) => logger::error(
+                    "apply",
+                    rust_i18n::t!("log.config_write_failed", error = format!("{e:#}")).to_string(),
+                ),
             }
         });
 
@@ -125,7 +159,9 @@ impl RootView {
             model.state.current = Some(selected.clone().into());
             model.state.selected = selected.clone().into();
             model.state.status = Status::Success(
-                format!("已切换到 {selected}，配置已写入（备份在 config.toml.bak）").into(),
+                rust_i18n::t!("status.applied", source = selected_for_log.as_str())
+                    .to_string()
+                    .into(),
             );
             cx.notify();
         });
@@ -161,7 +197,10 @@ impl RootView {
             cx.notify();
         });
 
-        logger::info("probe", format!("开始测速 {id} ({url})"));
+        logger::info(
+            "probe",
+            rust_i18n::t!("log.probe_start", id = id.as_str(), url = url.as_str()).to_string(),
+        );
 
         cx.spawn(async move |view, cx| {
             let report = cx
@@ -171,13 +210,12 @@ impl RootView {
             let probe = Probe::from_report(report);
 
             let summary = probe_summary(&probe);
+            let message =
+                rust_i18n::t!("log.probe_done", id = id.as_str(), summary = summary.as_str())
+                    .to_string();
             match &probe.download {
-                Level::Failed(_) | Level::Skipped => {
-                    logger::warn("probe", format!("测速完成 {id}：{summary}"));
-                }
-                _ => {
-                    logger::info("probe", format!("测速完成 {id}：{summary}"));
-                }
+                Level::Failed(_) | Level::Skipped => logger::warn("probe", message),
+                _ => logger::info("probe", message),
             }
 
             let _ = view.update(cx, |view, cx| {
@@ -196,14 +234,16 @@ impl RootView {
             files: true,
             directories: false,
             multiple: false,
-            prompt: Some("选择 srmgui 自定义源文件".into()),
+            prompt: Some(rust_i18n::t!("dialog.import_title").to_string().into()),
         });
         cx.spawn(async move |view, cx| {
             let path = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
                 Ok(Ok(None)) => None,
                 Ok(Err(error)) => {
-                    let message = format!("打开文件选择器失败：{error}");
+                    let message =
+                        rust_i18n::t!("status.import_picker_failed", error = error.to_string())
+                            .to_string();
                     let _ = view.update(cx, |view, cx| {
                         view.app.update(cx, |model, cx| {
                             model.state.status = Status::Error(message.clone().into());
@@ -223,18 +263,32 @@ impl RootView {
 
     /// 从文件导入自定义源：跳过内置与已存在的标识，新增项立即测速。
     fn import_customs_from(&mut self, path: &Path, cx: &mut Context<Self>) {
-        logger::info("import", format!("开始导入文件：{}", path.display()));
+        logger::info(
+            "import",
+            rust_i18n::t!("log.import_start", path = path.display().to_string()).to_string(),
+        );
 
         let imported = std::fs::read_to_string(path)
-            .map_err(|error| format!("读取 {} 失败：{error}", path.display()))
+            .map_err(|error| {
+                rust_i18n::t!(
+                    "status.read_failed",
+                    path = path.display().to_string(),
+                    error = error.to_string()
+                )
+                .to_string()
+            })
             .and_then(|text| {
-                config_io::import_customs(&text).map_err(|error| format!("{error:#}"))
+                config_io::import_customs(&text)
+                    .map_err(|error| rust_i18n::t!("status.import_failed", error = format!("{error:#}")).to_string())
             });
 
         let imported = match imported {
             Ok(imported) => imported,
             Err(message) => {
-                logger::error("import", format!("导入失败：{message}"));
+                logger::error(
+                    "import",
+                    rust_i18n::t!("log.import_failed", error = message.as_str()).to_string(),
+                );
                 self.app.update(cx, |model, cx| {
                     model.state.status = Status::Error(message.into());
                     cx.notify();
@@ -261,15 +315,25 @@ impl RootView {
             }
 
             model.state.status = if added.is_empty() {
-                Status::Error(format!("没有导入任何源（跳过 {skipped} 个内置或重复项）").into())
+                Status::Error(
+                    rust_i18n::t!("status.import_empty", skipped = skipped)
+                        .to_string()
+                        .into(),
+                )
             } else if skipped == 0 {
-                Status::Success(format!("已导入 {} 个自定义源", added.len()).into())
+                Status::Success(
+                    rust_i18n::t!("status.imported", count = added.len())
+                        .to_string()
+                        .into(),
+                )
             } else {
                 Status::Success(
-                    format!(
-                        "已导入 {} 个自定义源，跳过 {skipped} 个内置或重复项",
-                        added.len()
+                    rust_i18n::t!(
+                        "status.imported_skipped",
+                        count = added.len(),
+                        skipped = skipped
                     )
+                    .to_string()
                     .into(),
                 )
             };
@@ -281,7 +345,7 @@ impl RootView {
 
         logger::info(
             "import",
-            format!("导入完成：新增 {} 个，跳过 {} 个", added.len(), skipped),
+            rust_i18n::t!("log.import_done", added = added.len(), skipped = skipped).to_string(),
         );
 
         for (name, url) in added {
@@ -304,7 +368,8 @@ impl RootView {
 
         if customs.is_empty() {
             self.app.update(cx, |model, cx| {
-                model.state.status = Status::Error("还没有可导出的自定义源".into());
+                model.state.status =
+                    Status::Error(rust_i18n::t!("status.export_empty").to_string().into());
                 cx.notify();
             });
             return;
@@ -321,7 +386,9 @@ impl RootView {
                 Ok(Ok(Some(path))) => path,
                 Ok(Ok(None)) => return,
                 Ok(Err(error)) => {
-                    let message = format!("打开保存对话框失败：{error}");
+                    let message =
+                        rust_i18n::t!("status.export_picker_failed", error = error.to_string())
+                            .to_string();
                     let _ = view.update(cx, |view, cx| {
                         view.app.update(cx, |model, cx| {
                             model.state.status = Status::Error(message.clone().into());
@@ -334,28 +401,47 @@ impl RootView {
             };
 
             let target = with_sources_extension(&path);
+            let target_path = target.display().to_string();
             let count = customs.len();
             let text = config_io::export_customs(&customs);
             let result = std::fs::write(&target, text);
             match &result {
                 Ok(()) => logger::info(
                     "export",
-                    format!("已导出 {count} 个自定义源到 {}", target.display()),
+                    rust_i18n::t!("log.exported", count = count, path = target_path.as_str())
+                        .to_string(),
                 ),
                 Err(error) => logger::error(
                     "export",
-                    format!("写入 {} 失败：{error}", target.display()),
+                    rust_i18n::t!(
+                        "log.export_failed",
+                        path = target_path.as_str(),
+                        error = error.to_string()
+                    )
+                    .to_string(),
                 ),
             }
             let _ = view.update(cx, |view, cx| {
                 view.app.update(cx, |model, cx| {
                     model.state.status = match result {
                         Ok(()) => Status::Success(
-                            format!("已导出 {count} 个自定义源到 {}", target.display()).into(),
+                            rust_i18n::t!(
+                                "status.exported",
+                                count = count,
+                                path = target_path.as_str()
+                            )
+                            .to_string()
+                            .into(),
                         ),
-                        Err(error) => {
-                            Status::Error(format!("写入 {} 失败：{error}", target.display()).into())
-                        }
+                        Err(error) => Status::Error(
+                            rust_i18n::t!(
+                                "status.export_failed",
+                                path = target_path.as_str(),
+                                error = error.to_string()
+                            )
+                            .to_string()
+                            .into(),
+                        ),
                     };
                     cx.notify();
                 });
@@ -371,10 +457,14 @@ impl RootView {
         };
 
         let steps = [
-            ("🔌", "TCP 连通", &probe.tcp),
-            ("🌐", "HTTP 索引探测", &probe.http),
-            ("📄", "索引文件解析", &probe.parse),
-            ("⬇️", "下载端点速度", &probe.download),
+            ("🔌", rust_i18n::t!("probe.tcp").to_string(), &probe.tcp),
+            ("🌐", rust_i18n::t!("probe.http").to_string(), &probe.http),
+            ("📄", rust_i18n::t!("probe.parse").to_string(), &probe.parse),
+            (
+                "⬇️",
+                rust_i18n::t!("probe.download").to_string(),
+                &probe.download,
+            ),
         ];
 
         let mut row = h_flex().items_stretch().gap_2().self_stretch();
@@ -394,7 +484,7 @@ impl RootView {
         row_id: &str,
         index: usize,
         icon: &'static str,
-        title: &'static str,
+        title: &str,
         level: &Level,
         show_speed: bool,
         cx: &mut Context<Self>,
@@ -440,13 +530,20 @@ impl RootView {
             .into_iter()
             .map(|r| {
                 let id = r.id.to_string();
+                let name = rust_i18n::t!(format!("registry.{}.name", r.id)).to_string();
+                let description =
+                    rust_i18n::t!(format!("registry.{}.description", r.id)).to_string();
                 SourceItem {
-                    name: r.name.into(),
-                    detail: r.description.into(),
-                    tip: format!(
-                        "标识名：{}\n名称：{}\n说明：{}\nRegistry URL：{}",
-                        r.id, r.name, r.description, r.url
+                    name: name.clone().into(),
+                    detail: description.clone().into(),
+                    tip: rust_i18n::t!(
+                        "source.tip",
+                        id = r.id,
+                        name = name.as_str(),
+                        description = description.as_str(),
+                        url = r.url
                     )
+                    .to_string()
                     .into(),
                     is_selected: selected.as_ref() == r.id,
                     is_current: current.as_ref().map(|c| c.as_ref()) == Some(r.id),
@@ -478,11 +575,20 @@ impl RootView {
                 let display_name = if src.name.is_empty() { id.clone() } else { src.name.clone() };
                 let url_display = src.url.strip_prefix("sparse+").unwrap_or(&src.url).to_string();
                 let desc_display = if src.description.is_empty() { url_display.clone() } else { src.description.clone() };
-                let tip: SharedString = format!(
-                    "标识名：{id}\n名称：{display_name}\n说明：{}\nRegistry URL：{}",
-                    if src.description.is_empty() { "（无）" } else { &src.description },
-                    src.url
-                ).into();
+                let desc_tip = if src.description.is_empty() {
+                    rust_i18n::t!("source.none").to_string()
+                } else {
+                    src.description.clone()
+                };
+                let tip: SharedString = rust_i18n::t!(
+                    "source.tip",
+                    id = id.as_str(),
+                    name = display_name.as_str(),
+                    description = desc_tip.as_str(),
+                    url = src.url.as_str()
+                )
+                .to_string()
+                .into();
                 SourceItem {
                     id,
                     name: display_name.into(),
@@ -497,7 +603,7 @@ impl RootView {
             .collect();
 
         SourceList::new("custom-list-scroll", "custom")
-            .empty_hint("还没有自定义源，在下方添加")
+            .empty_hint(rust_i18n::t!("source.empty").to_string())
             .items(items)
             .render(self, cx)
     }
@@ -512,11 +618,11 @@ impl RootView {
         let is_log_active = self.bottom_panel == BottomPanel::LogPanel;
         let log_btn = if is_log_active {
             Button::new("toggle-log")
-                .label("收起日志")
+                .label(rust_i18n::t!("button.log_collapse").to_string())
                 .primary()
         } else {
             Button::new("toggle-log")
-                .label("日志")
+                .label(rust_i18n::t!("button.log").to_string())
                 .secondary()
         }
         .on_click(cx.listener(|view, _ev, _window, cx| {
@@ -544,6 +650,7 @@ impl RootView {
 impl Render for RootView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.app.read(cx).state.theme;
+        let language = self.app.read(cx).state.language;
         let active_tab = self.app.read(cx).state.active_tab;
         let theme_app = self.app.clone();
         let viewport_height = _window.viewport_size().height.as_f32();
@@ -558,7 +665,11 @@ impl Render for RootView {
                         .items_center()
                         .gap_2()
                         .child(logo_icon(18.))
-                        .child(Label::new("Cargo 镜像源切换工具").text_sm().font_semibold()),
+                        .child(
+                            Label::new(rust_i18n::t!("app.title").to_string())
+                                .text_sm()
+                                .font_semibold(),
+                        ),
                 ),
             )
             .child(
@@ -568,35 +679,75 @@ impl Render for RootView {
                     .p_4()
                     .gap_4()
                     .child(
-                        // Header: 关于与主题切换
+                        // Header: 关于、语言与主题切换
                         h_flex()
                             .items_center()
                             .gap_2()
                             .child(
                                 Button::new("about-button")
                                     .icon(IconName::Info)
-                                    .tooltip("关于")
+                                    .tooltip(rust_i18n::t!("button.about_tip").to_string())
                                     .small()
                                     .secondary()
                                     .on_click(|_, window, cx| open_about_dialog(window, cx)),
                             )
                             .child(
-                                div().ml_auto().child(
-                                    TabBar::new("theme-tabs")
-                                        .segmented()
-                                        .selected_index(theme.index())
-                                        .on_click(move |index, _window, cx| {
-                                            let choice = ThemeChoice::from_index(*index);
-                                            theme_app.update(cx, |model, cx| {
-                                                model.state.theme = choice;
-                                                cx.notify();
-                                            });
-                                            apply_theme(choice, cx);
-                                        })
-                                        .child(Tab::new().label("跟随系统"))
-                                        .child(Tab::new().label("浅色"))
-                                        .child(Tab::new().label("深色")),
-                                ),
+                                h_flex()
+                                    .ml_auto()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(
+                                        TabBar::new("language-tabs")
+                                            .segmented()
+                                            .selected_index(language.index())
+                                            .on_click(cx.listener(
+                                                |view, index: &usize, window, cx| {
+                                                    let language =
+                                                        Language::from_index(*index);
+                                                    rust_i18n::set_locale(language.code());
+                                                    let _ =
+                                                        config_io::write_language(language.code());
+                                                    view.update_placeholders(window, cx);
+                                                    view.app.update(cx, |model, cx| {
+                                                        model.state.language = language;
+                                                        model.state.status = Status::Info(
+                                                            rust_i18n::t!("status.hint")
+                                                                .to_string()
+                                                                .into(),
+                                                        );
+                                                        cx.notify();
+                                                    });
+                                                },
+                                            ))
+                                            .child(Tab::new().label(
+                                                rust_i18n::t!("language.zh").to_string(),
+                                            ))
+                                            .child(Tab::new().label(
+                                                rust_i18n::t!("language.en").to_string(),
+                                            )),
+                                    )
+                                    .child(
+                                        TabBar::new("theme-tabs")
+                                            .segmented()
+                                            .selected_index(theme.index())
+                                            .on_click(move |index, _window, cx| {
+                                                let choice = ThemeChoice::from_index(*index);
+                                                theme_app.update(cx, |model, cx| {
+                                                    model.state.theme = choice;
+                                                    cx.notify();
+                                                });
+                                                apply_theme(choice, cx);
+                                            })
+                                            .child(Tab::new().label(
+                                                rust_i18n::t!("theme.system").to_string(),
+                                            ))
+                                            .child(Tab::new().label(
+                                                rust_i18n::t!("theme.light").to_string(),
+                                            ))
+                                            .child(Tab::new().label(
+                                                rust_i18n::t!("theme.dark").to_string(),
+                                            )),
+                                    ),
                             ),
                     )
                 // Main: independent preset and custom source tabs
@@ -621,8 +772,12 @@ impl Render for RootView {
                                     }
                                     cx.notify();
                                 }))
-                                .child(Tab::new().flex_1().label("内置源"))
-                                .child(Tab::new().flex_1().label("自定义源")),
+                                .child(Tab::new().flex_1().label(
+                                    rust_i18n::t!("tab.builtin").to_string(),
+                                ))
+                                .child(Tab::new().flex_1().label(
+                                    rust_i18n::t!("tab.custom").to_string(),
+                                )),
                         )
                         .child(if active_tab == 0 {
                             self.render_preset_list(cx)
@@ -640,9 +795,9 @@ impl Render for RootView {
                                             let is_add_active = self.bottom_panel == BottomPanel::AddForm;
                                             let add_btn = Button::new("toggle-add-form")
                                                 .label(if is_add_active {
-                                                    "收起添加"
+                                                    rust_i18n::t!("button.add_collapse").to_string()
                                                 } else {
-                                                    "添加"
+                                                    rust_i18n::t!("button.add").to_string()
                                                 });
                                             if is_add_active {
                                                 add_btn.primary()
@@ -659,7 +814,7 @@ impl Render for RootView {
                                         })
                                         .child(
                                             Button::new("import-customs")
-                                                .label("导入")
+                                                .label(rust_i18n::t!("button.import").to_string())
                                                 .secondary()
                                                 .on_click(cx.listener(|view, _ev, _window, cx| {
                                                     view.import_customs(cx);
@@ -667,7 +822,7 @@ impl Render for RootView {
                                         )
                                         .child(
                                             Button::new("export-customs")
-                                                .label("导出")
+                                                .label(rust_i18n::t!("button.export").to_string())
                                                 .secondary()
                                                 .on_click(cx.listener(|view, _ev, _window, cx| {
                                                     view.export_customs(cx);

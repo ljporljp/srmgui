@@ -32,6 +32,14 @@ impl CustomSource {
     }
 }
 
+/// 用户主目录。
+fn home_dir() -> Result<PathBuf> {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .map(PathBuf::from)
+        .with_context(|| rust_i18n::t!("error.home").to_string())
+}
+
 /// Cargo home: `$CARGO_HOME` or `~/.cargo`.
 pub fn cargo_home() -> Result<PathBuf> {
     if let Ok(p) = std::env::var("CARGO_HOME") {
@@ -39,10 +47,12 @@ pub fn cargo_home() -> Result<PathBuf> {
             return Ok(PathBuf::from(p));
         }
     }
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .context("cannot find home directory")?;
-    Ok(PathBuf::from(home).join(".cargo"))
+    Ok(home_dir()?.join(".cargo"))
+}
+
+/// 应用配置目录：`<HOME>/srmgui`，与日志目录 `<HOME>/srmgui/logs` 同级。
+pub fn app_dir() -> Result<PathBuf> {
+    Ok(home_dir()?.join("srmgui"))
 }
 
 /// Path to the active cargo config file (prefers `config.toml` over legacy `config`).
@@ -55,7 +65,41 @@ pub fn config_path() -> Result<PathBuf> {
 
 /// 自定义源元数据文件路径（存放 name / description 等 cargo config 无法承载的信息）。
 pub fn customs_path() -> Result<PathBuf> {
-    Ok(cargo_home()?.join("srmgui-customs.toml"))
+    Ok(app_dir()?.join("srmgui-customs.toml"))
+}
+
+/// 应用设置文件路径。
+pub fn settings_path() -> Result<PathBuf> {
+    Ok(app_dir()?.join("srmgui-settings.toml"))
+}
+
+/// 读取持久化的界面语言（如 `zh-CN` / `en-US`）。
+pub fn read_language() -> Option<String> {
+    let path = settings_path().ok()?;
+    let text = std::fs::read_to_string(path).ok()?;
+    let root: toml::Table = text.parse().ok()?;
+    match root.get("language") {
+        Some(toml::Value::String(code)) => Some(code.clone()),
+        _ => None,
+    }
+}
+
+/// 持久化界面语言设置。
+pub fn write_language(code: &str) -> Result<()> {
+    let path = settings_path()?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| {
+            rust_i18n::t!("error.create_dir", path = parent.display().to_string()).to_string()
+        })?;
+    }
+    let content = format!(
+        "# srmgui 设置（由 srmgui 管理，请勿手动编辑）\nlanguage = {}\n",
+        quote(code)
+    );
+    std::fs::write(&path, content).with_context(|| {
+        rust_i18n::t!("error.write_file", path = path.display().to_string()).to_string()
+    })?;
+    Ok(())
 }
 
 /// Read which source id is currently in effect.
@@ -68,9 +112,12 @@ pub fn current_source() -> Result<Option<String>> {
     if !path.exists() {
         return Ok(None);
     }
-    let text =
-        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    let root: toml::Table = text.parse().context("parse cargo config")?;
+    let text = std::fs::read_to_string(&path).with_context(|| {
+        rust_i18n::t!("error.read_file", path = path.display().to_string()).to_string()
+    })?;
+    let root: toml::Table = text
+        .parse()
+        .with_context(|| rust_i18n::t!("error.parse_cargo_config").to_string())?;
 
     // `[source.crates-io] replace-with = "..."`
     if let Some(toml::Value::Table(src)) = root.get("source") {
@@ -131,7 +178,9 @@ pub fn read_customs() -> Result<HashMap<String, CustomSource>> {
 
 /// 解析 srmgui 元数据文件（内部存储格式）。
 fn parse_customs_metadata(text: &str) -> Result<HashMap<String, CustomSource>> {
-    let root: toml::Table = text.parse().context("解析 srmgui 元数据文件失败")?;
+    let root: toml::Table = text
+        .parse()
+        .with_context(|| rust_i18n::t!("error.parse_metadata").to_string())?;
     let Some(toml::Value::Array(customs)) = root.get("custom") else {
         return Ok(HashMap::new());
     };
@@ -139,20 +188,27 @@ fn parse_customs_metadata(text: &str) -> Result<HashMap<String, CustomSource>> {
     let mut out = HashMap::new();
     for (index, item) in customs.iter().enumerate() {
         let toml::Value::Table(entry) = item else {
-            bail!("元数据第 {} 条目格式错误", index + 1);
+            bail!(
+                "{}",
+                rust_i18n::t!("error.metadata_entry", index = index + 1)
+            );
         };
         let id = entry
             .get("id")
             .and_then(toml::Value::as_str)
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .with_context(|| format!("元数据第 {} 条缺少 id", index + 1))?;
+            .with_context(|| {
+                rust_i18n::t!("error.metadata_missing_id", index = index + 1).to_string()
+            })?;
         let url = entry
             .get("url")
             .and_then(toml::Value::as_str)
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .with_context(|| format!("元数据「{id}」缺少 url"))?;
+            .with_context(|| {
+                rust_i18n::t!("error.metadata_missing_url", id = id).to_string()
+            })?;
         let name = entry
             .get("name")
             .and_then(toml::Value::as_str)
@@ -168,12 +224,13 @@ fn parse_customs_metadata(text: &str) -> Result<HashMap<String, CustomSource>> {
     Ok(out)
 }
 
-/// 持久化自定义源元数据到 `~/.cargo/srmgui-customs.toml`。
+/// 持久化自定义源元数据到 `<HOME>/srmgui/srmgui-customs.toml`。
 pub fn write_customs(customs: &HashMap<String, CustomSource>) -> Result<()> {
     let path = customs_path()?;
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| parent.display().to_string())?;
+        std::fs::create_dir_all(parent).with_context(|| {
+            rust_i18n::t!("error.create_dir", path = parent.display().to_string()).to_string()
+        })?;
     }
 
     let mut ids: Vec<&String> = customs.keys().collect();
@@ -189,7 +246,9 @@ pub fn write_customs(customs: &HashMap<String, CustomSource>) -> Result<()> {
         out.push_str(&format!("url = {}\n", quote(&src.url)));
         out.push_str(&format!("description = {}\n", quote(&src.description)));
     }
-    std::fs::write(&path, out).with_context(|| path.display().to_string())?;
+    std::fs::write(&path, out).with_context(|| {
+        rust_i18n::t!("error.write_file", path = path.display().to_string()).to_string()
+    })?;
     Ok(())
 }
 
@@ -214,28 +273,39 @@ pub fn export_customs(customs: &HashMap<String, CustomSource>) -> String {
 
 /// 解析 srmgui 自定义源文件，支持 v1（name 即 id）与 v2（id + name + description）。
 pub fn import_customs(text: &str) -> Result<HashMap<String, CustomSource>> {
-    let root: toml::Table = text.parse().context("解析 srmgui 文件失败")?;
+    let root: toml::Table = text
+        .parse()
+        .with_context(|| rust_i18n::t!("error.parse_sources").to_string())?;
 
     match root.get("format") {
         Some(toml::Value::String(format)) if format == SOURCES_FORMAT => {}
-        _ => bail!("不是 srmgui 源文件（缺少 format = \"{SOURCES_FORMAT}\"）"),
+        _ => bail!(
+            "{}",
+            rust_i18n::t!("error.bad_format", format = SOURCES_FORMAT)
+        ),
     }
     let version = match root.get("version") {
         Some(toml::Value::Integer(v)) => *v,
-        _ => bail!("srmgui 文件缺少 version 字段"),
+        _ => bail!("{}", rust_i18n::t!("error.missing_version")),
     };
     if version != 1 && version != SOURCES_VERSION {
-        bail!("不支持的 srmgui 文件版本：{version}");
+        bail!(
+            "{}",
+            rust_i18n::t!("error.unsupported_version", version = version)
+        );
     }
 
     let Some(toml::Value::Array(sources)) = root.get("source") else {
-        bail!("srmgui 文件中没有源条目");
+        bail!("{}", rust_i18n::t!("error.no_sources"));
     };
 
     let mut customs = HashMap::new();
     for (index, item) in sources.iter().enumerate() {
         let toml::Value::Table(entry) = item else {
-            bail!("第 {} 个源条目格式错误", index + 1);
+            bail!(
+                "{}",
+                rust_i18n::t!("error.source_entry_format", index = index + 1)
+            );
         };
 
         // v1 用 name 字段作为 id；v2 用 id 字段，name 为展示名
@@ -245,7 +315,9 @@ pub fn import_customs(text: &str) -> Result<HashMap<String, CustomSource>> {
                 .and_then(toml::Value::as_str)
                 .map(str::trim)
                 .filter(|s| !s.is_empty())
-                .with_context(|| format!("第 {} 个源缺少 name", index + 1))?;
+                .with_context(|| {
+                    rust_i18n::t!("error.source_missing_name", index = index + 1).to_string()
+                })?;
             (name.to_string(), name.to_string())
         } else {
             let id = entry
@@ -253,7 +325,9 @@ pub fn import_customs(text: &str) -> Result<HashMap<String, CustomSource>> {
                 .and_then(toml::Value::as_str)
                 .map(str::trim)
                 .filter(|s| !s.is_empty())
-                .with_context(|| format!("第 {} 个源缺少 id", index + 1))?;
+                .with_context(|| {
+                    rust_i18n::t!("error.source_missing_id", index = index + 1).to_string()
+                })?;
             (id.to_string(), id.to_string())
         };
 
@@ -262,7 +336,9 @@ pub fn import_customs(text: &str) -> Result<HashMap<String, CustomSource>> {
             .and_then(toml::Value::as_str)
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .with_context(|| format!("源「{id}」缺少 url"))?;
+            .with_context(|| {
+                rust_i18n::t!("error.source_missing_url", id = id.as_str()).to_string()
+            })?;
 
         let name = entry
             .get("name")
@@ -278,7 +354,7 @@ pub fn import_customs(text: &str) -> Result<HashMap<String, CustomSource>> {
         customs.insert(id, CustomSource::new(name, url, description));
     }
     if customs.is_empty() {
-        bail!("srmgui 文件中没有有效的源条目");
+        bail!("{}", rust_i18n::t!("error.no_valid_sources"));
     }
     Ok(customs)
 }
@@ -304,12 +380,16 @@ fn quote(value: &str) -> String {
 /// Write the new config, keeping a `.bak` of the previous file.
 pub fn write_config(content: &str) -> Result<PathBuf> {
     let home = cargo_home()?;
-    std::fs::create_dir_all(&home).with_context(|| home.display().to_string())?;
+    std::fs::create_dir_all(&home).with_context(|| {
+        rust_i18n::t!("error.create_dir", path = home.display().to_string()).to_string()
+    })?;
     let path = home.join("config.toml");
     if path.exists() {
         let _ = std::fs::copy(&path, home.join("config.toml.bak"));
     }
-    std::fs::write(&path, content).with_context(|| path.display().to_string())?;
+    std::fs::write(&path, content).with_context(|| {
+        rust_i18n::t!("error.write_file", path = path.display().to_string()).to_string()
+    })?;
     Ok(path)
 }
 

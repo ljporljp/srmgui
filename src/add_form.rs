@@ -25,27 +25,34 @@ pub(crate) fn render_add_form(view: &RootView, cx: &mut Context<RootView>) -> An
             .trim()
             .to_string();
         if id.is_empty() || url.is_empty() {
-            logger::warn("custom", "添加自定义源失败：标识名或 URL 为空");
+            logger::warn("custom", rust_i18n::t!("log.add_empty").to_string());
             view.app.update(cx, |model, cx| {
-                model.state.status = Status::Error("标识名和 URL 都不能为空".into());
+                model.state.status =
+                    Status::Error(rust_i18n::t!("add.error_empty").to_string().into());
                 cx.notify();
             });
             return;
         }
         if registry::builtins().iter().any(|r| r.id == id) {
-            logger::warn("custom", format!("添加失败：「{id}」是内置源"));
+            logger::warn(
+                "custom",
+                rust_i18n::t!("log.add_builtin", id = id.as_str()).to_string(),
+            );
             view.app.update(cx, |model, cx| {
                 model.state.status =
-                    Status::Error(format!("「{id}」是内置源，不能覆盖").into());
+                    Status::Error(rust_i18n::t!("add.error_builtin", id = id).to_string().into());
                 cx.notify();
             });
             return;
         }
         if view.app.read(cx).state.customs.contains_key(&id) {
-            logger::warn("custom", format!("添加失败：「{id}」已存在"));
+            logger::warn(
+                "custom",
+                rust_i18n::t!("log.add_exists", id = id.as_str()).to_string(),
+            );
             view.app.update(cx, |model, cx| {
                 model.state.status =
-                    Status::Error(format!("「{id}」已存在，请勿重复添加").into());
+                    Status::Error(rust_i18n::t!("add.error_exists", id = id).to_string().into());
                 cx.notify();
             });
             return;
@@ -54,7 +61,7 @@ pub(crate) fn render_add_form(view: &RootView, cx: &mut Context<RootView>) -> An
         let normalized_url = normalize_registry_url(&url);
         logger::info(
             "custom",
-            format!("添加自定义源：{id} ({normalized_url})"),
+            rust_i18n::t!("log.add", id = id.as_str(), url = normalized_url.as_str()).to_string(),
         );
         view.app.update(cx, |model, cx| {
             model.state.customs.insert(
@@ -62,7 +69,8 @@ pub(crate) fn render_add_form(view: &RootView, cx: &mut Context<RootView>) -> An
                 CustomSource::new(display_name, normalized_url, description),
             );
             model.state.selected = id.clone().into();
-            model.state.status = Status::Success("已添加自定义源".into());
+            model.state.status =
+                Status::Success(rust_i18n::t!("add.success").to_string().into());
             cx.notify();
         });
         let _ = config_io::write_customs(&view.app.read(cx).state.customs);
@@ -88,33 +96,33 @@ pub(crate) fn render_add_form(view: &RootView, cx: &mut Context<RootView>) -> An
                     v_flex()
                         .gap_1()
                         .flex_1()
-                        .child(Label::new("标识名").text_sm())
+                        .child(Label::new(rust_i18n::t!("add.label_id").to_string()).text_sm())
                         .child(Input::new(&view.new_id_input).id("custom-id").text_color(cx.theme().foreground)),
                 )
                 .child(
                     v_flex()
                         .gap_1()
                         .flex_1()
-                        .child(Label::new("名称").text_sm())
+                        .child(Label::new(rust_i18n::t!("add.label_name").to_string()).text_sm())
                         .child(Input::new(&view.new_name_input).id("custom-name").text_color(cx.theme().foreground)),
                 )
                 .child(
                     v_flex()
                         .gap_1()
                         .flex_grow(2.0)
-                        .child(Label::new("Registry URL").text_sm())
+                        .child(Label::new(rust_i18n::t!("add.label_url").to_string()).text_sm())
                         .child(Input::new(&view.new_url_input).id("custom-url").text_color(cx.theme().foreground)),
                 ),
         )
         .child(
             v_flex()
                 .gap_1()
-                .child(Label::new("说明（可选）").text_sm())
+                .child(Label::new(rust_i18n::t!("add.label_description").to_string()).text_sm())
                 .child(Input::new(&view.new_desc_input).id("custom-desc").text_color(cx.theme().foreground)),
         )
         .child(
             Button::new("confirm-add-custom")
-                .label("确定")
+                .label(rust_i18n::t!("add.ok").to_string())
                 .primary()
                 .w_full()
                 .on_click(confirm_click),

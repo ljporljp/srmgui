@@ -1,0 +1,159 @@
+app:
+  title: Cargo 镜像源切换工具
+
+about:
+  title: 关于
+  version: 版本 %{version}
+  description: 用于切换 Rust Cargo 镜像源的桌面小工具
+  author: 作者
+  license: 许可证
+  homepage: 项目主页
+  ok: 确定
+
+language:
+  zh: 中文
+  en: English
+
+theme:
+  system: 跟随系统
+  light: 浅色
+  dark: 深色
+
+tab:
+  builtin: 内置源
+  custom: 自定义源
+
+button:
+  about_tip: 关于
+  log: 日志
+  log_collapse: 收起日志
+  add: 添加
+  add_collapse: 收起添加
+  import: 导入
+  export: 导出
+
+source:
+  current: 当前生效
+  apply: 应用
+  delete: 删除
+  tip: "标识名：%{id}\n名称：%{name}\n说明：%{description}\nRegistry URL：%{url}"
+  none: （无）
+  empty: 还没有自定义源，在下方添加
+
+add:
+  label_id: 标识名
+  label_name: 名称
+  label_url: Registry URL
+  label_description: 说明（可选）
+  placeholder_id: 如 my-mirror
+  placeholder_name: 如 我的镜像源
+  placeholder_url: sparse+https://example.com/index/
+  placeholder_description: 可选，源的说明文字
+  ok: 确定
+  error_empty: 标识名和 URL 都不能为空
+  error_builtin: 「%{id}」是内置源，不能覆盖
+  error_exists: 「%{id}」已存在，请勿重复添加
+  success: 已添加自定义源
+
+status:
+  hint: 选择一个源，然后点击「应用」写入 ~/.cargo/config.toml
+  applied: 已切换到 %{source}，配置已写入（备份在 config.toml.bak）
+  imported: 已导入 %{count} 个自定义源
+  imported_skipped: 已导入 %{count} 个自定义源，跳过 %{skipped} 个内置或重复项
+  import_empty: 没有导入任何源（跳过 %{skipped} 个内置或重复项）
+  import_failed: 导入失败：%{error}
+  read_failed: 读取 %{path} 失败：%{error}
+  import_picker_failed: 打开文件选择器失败：%{error}
+  export_empty: 还没有可导出的自定义源
+  export_picker_failed: 打开保存对话框失败：%{error}
+  exported: 已导出 %{count} 个自定义源到 %{path}
+  export_failed: 写入 %{path} 失败：%{error}
+
+dialog:
+  import_title: 选择 srmgui 自定义源文件
+
+log:
+  title: 日志
+  empty: 暂无日志
+  dir: 日志目录：%{dir}
+  open: 点击在文件管理器中打开
+  app_start: srmgui 启动
+  switch: 切换到源：%{source}
+  config_written: 配置已写入，源 %{source} 生效
+  config_write_failed: 写入配置失败：%{error}
+  probe_start: 开始测速 %{id} (%{url})
+  probe_done: 测速完成 %{id}：%{summary}
+  import_start: 开始导入文件：%{path}
+  import_failed: 导入失败：%{error}
+  import_done: 导入完成：新增 %{added} 个，跳过 %{skipped} 个
+  exported: 已导出 %{count} 个自定义源到 %{path}
+  export_failed: 写入 %{path} 失败：%{error}
+  custom_delete: 删除自定义源：%{id}
+  add_empty: 添加自定义源失败：标识名或 URL 为空
+  add_builtin: 添加失败：「%{id}」是内置源
+  add_exists: 添加失败：「%{id}」已存在
+  add: 添加自定义源：%{id} (%{url})
+
+probe:
+  tcp: TCP 连通
+  http: HTTP 索引探测
+  parse: 索引文件解析
+  download: 下载端点速度
+  tip_running: "%{title}：测速中…"
+  tip_skipped: "%{title}：已跳过（前序步骤未通过）"
+  tip_passed: "%{title}：通过 · %{detail}"
+  tip_failed: "%{title}：不通过 · %{error}"
+  summary_download: 下载
+  summary_skipped: 跳过
+  summary_running: 进行中
+  summary_failed: 失败:%{error}
+
+net:
+  url_invalid: URL 无效：%{error}
+  missing_dl: config.json 缺少 dl/api 字段
+  index_parse_failed: 索引文件解析失败
+  empty_download: 下载内容为空
+  missing_location: 重定向缺少 Location
+  too_many_redirects: 重定向次数超过 %{max} 次
+  bad_response: HTTP 响应格式错误
+
+error:
+  home: 找不到用户主目录
+  parse_cargo_config: 解析 cargo 配置失败
+  read_file: 读取 %{path} 失败
+  create_dir: 创建目录 %{path} 失败
+  write_file: 写入 %{path} 失败
+  parse_metadata: 解析 srmgui 元数据文件失败
+  metadata_entry: 元数据第 %{index} 条目格式错误
+  metadata_missing_id: 元数据第 %{index} 条缺少 id
+  metadata_missing_url: 元数据「%{id}」缺少 url
+  parse_sources: 解析 srmgui 文件失败
+  bad_format: 不是 srmgui 源文件（缺少 format = "%{format}"）
+  missing_version: srmgui 文件缺少 version 字段
+  unsupported_version: 不支持的 srmgui 文件版本：%{version}
+  no_sources: srmgui 文件中没有源条目
+  source_entry_format: 第 %{index} 个源条目格式错误
+  source_missing_name: 第 %{index} 个源缺少 name
+  source_missing_id: 第 %{index} 个源缺少 id
+  source_missing_url: 源「%{id}」缺少 url
+  no_valid_sources: srmgui 文件中没有有效的源条目
+
+registry:
+  rsproxy:
+    name: RsProxy（字节）
+    description: 国内实测最稳，推荐日常使用
+  aliyun:
+    name: 阿里云
+    description: 备用源，偶发索引通但下载 404
+  ustc:
+    name: 中科大 USTC
+    description: 文档仍在，连通性波动较大
+  tuna:
+    name: 清华 TUNA
+    description: 帮助文档仍在，偶发无响应
+  sjtu:
+    name: 上海交大 SJTUG
+    description: 高校源，适合应急
+  official:
+    name: 官方 crates.io
+    description: 默认源，cargo publish 前建议切回
