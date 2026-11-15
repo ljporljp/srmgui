@@ -39,6 +39,17 @@ source:
   none: （なし）
   empty: カスタムミラーはまだありません。追加してください。
 
+scope:
+  label: 設定の出力先
+  global: グローバル
+  project: プロジェクト
+  select: プロジェクトを選択
+  change: プロジェクトを変更
+  none: プロジェクト未選択
+  tip: "プロジェクトルート（Cargo.toml を含む）：%{path}"
+  error_not_found: "%{path} に Cargo.toml が見つかりません"
+  picker_failed: "フォルダー選択ダイアログを開けませんでした：%{error}"
+
 add:
   label_id: ID
   label_name: 名前
@@ -55,8 +66,10 @@ add:
   success: カスタムミラーを追加しました
 
 status:
-  hint: ミラーを選択して「適用」をクリックすると ~/.cargo/config.toml に書き込まれます
-  applied: "%{source} に切り替えました。設定を書き込みました（バックアップ: config.toml.bak）"
+  hint: ミラーを選択して「適用」をクリックすると、グローバルまたはプロジェクトの設定に書き込まれます
+  applied: "%{source} に切り替えました。設定を %{path} に書き込みました（バックアップ: config.toml.bak）"
+  project_required: 先にプロジェクトフォルダーを選択してください
+  project_selected: "プロジェクトを選択しました：%{path}"
   imported: カスタムミラーを %{count} 件インポートしました
   imported_skipped: カスタムミラーを %{count} 件インポートし、組み込みまたは重複の %{skipped} 件をスキップしました
   import_empty: インポートされたミラーはありません（組み込みまたは重複の %{skipped} 件をスキップ）
@@ -70,6 +83,7 @@ status:
 
 dialog:
   import_title: srmgui カスタムミラーファイルを選択
+  project_title: Cargo プロジェクトのフォルダーを選択
 
 log:
   title: ログ
@@ -78,7 +92,8 @@ log:
   open: クリックしてファイルマネージャーで開く
   app_start: srmgui を起動しました
   switch: "ミラーを切り替え：%{source}"
-  config_written: 設定を書き込みました。ミラー %{source} が有効です
+  config_written: "設定を %{path} に書き込みました。ミラー %{source} が有効です"
+  project_selected: "プロジェクト設定を使用：%{path}"
   config_write_failed: "設定の書き込みに失敗しました：%{error}"
   probe_start: "%{id} の速度測定を開始 (%{url})"
   probe_done: "測定完了 %{id}：%{summary}"

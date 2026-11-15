@@ -39,6 +39,17 @@ source:
   none: （无）
   empty: 还没有自定义源，请添加
 
+scope:
+  label: 配置位置
+  global: 全局
+  project: 项目
+  select: 选择项目
+  change: 更换项目
+  none: 尚未选择项目
+  tip: "项目根目录（含 Cargo.toml）：%{path}"
+  error_not_found: "在 %{path} 未找到 Cargo.toml"
+  picker_failed: "打开目录选择器失败：%{error}"
+
 add:
   label_id: 标识名
   label_name: 名称
@@ -55,8 +66,10 @@ add:
   success: 已添加自定义源
 
 status:
-  hint: 选择一个源，然后点击「应用」写入 ~/.cargo/config.toml
-  applied: 已切换到 %{source}，配置已写入（备份在 config.toml.bak）
+  hint: 选择一个源，然后点击「应用」写入全局或项目配置
+  applied: 已切换到 %{source}，配置已写入 %{path}（备份在 config.toml.bak）
+  project_required: 请先选择项目目录
+  project_selected: 已选择项目：%{path}
   imported: 已导入 %{count} 个自定义源
   imported_skipped: 已导入 %{count} 个自定义源，跳过 %{skipped} 个内置或重复项
   import_empty: 没有导入任何源（跳过 %{skipped} 个内置或重复项）
@@ -70,6 +83,7 @@ status:
 
 dialog:
   import_title: 选择 srmgui 自定义源文件
+  project_title: 选择 Cargo 项目目录
 
 log:
   title: 日志
@@ -78,7 +92,8 @@ log:
   open: 点击在文件管理器中打开
   app_start: srmgui 启动
   switch: 切换到源：%{source}
-  config_written: 配置已写入，源 %{source} 生效
+  config_written: 配置已写入 %{path}，源 %{source} 生效
+  project_selected: 使用项目配置：%{path}
   config_write_failed: 写入配置失败：%{error}
   probe_start: 开始测速 %{id} (%{url})
   probe_done: 测速完成 %{id}：%{summary}

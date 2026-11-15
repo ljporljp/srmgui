@@ -39,6 +39,17 @@ source:
   none: (aucun)
   empty: Aucun miroir personnalisé pour l’instant. Veuillez en ajouter un.
 
+scope:
+  label: Destination
+  global: Global
+  project: Projet
+  select: Choisir un projet
+  change: Changer de projet
+  none: Aucun projet sélectionné
+  tip: "Racine du projet (contient Cargo.toml) : %{path}"
+  error_not_found: "Aucun Cargo.toml trouvé dans %{path}"
+  picker_failed: "Impossible d’ouvrir le sélecteur de dossier : %{error}"
+
 add:
   label_id: ID
   label_name: Nom
@@ -55,8 +66,10 @@ add:
   success: Miroir personnalisé ajouté
 
 status:
-  hint: Sélectionnez un miroir puis cliquez sur « Appliquer » pour écrire ~/.cargo/config.toml
-  applied: "Passé à %{source}. Configuration écrite (sauvegarde : config.toml.bak)."
+  hint: Sélectionnez un miroir puis cliquez sur « Appliquer » pour écrire la configuration globale ou du projet
+  applied: "Passé à %{source}. Configuration écrite dans %{path} (sauvegarde : config.toml.bak)."
+  project_required: Choisissez d’abord un dossier de projet
+  project_selected: "Projet sélectionné : %{path}"
   imported: "%{count} miroir(s) personnalisé(s) importé(s)"
   imported_skipped: "%{count} miroir(s) personnalisé(s) importé(s), %{skipped} intégré(s) ou doublon(s) ignoré(s)"
   import_empty: "Rien importé (%{skipped} intégré(s) ou doublon(s) ignoré(s))"
@@ -70,6 +83,7 @@ status:
 
 dialog:
   import_title: Choisir un fichier de miroirs srmgui
+  project_title: Choisir un dossier de projet Cargo
 
 log:
   title: Journal
@@ -78,7 +92,8 @@ log:
   open: Cliquez pour ouvrir dans le gestionnaire de fichiers
   app_start: srmgui démarré
   switch: "Changement vers le miroir : %{source}"
-  config_written: Configuration écrite, le miroir %{source} est actif
+  config_written: "Configuration écrite dans %{path}, le miroir %{source} est actif"
+  project_selected: "Configuration du projet utilisée : %{path}"
   config_write_failed: "Échec d’écriture de la configuration : %{error}"
   probe_start: "Début du test de %{id} (%{url})"
   probe_done: "Test terminé pour %{id} : %{summary}"

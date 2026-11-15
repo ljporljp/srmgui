@@ -39,6 +39,17 @@ source:
   none: (нет)
   empty: Пользовательских зеркал пока нет. Добавьте одно.
 
+scope:
+  label: Куда записывать
+  global: Глобально
+  project: Проект
+  select: Выбрать проект
+  change: Сменить проект
+  none: Проект не выбран
+  tip: "Корень проекта (содержит Cargo.toml): %{path}"
+  error_not_found: "В %{path} не найден Cargo.toml"
+  picker_failed: "Не удалось открыть выбор папки: %{error}"
+
 add:
   label_id: ID
   label_name: Название
@@ -55,8 +66,10 @@ add:
   success: Пользовательское зеркало добавлено
 
 status:
-  hint: Выберите зеркало и нажмите «Применить», чтобы записать ~/.cargo/config.toml
-  applied: "Переключено на %{source}. Конфигурация записана (резервная копия: config.toml.bak)."
+  hint: Выберите зеркало и нажмите «Применить», чтобы записать глобальную конфигурацию или конфигурацию проекта
+  applied: "Переключено на %{source}. Конфигурация записана в %{path} (резервная копия: config.toml.bak)."
+  project_required: Сначала выберите папку проекта
+  project_selected: "Проект выбран: %{path}"
   imported: "Импортировано пользовательских зеркал: %{count}"
   imported_skipped: "Импортировано пользовательских зеркал: %{count}, пропущено встроенных или дубликатов: %{skipped}"
   import_empty: "Ничего не импортировано (пропущено встроенных или дубликатов: %{skipped})"
@@ -70,6 +83,7 @@ status:
 
 dialog:
   import_title: Выберите файл зеркал srmgui
+  project_title: Выберите папку проекта Cargo
 
 log:
   title: Журнал
@@ -78,7 +92,8 @@ log:
   open: Нажмите, чтобы открыть в файловом менеджере
   app_start: srmgui запущен
   switch: "Переключение на зеркало: %{source}"
-  config_written: Конфигурация записана, зеркало %{source} активно
+  config_written: "Конфигурация записана в %{path}, зеркало %{source} активно"
+  project_selected: "Используется конфигурация проекта: %{path}"
   config_write_failed: "Не удалось записать конфигурацию: %{error}"
   probe_start: "Начата проверка %{id} (%{url})"
   probe_done: "Проверка завершена для %{id}: %{summary}"

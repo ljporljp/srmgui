@@ -39,6 +39,17 @@ source:
   none: (none)
   empty: No custom sources yet. Please add one.
 
+scope:
+  label: Config target
+  global: Global
+  project: Project
+  select: Choose project
+  change: Change project
+  none: No project selected
+  tip: "Project root (contains Cargo.toml): %{path}"
+  error_not_found: "No Cargo.toml found in %{path}"
+  picker_failed: "Failed to open directory picker: %{error}"
+
 add:
   label_id: ID
   label_name: Name
@@ -55,8 +66,10 @@ add:
   success: Custom source added
 
 status:
-  hint: Select a source, then click "Apply" to write ~/.cargo/config.toml
-  applied: Switched to %{source}. Config written (backup at config.toml.bak).
+  hint: Select a source, then click "Apply" to write the global or project config
+  applied: Switched to %{source}. Config written to %{path} (backup at config.toml.bak).
+  project_required: Choose a project directory first
+  project_selected: "Project selected: %{path}"
   imported: Imported %{count} custom source(s)
   imported_skipped: Imported %{count} custom source(s), skipped %{skipped} built-in or duplicate item(s)
   import_empty: Nothing imported (skipped %{skipped} built-in or duplicate item(s))
@@ -70,6 +83,7 @@ status:
 
 dialog:
   import_title: Select a srmgui custom sources file
+  project_title: Select a Cargo project directory
 
 log:
   title: Logs
@@ -78,7 +92,8 @@ log:
   open: Click to open in file manager
   app_start: srmgui started
   switch: "Switching to source: %{source}"
-  config_written: Config written, source %{source} is now active
+  config_written: "Config written to %{path}, source %{source} is now active"
+  project_selected: "Using project config: %{path}"
   config_write_failed: "Failed to write config: %{error}"
   probe_start: Probing %{id} (%{url})
   probe_done: "Probe finished for %{id}: %{summary}"

@@ -39,6 +39,17 @@ source:
   none: (ninguno)
   empty: Aún no hay espejos personalizados. Añade uno.
 
+scope:
+  label: Destino
+  global: Global
+  project: Proyecto
+  select: Elegir proyecto
+  change: Cambiar proyecto
+  none: Ningún proyecto seleccionado
+  tip: "Raíz del proyecto (contiene Cargo.toml): %{path}"
+  error_not_found: "No se encontró Cargo.toml en %{path}"
+  picker_failed: "No se pudo abrir el selector de carpetas: %{error}"
+
 add:
   label_id: ID
   label_name: Nombre
@@ -55,8 +66,10 @@ add:
   success: Espejo personalizado añadido
 
 status:
-  hint: Selecciona un espejo y pulsa «Aplicar» para escribir ~/.cargo/config.toml
-  applied: "Cambiado a %{source}. Configuración escrita (copia de seguridad: config.toml.bak)."
+  hint: Selecciona un espejo y pulsa «Aplicar» para escribir la configuración global o del proyecto
+  applied: "Cambiado a %{source}. Configuración escrita en %{path} (copia de seguridad: config.toml.bak)."
+  project_required: Elige primero una carpeta de proyecto
+  project_selected: "Proyecto seleccionado: %{path}"
   imported: "Se importaron %{count} espejo(s) personalizado(s)"
   imported_skipped: "Se importaron %{count} espejo(s) personalizado(s) y se omitieron %{skipped} integrado(s) o duplicado(s)"
   import_empty: "No se importó nada (se omitieron %{skipped} integrado(s) o duplicado(s))"
@@ -70,6 +83,7 @@ status:
 
 dialog:
   import_title: Selecciona un archivo de espejos de srmgui
+  project_title: Elegir una carpeta de proyecto Cargo
 
 log:
   title: Registro
@@ -78,7 +92,8 @@ log:
   open: Haz clic para abrir en el gestor de archivos
   app_start: srmgui iniciado
   switch: "Cambiando al espejo: %{source}"
-  config_written: Configuración escrita, el espejo %{source} está activo
+  config_written: "Configuración escrita en %{path}, el espejo %{source} está activo"
+  project_selected: "Usando configuración del proyecto: %{path}"
   config_write_failed: "Error al escribir la configuración: %{error}"
   probe_start: "Iniciando prueba de %{id} (%{url})"
   probe_done: "Prueba terminada para %{id}: %{summary}"

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use gpui_kit::{App, AppContext as _, Entity, SharedString};
 
@@ -19,6 +20,10 @@ pub(crate) struct State {
     pub(crate) theme: ThemeChoice,
     pub(crate) language: Language,
     pub(crate) update: UpdateState,
+    /// 上次选中的项目根目录（含 `Cargo.toml` 的目录）。
+    pub(crate) project_root: Option<PathBuf>,
+    /// 是否写入项目级配置（`<项目根>/.cargo/config.toml`）。
+    pub(crate) project_scope: bool,
 }
 
 impl State {
@@ -26,6 +31,8 @@ impl State {
         current: Option<String>,
         customs: HashMap<String, CustomSource>,
         language: Language,
+        project_root: Option<PathBuf>,
+        project_scope: bool,
     ) -> Self {
         let selected = current.clone().unwrap_or_else(|| "rsproxy".to_string());
         Self {
@@ -38,6 +45,8 @@ impl State {
             theme: ThemeChoice::System,
             language,
             update: UpdateState::Idle,
+            project_root,
+            project_scope,
         }
     }
 }
@@ -49,16 +58,37 @@ pub(crate) struct CargoMirrorApp {
 
 impl CargoMirrorApp {
     pub(crate) fn new(cx: &mut App) -> Entity<Self> {
+        let settings = config_io::read_settings();
+
         // 先按持久化的语言设置初始化 locale，后续所有文案按该语言生成。
-        let language = config_io::read_language()
-            .map(|code| Language::from_code(&code))
+        let language = settings
+            .language
+            .as_deref()
+            .map(Language::from_code)
             .unwrap_or_default();
         rust_i18n::set_locale(language.code());
 
-        let current = config_io::current_source().ok().flatten();
+        // 未记住项目目录时，尝试从当前工作目录向上自动识别 Cargo.toml。
+        let project_root = settings
+            .project_root
+            .filter(|root| root.join("Cargo.toml").is_file())
+            .or_else(|| {
+                std::env::current_dir()
+                    .ok()
+                    .and_then(|dir| config_io::detect_project_root(&dir))
+            });
+        let project_scope = settings.project_scope && project_root.is_some();
+
+        let current = config_io::current_source_scoped(if project_scope {
+            project_root.as_deref()
+        } else {
+            None
+        })
+        .ok()
+        .flatten();
         let customs = config_io::read_customs().unwrap_or_default();
         cx.new(|_cx| Self {
-            state: State::new(current, customs, language),
+            state: State::new(current, customs, language, project_root, project_scope),
         })
     }
 }

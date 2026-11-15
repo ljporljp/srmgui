@@ -39,6 +39,17 @@ source:
   none: (keine)
   empty: Noch keine benutzerdefinierten Spiegel. Bitte fügen Sie einen hinzu.
 
+scope:
+  label: Konfigurationsziel
+  global: Global
+  project: Projekt
+  select: Projekt wählen
+  change: Projekt ändern
+  none: Kein Projekt ausgewählt
+  tip: "Projektstammverzeichnis (enthält Cargo.toml): %{path}"
+  error_not_found: "Keine Cargo.toml in %{path} gefunden"
+  picker_failed: "Ordnerauswahl konnte nicht geöffnet werden: %{error}"
+
 add:
   label_id: ID
   label_name: Name
@@ -55,8 +66,10 @@ add:
   success: Benutzerdefinierter Spiegel hinzugefügt
 
 status:
-  hint: Wählen Sie einen Spiegel und klicken Sie auf „Anwenden“, um ~/.cargo/config.toml zu schreiben
-  applied: "Zu %{source} gewechselt. Konfiguration geschrieben (Sicherung: config.toml.bak)."
+  hint: Wählen Sie einen Spiegel und klicken Sie auf „Anwenden“, um die globale oder die Projektkonfiguration zu schreiben
+  applied: "Zu %{source} gewechselt. Konfiguration nach %{path} geschrieben (Sicherung: config.toml.bak)."
+  project_required: Bitte wählen Sie zuerst ein Projektverzeichnis
+  project_selected: "Projekt ausgewählt: %{path}"
   imported: "%{count} benutzerdefinierte Spiegel importiert"
   imported_skipped: "%{count} benutzerdefinierte Spiegel importiert, %{skipped} integrierte oder doppelte übersprungen"
   import_empty: "Nichts importiert (%{skipped} integrierte oder doppelte übersprungen)"
@@ -70,6 +83,7 @@ status:
 
 dialog:
   import_title: srmgui-Spiegeldatei auswählen
+  project_title: Cargo-Projektverzeichnis auswählen
 
 log:
   title: Protokoll
@@ -78,7 +92,8 @@ log:
   open: Klicken, um im Dateimanager zu öffnen
   app_start: srmgui gestartet
   switch: "Wechsel zu Spiegel: %{source}"
-  config_written: Konfiguration geschrieben, Spiegel %{source} ist aktiv
+  config_written: "Konfiguration nach %{path} geschrieben, Spiegel %{source} ist aktiv"
+  project_selected: "Projektkonfiguration wird verwendet: %{path}"
   config_write_failed: "Schreiben der Konfiguration fehlgeschlagen: %{error}"
   probe_start: "Geschwindigkeitstest für %{id} gestartet (%{url})"
   probe_done: "Test abgeschlossen für %{id}: %{summary}"

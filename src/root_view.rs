@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use gpui_kit::PathPromptOptions;
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants};
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::label::Label;
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
@@ -13,6 +13,7 @@ use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::component::{IconName, TitleBar};
+use gpui_kit::base::Selectable;
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, Animation, AnimationExt as _, AnyElement, Entity, SharedString, Window, div, px,
@@ -139,19 +140,163 @@ impl RootView {
     /// 切换界面语言：更新全局 locale、持久化并把状态栏恢复到提示文案。
     fn switch_language(&mut self, language: Language, window: &mut Window, cx: &mut Context<Self>) {
         rust_i18n::set_locale(language.code());
-        let _ = config_io::write_language(language.code());
         self.update_placeholders(window, cx);
         self.app.update(cx, |model, cx| {
             model.state.language = language;
             model.state.status = Status::Info(rust_i18n::t!("status.hint").to_string().into());
             cx.notify();
         });
+        self.persist_settings(cx);
         cx.notify();
+    }
+
+    /// 把当前语言与配置作用域写回设置文件。
+    fn persist_settings(&self, cx: &Context<Self>) {
+        let state = &self.app.read(cx).state;
+        let _ = config_io::write_settings(&config_io::Settings {
+            language: Some(state.language.code().to_string()),
+            project_root: state.project_root.clone(),
+            project_scope: state.project_scope,
+        });
+    }
+
+    /// 切换配置作用域：全局 ↔ 项目，并重新读取该作用域当前生效的源。
+    fn switch_scope(&mut self, project: bool, cx: &mut Context<Self>) {
+        let project_root = self.app.read(cx).state.project_root.clone();
+        self.app.update(cx, |model, cx| {
+            model.state.project_scope = project;
+            cx.notify();
+        });
+        // 切到项目作用域但还没选过目录时，直接弹出目录选择。
+        if project && project_root.is_none() {
+            self.pick_project(cx);
+        }
+        self.reload_current(cx);
+        self.persist_settings(cx);
+        cx.notify();
+    }
+
+    /// 重新读取当前作用域正在生效的源。
+    fn reload_current(&mut self, cx: &mut Context<Self>) {
+        let (project_scope, project_root) = {
+            let state = &self.app.read(cx).state;
+            (state.project_scope, state.project_root.clone())
+        };
+        let current = config_io::current_source_scoped(if project_scope {
+            project_root.as_deref()
+        } else {
+            None
+        })
+        .ok()
+        .flatten();
+        self.app.update(cx, |model, cx| {
+            model.state.current = current.map(Into::into);
+            cx.notify();
+        });
+    }
+
+    /// 选择项目目录：向上自动识别 `Cargo.toml`，并切换到项目级配置。
+    fn pick_project(&mut self, cx: &mut Context<Self>) {
+        let receiver = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some(
+                rust_i18n::t!("dialog.project_title")
+                    .to_string()
+                    .into(),
+            ),
+        });
+        cx.spawn(async move |view, cx| {
+            let picked = match receiver.await {
+                Ok(Ok(Some(paths))) => paths.into_iter().next(),
+                Ok(Ok(None)) => None,
+                Ok(Err(error)) => {
+                    let message = rust_i18n::t!(
+                        "scope.picker_failed",
+                        error = error.to_string()
+                    )
+                    .to_string();
+                    let _ = view.update(cx, |view, cx| {
+                        view.app.update(cx, |model, cx| {
+                            model.state.status = Status::Error(message.clone().into());
+                            cx.notify();
+                        });
+                    });
+                    None
+                }
+                Err(_) => None,
+            };
+            if let Some(dir) = picked {
+                let _ = view.update(cx, |view, cx| view.set_project_dir(dir, cx));
+            }
+        })
+        .detach();
+    }
+
+    /// 应用目录选择结果：定位项目根目录并持久化作用域设置。
+    fn set_project_dir(&mut self, dir: PathBuf, cx: &mut Context<Self>) {
+        let Some(root) = config_io::detect_project_root(&dir) else {
+            let message = rust_i18n::t!(
+                "scope.error_not_found",
+                path = dir.display().to_string()
+            )
+            .to_string();
+            self.app.update(cx, |model, cx| {
+                model.state.status = Status::Error(message.into());
+                cx.notify();
+            });
+            return;
+        };
+
+        let root_display = root.display().to_string();
+        logger::info(
+            "scope",
+            rust_i18n::t!("log.project_selected", path = root_display.as_str()).to_string(),
+        );
+
+        let message = rust_i18n::t!("status.project_selected", path = root_display.as_str())
+            .to_string();
+        self.app.update(cx, |model, cx| {
+            model.state.project_root = Some(root);
+            model.state.project_scope = true;
+            model.state.status = Status::Success(message.into());
+            cx.notify();
+        });
+        self.reload_current(cx);
+        self.persist_settings(cx);
     }
 
     pub(crate) fn apply(&mut self, cx: &mut Context<Self>) {
         let selected: String = self.app.read(cx).state.selected.clone().into();
         let customs = self.app.read(cx).state.customs.clone();
+        let (project_scope, project_root) = {
+            let state = &self.app.read(cx).state;
+            (state.project_scope, state.project_root.clone())
+        };
+
+        // 项目作用域下必须先选定项目目录。
+        if project_scope && project_root.is_none() {
+            let message = rust_i18n::t!("status.project_required").to_string();
+            self.app.update(cx, |model, cx| {
+                model.state.status = Status::Error(message.into());
+                cx.notify();
+            });
+            return;
+        }
+
+        let target_path = if project_scope {
+            project_root.as_deref().map(config_io::project_config_path)
+        } else {
+            // 全局配置固定写入 `config.toml`，与 write_config 的目标保持一致。
+            config_io::cargo_home()
+                .ok()
+                .map(|home| home.join("config.toml"))
+        };
+        let target_display = target_path
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_default();
 
         logger::info(
             "apply",
@@ -161,19 +306,32 @@ impl RootView {
         // Offload config write to a thread so we never block the UI.
         let selected_for_write = selected.clone();
         let selected_for_log = selected.clone();
+        let target_for_status = target_display.clone();
+        let root_for_write = if project_scope {
+            project_root.clone()
+        } else {
+            None
+        };
         thread::spawn(move || {
             let result = (|| -> Result<_> {
                 let content = registry::build_config(&selected_for_write, &customs);
-                config_io::write_config(&content)?;
+                let path = match &root_for_write {
+                    Some(root) => config_io::write_project_config(root, &content)?,
+                    None => config_io::write_config(&content)?,
+                };
                 // 同步持久化自定义源元数据（name / description）
                 let _ = config_io::write_customs(&customs);
-                Ok(())
+                Ok(path)
             })();
             match result {
-                Ok(_) => logger::info(
+                Ok(path) => logger::info(
                     "apply",
-                    rust_i18n::t!("log.config_written", source = selected_for_write.as_str())
-                        .to_string(),
+                    rust_i18n::t!(
+                        "log.config_written",
+                        source = selected_for_write.as_str(),
+                        path = path.display().to_string()
+                    )
+                    .to_string(),
                 ),
                 Err(e) => logger::error(
                     "apply",
@@ -187,9 +345,13 @@ impl RootView {
             model.state.current = Some(selected.clone().into());
             model.state.selected = selected.clone().into();
             model.state.status = Status::Success(
-                rust_i18n::t!("status.applied", source = selected_for_log.as_str())
-                    .to_string()
-                    .into(),
+                rust_i18n::t!(
+                    "status.applied",
+                    source = selected_for_log.as_str(),
+                    path = target_for_status.as_str()
+                )
+                .to_string()
+                .into(),
             );
             cx.notify();
         });
@@ -866,6 +1028,8 @@ impl Render for RootView {
         let language = self.app.read(cx).state.language;
         let active_tab = self.app.read(cx).state.active_tab;
         let update_state = self.app.read(cx).state.update.clone();
+        let project_scope = self.app.read(cx).state.project_scope;
+        let project_root = self.app.read(cx).state.project_root.clone();
         let theme_app = self.app.clone();
         let viewport_height = _window.viewport_size().height.as_f32();
 
@@ -896,6 +1060,23 @@ impl Render for RootView {
                     .secondary(),
             ),
             _ => None,
+        };
+
+        let path_text: SharedString = project_root
+            .as_ref()
+            .map(|root| root.display().to_string())
+            .unwrap_or_else(|| rust_i18n::t!("scope.none").to_string())
+            .into();
+        let path_tip: SharedString = match &project_root {
+            Some(root) => rust_i18n::t!("scope.tip", path = root.display().to_string())
+                .to_string()
+                .into(),
+            None => rust_i18n::t!("scope.none").to_string().into(),
+        };
+        let pick_label = if project_root.is_some() {
+            rust_i18n::t!("scope.change").to_string()
+        } else {
+            rust_i18n::t!("scope.select").to_string()
         };
 
         v_flex()
@@ -1011,6 +1192,68 @@ impl Render for RootView {
                         .flex_1()
                         .min_h_0()
                         .gap_3()
+                        .child(
+                            // 配置作用域：全局 ~/.cargo/config.toml 或项目 .cargo/config.toml
+                            h_flex()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    Label::new(rust_i18n::t!("scope.label").to_string())
+                                        .text_sm()
+                                        .text_color(cx.theme().muted_foreground),
+                                )
+                                .child(
+                                    ButtonGroup::new("scope-group")
+                                        .small()
+                                        .child(
+                                            Button::new("scope-global")
+                                                .label(rust_i18n::t!("scope.global").to_string())
+                                                .selected(!project_scope),
+                                        )
+                                        .child(
+                                            Button::new("scope-project")
+                                                .label(rust_i18n::t!("scope.project").to_string())
+                                                .selected(project_scope),
+                                        )
+                                        .on_click(cx.listener(
+                                            |view, clicks: &Vec<usize>, _window, cx| {
+                                                if let Some(index) = clicks.first() {
+                                                    view.switch_scope(*index == 1, cx);
+                                                }
+                                            },
+                                        )),
+                                )
+                                .when(project_scope, |row| {
+                                    let tip = path_tip.clone();
+                                    row.child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .overflow_hidden()
+                                            .id("project-path")
+                                            .tooltip(move |_, cx| {
+                                                cx.new(|_| Tooltip::new(tip.clone())).into()
+                                            })
+                                            .child(
+                                                Label::new(path_text.clone())
+                                                    .w_full()
+                                                    .text_sm()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .whitespace_nowrap()
+                                                    .text_ellipsis(),
+                                            ),
+                                    )
+                                    .child(
+                                        Button::new("pick-project")
+                                            .label(pick_label.clone())
+                                            .small()
+                                            .secondary()
+                                            .on_click(cx.listener(
+                                                |view, _ev, _window, cx| view.pick_project(cx),
+                                            )),
+                                    )
+                                }),
+                        )
                         .child(
                             TabBar::new("registry-tabs")
                                 .w_full()

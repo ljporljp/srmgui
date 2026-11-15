@@ -39,6 +39,17 @@ source:
   none: (없음)
   empty: 사용자 정의 미러가 없습니다. 추가하세요.
 
+scope:
+  label: 설정 위치
+  global: 전역
+  project: 프로젝트
+  select: 프로젝트 선택
+  change: 프로젝트 변경
+  none: 선택한 프로젝트 없음
+  tip: "프로젝트 루트(Cargo.toml 포함): %{path}"
+  error_not_found: "%{path}에서 Cargo.toml을 찾을 수 없습니다"
+  picker_failed: "폴더 선택기를 열지 못했습니다: %{error}"
+
 add:
   label_id: ID
   label_name: 이름
@@ -55,8 +66,10 @@ add:
   success: 사용자 정의 미러를 추가했습니다
 
 status:
-  hint: 미러를 선택한 뒤 "적용"을 클릭하면 ~/.cargo/config.toml에 기록됩니다
-  applied: "%{source} (으)로 전환했습니다. 설정이 기록되었습니다 (백업: config.toml.bak)"
+  hint: 미러를 선택한 뒤 "적용"을 클릭하면 전역 또는 프로젝트 설정에 기록됩니다
+  applied: "%{source} (으)로 전환했습니다. %{path}에 설정이 기록되었습니다 (백업: config.toml.bak)"
+  project_required: 먼저 프로젝트 폴더를 선택하세요
+  project_selected: "프로젝트 선택됨: %{path}"
   imported: 사용자 정의 미러 %{count}개를 가져왔습니다
   imported_skipped: 사용자 정의 미러 %{count}개를 가져오고 내장 또는 중복 %{skipped}개를 건너뛰었습니다
   import_empty: 가져온 미러가 없습니다 (내장 또는 중복 %{skipped}개 건너뜀)
@@ -70,6 +83,7 @@ status:
 
 dialog:
   import_title: srmgui 사용자 정의 미러 파일 선택
+  project_title: Cargo 프로젝트 폴더 선택
 
 log:
   title: 로그
@@ -78,7 +92,8 @@ log:
   open: 클릭하면 파일 관리자에서 열립니다
   app_start: srmgui 시작됨
   switch: "미러 전환: %{source}"
-  config_written: 설정이 기록되어 미러 %{source}이(가) 적용되었습니다
+  config_written: "%{path}에 설정이 기록되어 미러 %{source}이(가) 적용되었습니다"
+  project_selected: "프로젝트 설정 사용: %{path}"
   config_write_failed: "설정 쓰기 실패: %{error}"
   probe_start: "%{id} 속도 측정 시작 (%{url})"
   probe_done: "측정 완료 %{id}: %{summary}"

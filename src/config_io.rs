@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// 自定义源导出文件的扩展名。
 pub const SOURCES_EXTENSION: &str = "srmgui";
@@ -73,46 +73,101 @@ pub fn settings_path() -> Result<PathBuf> {
     Ok(app_dir()?.join("srmgui-settings.toml"))
 }
 
-/// 读取持久化的界面语言（如 `zh-CN` / `en-US`）。
-pub fn read_language() -> Option<String> {
-    let path = settings_path().ok()?;
-    let text = std::fs::read_to_string(path).ok()?;
-    let root: toml::Table = text.parse().ok()?;
-    match root.get("language") {
-        Some(toml::Value::String(code)) => Some(code.clone()),
-        _ => None,
+/// 应用设置：界面语言与配置写入作用域。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Settings {
+    /// 持久化的界面语言（如 `zh-CN` / `en-US`）。
+    pub language: Option<String>,
+    /// 上次选中的项目根目录（含 `Cargo.toml` 的目录）。
+    pub project_root: Option<PathBuf>,
+    /// 是否写入项目级配置（`<项目根>/.cargo/config.toml`）。
+    pub project_scope: bool,
+}
+
+/// 读取应用设置，文件不存在或解析失败时回退默认值。
+pub fn read_settings() -> Settings {
+    let Some(text) = settings_path()
+        .ok()
+        .and_then(|path| std::fs::read_to_string(path).ok())
+    else {
+        return Settings::default();
+    };
+    let Ok(root) = text.parse::<toml::Table>() else {
+        return Settings::default();
+    };
+    Settings {
+        language: root
+            .get("language")
+            .and_then(toml::Value::as_str)
+            .map(str::to_string),
+        project_root: root
+            .get("project_root")
+            .and_then(toml::Value::as_str)
+            .map(PathBuf::from),
+        project_scope: root.get("scope").and_then(toml::Value::as_str) == Some("project"),
     }
 }
 
-/// 持久化界面语言设置。
-pub fn write_language(code: &str) -> Result<()> {
+/// 持久化应用设置。
+pub fn write_settings(settings: &Settings) -> Result<()> {
     let path = settings_path()?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).with_context(|| {
             rust_i18n::t!("error.create_dir", path = parent.display().to_string()).to_string()
         })?;
     }
-    let content = format!(
-        "# srmgui 设置（由 srmgui 管理，请勿手动编辑）\nlanguage = {}\n",
-        quote(code)
-    );
+    let mut content = String::from("# srmgui 设置（由 srmgui 管理，请勿手动编辑）\n");
+    if let Some(code) = &settings.language {
+        content.push_str(&format!("language = {}\n", quote(code)));
+    }
+    let scope = if settings.project_scope {
+        "project"
+    } else {
+        "global"
+    };
+    content.push_str(&format!("scope = {}\n", quote(scope)));
+    if let Some(root) = &settings.project_root {
+        content.push_str(&format!(
+            "project_root = {}\n",
+            quote(&root.display().to_string())
+        ));
+    }
     std::fs::write(&path, content).with_context(|| {
         rust_i18n::t!("error.write_file", path = path.display().to_string()).to_string()
     })?;
     Ok(())
 }
 
-/// Read which source id is currently in effect.
+/// 项目级 cargo 配置路径：`<项目根>/.cargo/config.toml`。
+pub fn project_config_path(root: &Path) -> PathBuf {
+    root.join(".cargo").join("config.toml")
+}
+
+/// 从给定目录向上查找最近的 `Cargo.toml`，返回它所在的目录。
+///
+/// 用户可能选中工作区里的子 crate，向上回溯可以定位到真正需要写
+/// `.cargo/config.toml` 的项目 / 工作区根目录。
+pub fn detect_project_root(dir: &Path) -> Option<PathBuf> {
+    dir.ancestors()
+        .find(|ancestor| ancestor.join("Cargo.toml").is_file())
+        .map(Path::to_path_buf)
+}
+
+/// Read which source id is currently in effect in the global config.
 ///
 /// `replace-with` 决定被替换成的源；没有该字段时 cargo 直接使用默认的
 /// crates.io（即内置的 `official`），因此返回 `official` 而不是 `None`。
 /// 只有配置文件不存在（从未写入过配置）时才返回 `None`。
 pub fn current_source() -> Result<Option<String>> {
-    let path = config_path()?;
+    current_source_at(&config_path()?)
+}
+
+/// 读取指定 cargo 配置文件中的当前生效源（规则同 [`current_source`]）。
+pub fn current_source_at(path: &Path) -> Result<Option<String>> {
     if !path.exists() {
         return Ok(None);
     }
-    let text = std::fs::read_to_string(&path).with_context(|| {
+    let text = std::fs::read_to_string(path).with_context(|| {
         rust_i18n::t!("error.read_file", path = path.display().to_string()).to_string()
     })?;
     let root: toml::Table = text
@@ -128,6 +183,20 @@ pub fn current_source() -> Result<Option<String>> {
         }
     }
     Ok(Some("official".to_string()))
+}
+
+/// 读取指定作用域当前生效的源。
+///
+/// `project_root` 为 `None` 时读取全局配置；项目级配置文件不存在时，
+/// cargo 会沿用全局配置，因此这里同样回退到全局读取。
+pub fn current_source_scoped(project_root: Option<&Path>) -> Result<Option<String>> {
+    if let Some(root) = project_root {
+        let path = project_config_path(root);
+        if path.exists() {
+            return current_source_at(&path);
+        }
+    }
+    current_source()
 }
 
 /// 读取自定义源：优先从 srmgui 元数据文件读取（含 name / description），
@@ -377,20 +446,36 @@ fn quote(value: &str) -> String {
     out
 }
 
-/// Write the new config, keeping a `.bak` of the previous file.
+/// Write the new global config, keeping a `.bak` of the previous file.
 pub fn write_config(content: &str) -> Result<PathBuf> {
-    let home = cargo_home()?;
-    std::fs::create_dir_all(&home).with_context(|| {
-        rust_i18n::t!("error.create_dir", path = home.display().to_string()).to_string()
-    })?;
-    let path = home.join("config.toml");
-    if path.exists() {
-        let _ = std::fs::copy(&path, home.join("config.toml.bak"));
+    let path = cargo_home()?.join("config.toml");
+    write_config_file(&path, content)?;
+    Ok(path)
+}
+
+/// 写入项目级配置 `<项目根>/.cargo/config.toml`，同样保留 `.bak` 备份。
+pub fn write_project_config(root: &Path, content: &str) -> Result<PathBuf> {
+    let path = project_config_path(root);
+    write_config_file(&path, content)?;
+    Ok(path)
+}
+
+/// 写入配置文件：自动创建父目录，并在覆盖前备份为 `config.toml.bak`。
+fn write_config_file(path: &Path, content: &str) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| {
+            rust_i18n::t!("error.create_dir", path = parent.display().to_string()).to_string()
+        })?;
     }
-    std::fs::write(&path, content).with_context(|| {
+    if path.exists() {
+        let mut backup = path.as_os_str().to_os_string();
+        backup.push(".bak");
+        let _ = std::fs::copy(path, PathBuf::from(backup));
+    }
+    std::fs::write(path, content).with_context(|| {
         rust_i18n::t!("error.write_file", path = path.display().to_string()).to_string()
     })?;
-    Ok(path)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -485,5 +570,45 @@ mod tests {
         assert_eq!(src.name, "Foo 源");
         assert_eq!(src.url, "sparse+https://foo.example/index/");
         assert_eq!(src.description, "说明");
+    }
+
+    #[test]
+    fn project_config_path_is_under_dot_cargo() {
+        let path = project_config_path(Path::new("demo"));
+        assert_eq!(path, Path::new("demo").join(".cargo").join("config.toml"));
+    }
+
+    #[test]
+    fn detects_project_root_from_nested_dir() {
+        let base = std::env::temp_dir().join(format!("srmgui-root-{}", std::process::id()));
+        let nested = base.join("crates").join("app").join("src");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(base.join("Cargo.toml"), "[workspace]\n").unwrap();
+
+        assert_eq!(detect_project_root(&nested), Some(base.clone()));
+
+        let lonely = std::env::temp_dir().join(format!("srmgui-root-none-{}", std::process::id()));
+        std::fs::create_dir_all(&lonely).unwrap();
+        assert_eq!(detect_project_root(&lonely), None);
+
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::remove_dir_all(&lonely);
+    }
+
+    #[test]
+    fn current_source_at_reads_any_config_file() {
+        let dir = std::env::temp_dir().join(format!("srmgui-current-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+
+        assert_eq!(current_source_at(&path).unwrap(), None);
+
+        std::fs::write(&path, "[source.crates-io]\nreplace-with = \"corp\"\n").unwrap();
+        assert_eq!(current_source_at(&path).unwrap(), Some("corp".to_string()));
+
+        std::fs::write(&path, "[net]\ngit-fetch-with-cli = true\n").unwrap();
+        assert_eq!(current_source_at(&path).unwrap(), Some("official".to_string()));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
