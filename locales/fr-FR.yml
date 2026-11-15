@@ -1,0 +1,156 @@
+app:
+  title: Commutateur de registre Cargo
+
+about:
+  title: À propos
+  version: Version %{version}
+  description: Un petit outil de bureau pour changer de miroir Cargo (Rust)
+  author: Auteur
+  license: Licence
+  homepage: Page du projet
+  ok: OK
+
+theme:
+  system: Système
+  light: Clair
+  dark: Sombre
+
+tab:
+  builtin: Intégrés
+  custom: Personnalisés
+
+button:
+  about_tip: À propos
+  log: Journal
+  log_collapse: Masquer le journal
+  add: Ajouter
+  add_collapse: Masquer le formulaire
+  import: Importer
+  export: Exporter
+  language_tip: Langue
+
+source:
+  current: Actif
+  apply: Appliquer
+  delete: Supprimer
+  tip: "ID : %{id}\nNom : %{name}\nDescription : %{description}\nURL du registre : %{url}"
+  none: (aucun)
+  empty: Aucun miroir personnalisé pour l’instant. Ajoutez-en un ci-dessous.
+
+add:
+  label_id: ID
+  label_name: Nom
+  label_url: URL du registre
+  label_description: Description (facultatif)
+  placeholder_id: ex. my-mirror
+  placeholder_name: ex. Mon miroir
+  placeholder_url: sparse+https://example.com/index/
+  placeholder_description: Facultatif, description du miroir
+  ok: OK
+  error_empty: L’ID et l’URL sont obligatoires
+  error_builtin: « %{id} » est un miroir intégré et ne peut pas être remplacé
+  error_exists: « %{id} » existe déjà
+  success: Miroir personnalisé ajouté
+
+status:
+  hint: Sélectionnez un miroir puis cliquez sur « Appliquer » pour écrire ~/.cargo/config.toml
+  applied: "Passé à %{source}. Configuration écrite (sauvegarde : config.toml.bak)."
+  imported: "%{count} miroir(s) personnalisé(s) importé(s)"
+  imported_skipped: "%{count} miroir(s) personnalisé(s) importé(s), %{skipped} intégré(s) ou doublon(s) ignoré(s)"
+  import_empty: "Rien importé (%{skipped} intégré(s) ou doublon(s) ignoré(s))"
+  import_failed: "Échec de l’import : %{error}"
+  read_failed: "Échec de lecture de %{path} : %{error}"
+  import_picker_failed: "Impossible d’ouvrir le sélecteur de fichier : %{error}"
+  export_empty: Aucun miroir personnalisé à exporter
+  export_picker_failed: "Impossible d’ouvrir la boîte de dialogue d’enregistrement : %{error}"
+  exported: "%{count} miroir(s) personnalisé(s) exporté(s) vers %{path}"
+  export_failed: "Échec d’écriture de %{path} : %{error}"
+
+dialog:
+  import_title: Choisir un fichier de miroirs srmgui
+
+log:
+  title: Journal
+  empty: Aucun journal pour l’instant
+  dir: "Dossier des journaux : %{dir}"
+  open: Cliquez pour ouvrir dans le gestionnaire de fichiers
+  app_start: srmgui démarré
+  switch: "Changement vers le miroir : %{source}"
+  config_written: Configuration écrite, le miroir %{source} est actif
+  config_write_failed: "Échec d’écriture de la configuration : %{error}"
+  probe_start: "Début du test de %{id} (%{url})"
+  probe_done: "Test terminé pour %{id} : %{summary}"
+  import_start: "Début de l’import du fichier : %{path}"
+  import_failed: "Échec de l’import : %{error}"
+  import_done: "Import terminé : %{added} ajouté(s), %{skipped} ignoré(s)"
+  exported: "%{count} miroir(s) personnalisé(s) exporté(s) vers %{path}"
+  export_failed: "Échec d’écriture de %{path} : %{error}"
+  custom_delete: "Miroir personnalisé supprimé : %{id}"
+  add_empty: "Échec de l’ajout : l’ID ou l’URL est vide"
+  add_builtin: "Échec de l’ajout : « %{id} » est un miroir intégré"
+  add_exists: "Échec de l’ajout : « %{id} » existe déjà"
+  add: "Miroir personnalisé ajouté : %{id} (%{url})"
+
+probe:
+  tcp: Connexion TCP
+  http: Index HTTP
+  parse: Analyse de l’index
+  download: Vitesse de téléchargement
+  tip_running: "%{title} : test en cours…"
+  tip_skipped: "%{title} : ignoré (étape précédente échouée)"
+  tip_passed: "%{title} : réussi · %{detail}"
+  tip_failed: "%{title} : échec · %{error}"
+  summary_download: Téléchargement
+  summary_skipped: ignoré
+  summary_running: en cours
+  summary_failed: "échec : %{error}"
+
+net:
+  url_invalid: "URL invalide : %{error}"
+  missing_dl: Le fichier config.json n’a pas de champ dl/api
+  index_parse_failed: Échec de l’analyse du fichier d’index
+  empty_download: Le contenu téléchargé est vide
+  missing_location: Redirection sans en-tête Location
+  too_many_redirects: Plus de %{max} redirections
+  bad_response: Format de réponse HTTP invalide
+
+error:
+  home: Répertoire personnel introuvable
+  parse_cargo_config: Échec de l’analyse de la configuration cargo
+  read_file: "Échec de lecture de %{path}"
+  create_dir: "Impossible de créer le dossier %{path}"
+  write_file: "Échec d’écriture de %{path}"
+  parse_metadata: Échec de l’analyse du fichier de métadonnées srmgui
+  metadata_entry: "L’entrée de métadonnées %{index} est invalide"
+  metadata_missing_id: "L’entrée de métadonnées %{index} n’a pas d’id"
+  metadata_missing_url: "Les métadonnées de « %{id} » n’ont pas d’url"
+  parse_sources: Échec de l’analyse du fichier srmgui
+  bad_format: 'Ce n’est pas un fichier de miroirs srmgui (format = "%{format}" manquant)'
+  missing_version: Le fichier srmgui n’a pas de champ version
+  unsupported_version: "Version de fichier srmgui non prise en charge : %{version}"
+  no_sources: Le fichier srmgui ne contient aucun miroir
+  source_entry_format: "L’entrée de miroir %{index} est invalide"
+  source_missing_name: "L’entrée de miroir %{index} n’a pas de nom"
+  source_missing_id: "L’entrée de miroir %{index} n’a pas d’id"
+  source_missing_url: "Le miroir « %{id} » n’a pas d’url"
+  no_valid_sources: Le fichier srmgui ne contient aucun miroir valide
+
+registry:
+  rsproxy:
+    name: RsProxy (ByteDance)
+    description: Le plus stable en Chine, recommandé au quotidien
+  aliyun:
+    name: Alibaba Cloud
+    description: Miroir de secours ; l’index répond mais les téléchargements peuvent renvoyer 404
+  ustc:
+    name: USTC (Université de science et technologie de Chine)
+    description: Documentation encore en ligne, connexion instable
+  tuna:
+    name: Tsinghua TUNA
+    description: Documentation encore en ligne, parfois sans réponse
+  sjtu:
+    name: SJTUG (Université Jiao Tong de Shanghai)
+    description: Miroir universitaire, utile en urgence
+  official:
+    name: crates.io officiel
+    description: Miroir par défaut ; revenez-y avant cargo publish

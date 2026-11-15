@@ -1,0 +1,156 @@
+app:
+  title: Conmutador de registros de Cargo
+
+about:
+  title: Acerca de
+  version: Versión %{version}
+  description: Una pequeña herramienta de escritorio para cambiar el espejo de Cargo (Rust)
+  author: Autor
+  license: Licencia
+  homepage: Página del proyecto
+  ok: Aceptar
+
+theme:
+  system: Sistema
+  light: Claro
+  dark: Oscuro
+
+tab:
+  builtin: Integrados
+  custom: Personalizados
+
+button:
+  about_tip: Acerca de
+  log: Registro
+  log_collapse: Ocultar registro
+  add: Añadir
+  add_collapse: Ocultar formulario
+  import: Importar
+  export: Exportar
+  language_tip: Idioma
+
+source:
+  current: En uso
+  apply: Aplicar
+  delete: Eliminar
+  tip: "ID: %{id}\nNombre: %{name}\nDescripción: %{description}\nURL del registro: %{url}"
+  none: (ninguno)
+  empty: Aún no hay espejos personalizados. Añade uno abajo.
+
+add:
+  label_id: ID
+  label_name: Nombre
+  label_url: URL del registro
+  label_description: Descripción (opcional)
+  placeholder_id: p. ej. my-mirror
+  placeholder_name: p. ej. Mi espejo
+  placeholder_url: sparse+https://example.com/index/
+  placeholder_description: Opcional, descripción del espejo
+  ok: Aceptar
+  error_empty: El ID y la URL son obligatorios
+  error_builtin: «%{id}» es un espejo integrado y no se puede sobrescribir
+  error_exists: «%{id}» ya existe
+  success: Espejo personalizado añadido
+
+status:
+  hint: Selecciona un espejo y pulsa «Aplicar» para escribir ~/.cargo/config.toml
+  applied: "Cambiado a %{source}. Configuración escrita (copia de seguridad: config.toml.bak)."
+  imported: "Se importaron %{count} espejo(s) personalizado(s)"
+  imported_skipped: "Se importaron %{count} espejo(s) personalizado(s) y se omitieron %{skipped} integrado(s) o duplicado(s)"
+  import_empty: "No se importó nada (se omitieron %{skipped} integrado(s) o duplicado(s))"
+  import_failed: "Error al importar: %{error}"
+  read_failed: "Error al leer %{path}: %{error}"
+  import_picker_failed: "No se pudo abrir el selector de archivos: %{error}"
+  export_empty: No hay espejos personalizados para exportar
+  export_picker_failed: "No se pudo abrir el diálogo de guardado: %{error}"
+  exported: "Se exportaron %{count} espejo(s) personalizado(s) a %{path}"
+  export_failed: "Error al escribir %{path}: %{error}"
+
+dialog:
+  import_title: Selecciona un archivo de espejos de srmgui
+
+log:
+  title: Registro
+  empty: Aún no hay registros
+  dir: "Carpeta de registros: %{dir}"
+  open: Haz clic para abrir en el gestor de archivos
+  app_start: srmgui iniciado
+  switch: "Cambiando al espejo: %{source}"
+  config_written: Configuración escrita, el espejo %{source} está activo
+  config_write_failed: "Error al escribir la configuración: %{error}"
+  probe_start: "Iniciando prueba de %{id} (%{url})"
+  probe_done: "Prueba terminada para %{id}: %{summary}"
+  import_start: "Iniciando importación del archivo: %{path}"
+  import_failed: "Error al importar: %{error}"
+  import_done: "Importación terminada: %{added} añadido(s), %{skipped} omitido(s)"
+  exported: "Se exportaron %{count} espejo(s) personalizado(s) a %{path}"
+  export_failed: "Error al escribir %{path}: %{error}"
+  custom_delete: "Espejo personalizado eliminado: %{id}"
+  add_empty: "Error al añadir: el ID o la URL están vacíos"
+  add_builtin: "Error al añadir: «%{id}» es un espejo integrado"
+  add_exists: "Error al añadir: «%{id}» ya existe"
+  add: "Espejo personalizado añadido: %{id} (%{url})"
+
+probe:
+  tcp: Conexión TCP
+  http: Índice HTTP
+  parse: Análisis del índice
+  download: Velocidad de descarga
+  tip_running: "%{title}: probando…"
+  tip_skipped: "%{title}: omitido (el paso anterior falló)"
+  tip_passed: "%{title}: correcto · %{detail}"
+  tip_failed: "%{title}: fallido · %{error}"
+  summary_download: Descarga
+  summary_skipped: omitido
+  summary_running: en curso
+  summary_failed: "fallido: %{error}"
+
+net:
+  url_invalid: "URL no válida: %{error}"
+  missing_dl: A config.json le falta el campo dl/api
+  index_parse_failed: Error al analizar el archivo de índice
+  empty_download: El contenido descargado está vacío
+  missing_location: La redirección no tiene Location
+  too_many_redirects: Se superaron %{max} redirecciones
+  bad_response: Formato de respuesta HTTP incorrecto
+
+error:
+  home: No se encontró el directorio personal
+  parse_cargo_config: Error al analizar la configuración de cargo
+  read_file: "Error al leer %{path}"
+  create_dir: "No se pudo crear la carpeta %{path}"
+  write_file: "Error al escribir %{path}"
+  parse_metadata: Error al analizar el archivo de metadatos de srmgui
+  metadata_entry: "La entrada de metadatos %{index} tiene un formato incorrecto"
+  metadata_missing_id: "La entrada de metadatos %{index} no tiene id"
+  metadata_missing_url: "Los metadatos de «%{id}» no tienen url"
+  parse_sources: Error al analizar el archivo srmgui
+  bad_format: 'No es un archivo de espejos de srmgui (falta format = "%{format}")'
+  missing_version: Al archivo srmgui le falta el campo version
+  unsupported_version: "Versión de archivo srmgui no admitida: %{version}"
+  no_sources: El archivo srmgui no contiene entradas de espejos
+  source_entry_format: "La entrada de espejo %{index} tiene un formato incorrecto"
+  source_missing_name: "A la entrada de espejo %{index} le falta el nombre"
+  source_missing_id: "A la entrada de espejo %{index} le falta el id"
+  source_missing_url: "Al espejo «%{id}» le falta la url"
+  no_valid_sources: El archivo srmgui no contiene entradas de espejos válidas
+
+registry:
+  rsproxy:
+    name: RsProxy (ByteDance)
+    description: El más estable en China, recomendado para el día a día
+  aliyun:
+    name: Alibaba Cloud
+    description: Espejo de respaldo; el índice responde pero las descargas pueden dar 404
+  ustc:
+    name: USTC (Univ. de Ciencia y Tecnología de China)
+    description: La documentación sigue en línea, la conexión es inestable
+  tuna:
+    name: Tsinghua TUNA
+    description: La documentación sigue en línea, a veces no responde
+  sjtu:
+    name: SJTUG (Universidad Jiao Tong de Shanghái)
+    description: Espejo universitario, útil en emergencias
+  official:
+    name: crates.io oficial
+    description: Espejo predeterminado; vuelve a él antes de cargo publish

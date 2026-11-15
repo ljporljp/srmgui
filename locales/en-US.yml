@@ -10,10 +10,6 @@ about:
   homepage: Homepage
   ok: OK
 
-language:
-  zh: 中文
-  en: English
-
 theme:
   system: System
   light: Light
@@ -31,6 +27,7 @@ button:
   add_collapse: Hide form
   import: Import
   export: Export
+  language_tip: Language
 
 source:
   current: In use

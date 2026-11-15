@@ -10,10 +10,6 @@ about:
   homepage: 项目主页
   ok: 确定
 
-language:
-  zh: 中文
-  en: English
-
 theme:
   system: 跟随系统
   light: 浅色
@@ -31,6 +27,7 @@ button:
   add_collapse: 收起添加
   import: 导入
   export: 导出
+  language_tip: 界面语言
 
 source:
   current: 当前生效

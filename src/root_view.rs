@@ -8,12 +8,15 @@ use gpui_kit::PathPromptOptions;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::label::Label;
+use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::component::{IconName, TitleBar};
 use gpui_kit::prelude::*;
-use gpui_kit::{Animation, AnimationExt as _, AnyElement, Entity, SharedString, Window, div, px};
+use gpui_kit::{
+    Anchor, Animation, AnimationExt as _, AnyElement, Entity, SharedString, Window, div, px,
+};
 
 use crate::add_form::render_add_form;
 use crate::app::CargoMirrorApp;
@@ -119,6 +122,19 @@ impl RootView {
             let text = rust_i18n::t!(key).to_string();
             input.update(cx, |state, cx| state.set_placeholder(text, window, cx));
         }
+    }
+
+    /// 切换界面语言：更新全局 locale、持久化并把状态栏恢复到提示文案。
+    fn switch_language(&mut self, language: Language, window: &mut Window, cx: &mut Context<Self>) {
+        rust_i18n::set_locale(language.code());
+        let _ = config_io::write_language(language.code());
+        self.update_placeholders(window, cx);
+        self.app.update(cx, |model, cx| {
+            model.state.language = language;
+            model.state.status = Status::Info(rust_i18n::t!("status.hint").to_string().into());
+            cx.notify();
+        });
+        cx.notify();
     }
 
     pub(crate) fn apply(&mut self, cx: &mut Context<Self>) {
@@ -633,6 +649,7 @@ impl RootView {
             cx.notify();
         }));
 
+        let tip = text.clone();
         h_flex()
             .p_3()
             .rounded_lg()
@@ -641,8 +658,24 @@ impl RootView {
             .border_color(cx.theme().border)
             .w_full()
             .items_center()
-            .child(Label::new(text).text_color(color).flex_1())
-            .child(log_btn)
+            .gap_2()
+            .child(
+                // 状态文字单行截断，完整内容通过悬停 tips 查看
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .id("status-text")
+                    .tooltip(move |_, cx| cx.new(|_| Tooltip::new(tip.clone())).into())
+                    .child(
+                        Label::new(text)
+                            .w_full()
+                            .text_color(color)
+                            .whitespace_nowrap()
+                            .text_ellipsis(),
+                    ),
+            )
+            .child(div().flex_shrink_0().child(log_btn))
             .into_any()
     }
 }
@@ -697,34 +730,45 @@ impl Render for RootView {
                                     .items_center()
                                     .gap_2()
                                     .child(
-                                        TabBar::new("language-tabs")
-                                            .segmented()
-                                            .selected_index(language.index())
-                                            .on_click(cx.listener(
-                                                |view, index: &usize, window, cx| {
-                                                    let language =
-                                                        Language::from_index(*index);
-                                                    rust_i18n::set_locale(language.code());
-                                                    let _ =
-                                                        config_io::write_language(language.code());
-                                                    view.update_placeholders(window, cx);
-                                                    view.app.update(cx, |model, cx| {
-                                                        model.state.language = language;
-                                                        model.state.status = Status::Info(
-                                                            rust_i18n::t!("status.hint")
-                                                                .to_string()
-                                                                .into(),
-                                                        );
-                                                        cx.notify();
-                                                    });
+                                        Button::new("language-button")
+                                            .label(language.native_name())
+                                            .dropdown_caret(true)
+                                            .small()
+                                            .secondary()
+                                            .tooltip(
+                                                rust_i18n::t!("button.language_tip").to_string(),
+                                            )
+                                            .dropdown_menu_with_anchor(
+                                                Anchor::TopRight,
+                                                {
+                                                    let view = cx.entity().downgrade();
+                                                    move |menu, _, _| {
+                                                        let mut menu = menu;
+                                                        for item in Language::ALL {
+                                                            let view = view.clone();
+                                                            menu = menu.item(
+                                                                PopupMenuItem::new(
+                                                                    item.native_name(),
+                                                                )
+                                                                .checked(item == language)
+                                                                .on_click(
+                                                                    move |_, window, cx| {
+                                                                        let _ = view.update(
+                                                                            cx,
+                                                                            |view, cx| {
+                                                                                view.switch_language(
+                                                                                    item, window, cx,
+                                                                                )
+                                                                            },
+                                                                        );
+                                                                    },
+                                                                ),
+                                                            );
+                                                        }
+                                                        menu
+                                                    }
                                                 },
-                                            ))
-                                            .child(Tab::new().label(
-                                                rust_i18n::t!("language.zh").to_string(),
-                                            ))
-                                            .child(Tab::new().label(
-                                                rust_i18n::t!("language.en").to_string(),
-                                            )),
+                                            ),
                                     )
                                     .child(
                                         TabBar::new("theme-tabs")

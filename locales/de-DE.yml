@@ -1,0 +1,156 @@
+app:
+  title: Cargo-Registry-Umschalter
+
+about:
+  title: Über
+  version: Version %{version}
+  description: Ein kleines Desktop-Tool zum Umschalten der Rust-Cargo-Registry-Spiegel
+  author: Autor
+  license: Lizenz
+  homepage: Projektseite
+  ok: OK
+
+theme:
+  system: System
+  light: Hell
+  dark: Dunkel
+
+tab:
+  builtin: Integriert
+  custom: Benutzerdefiniert
+
+button:
+  about_tip: Über
+  log: Protokoll
+  log_collapse: Protokoll ausblenden
+  add: Hinzufügen
+  add_collapse: Formular ausblenden
+  import: Importieren
+  export: Exportieren
+  language_tip: Sprache
+
+source:
+  current: Aktiv
+  apply: Anwenden
+  delete: Löschen
+  tip: "ID: %{id}\nName: %{name}\nBeschreibung: %{description}\nRegistry-URL: %{url}"
+  none: (keine)
+  empty: Noch keine benutzerdefinierten Spiegel. Fügen Sie unten einen hinzu.
+
+add:
+  label_id: ID
+  label_name: Name
+  label_url: Registry-URL
+  label_description: Beschreibung (optional)
+  placeholder_id: z. B. my-mirror
+  placeholder_name: z. B. Mein Spiegel
+  placeholder_url: sparse+https://example.com/index/
+  placeholder_description: Optional, Beschreibung des Spiegels
+  ok: OK
+  error_empty: ID und URL sind erforderlich
+  error_builtin: „%{id}“ ist ein integrierter Spiegel und kann nicht überschrieben werden
+  error_exists: „%{id}“ existiert bereits
+  success: Benutzerdefinierter Spiegel hinzugefügt
+
+status:
+  hint: Wählen Sie einen Spiegel und klicken Sie auf „Anwenden“, um ~/.cargo/config.toml zu schreiben
+  applied: "Zu %{source} gewechselt. Konfiguration geschrieben (Sicherung: config.toml.bak)."
+  imported: "%{count} benutzerdefinierte Spiegel importiert"
+  imported_skipped: "%{count} benutzerdefinierte Spiegel importiert, %{skipped} integrierte oder doppelte übersprungen"
+  import_empty: "Nichts importiert (%{skipped} integrierte oder doppelte übersprungen)"
+  import_failed: "Import fehlgeschlagen: %{error}"
+  read_failed: "Lesen von %{path} fehlgeschlagen: %{error}"
+  import_picker_failed: "Dateiauswahl konnte nicht geöffnet werden: %{error}"
+  export_empty: Keine benutzerdefinierten Spiegel zum Exportieren
+  export_picker_failed: "Speichern-Dialog konnte nicht geöffnet werden: %{error}"
+  exported: "%{count} benutzerdefinierte Spiegel nach %{path} exportiert"
+  export_failed: "Schreiben von %{path} fehlgeschlagen: %{error}"
+
+dialog:
+  import_title: srmgui-Spiegeldatei auswählen
+
+log:
+  title: Protokoll
+  empty: Noch keine Einträge
+  dir: "Protokollordner: %{dir}"
+  open: Klicken, um im Dateimanager zu öffnen
+  app_start: srmgui gestartet
+  switch: "Wechsel zu Spiegel: %{source}"
+  config_written: Konfiguration geschrieben, Spiegel %{source} ist aktiv
+  config_write_failed: "Schreiben der Konfiguration fehlgeschlagen: %{error}"
+  probe_start: "Geschwindigkeitstest für %{id} gestartet (%{url})"
+  probe_done: "Test abgeschlossen für %{id}: %{summary}"
+  import_start: "Import der Datei gestartet: %{path}"
+  import_failed: "Import fehlgeschlagen: %{error}"
+  import_done: "Import abgeschlossen: %{added} hinzugefügt, %{skipped} übersprungen"
+  exported: "%{count} benutzerdefinierte Spiegel nach %{path} exportiert"
+  export_failed: "Schreiben von %{path} fehlgeschlagen: %{error}"
+  custom_delete: "Benutzerdefinierten Spiegel gelöscht: %{id}"
+  add_empty: "Hinzufügen fehlgeschlagen: ID oder URL ist leer"
+  add_builtin: "Hinzufügen fehlgeschlagen: „%{id}“ ist ein integrierter Spiegel"
+  add_exists: "Hinzufügen fehlgeschlagen: „%{id}“ existiert bereits"
+  add: "Benutzerdefinierten Spiegel hinzugefügt: %{id} (%{url})"
+
+probe:
+  tcp: TCP-Verbindung
+  http: HTTP-Index
+  parse: Index-Analyse
+  download: Download-Geschwindigkeit
+  tip_running: "%{title}: wird gemessen…"
+  tip_skipped: "%{title}: übersprungen (vorheriger Schritt fehlgeschlagen)"
+  tip_passed: "%{title}: bestanden · %{detail}"
+  tip_failed: "%{title}: fehlgeschlagen · %{error}"
+  summary_download: Download
+  summary_skipped: übersprungen
+  summary_running: läuft
+  summary_failed: "fehlgeschlagen:%{error}"
+
+net:
+  url_invalid: "Ungültige URL: %{error}"
+  missing_dl: In config.json fehlt das Feld dl/api
+  index_parse_failed: Indexdatei konnte nicht analysiert werden
+  empty_download: Heruntergeladener Inhalt ist leer
+  missing_location: Weiterleitung ohne Location
+  too_many_redirects: Mehr als %{max} Weiterleitungen
+  bad_response: Ungültiges HTTP-Antwortformat
+
+error:
+  home: Benutzerverzeichnis nicht gefunden
+  parse_cargo_config: Cargo-Konfiguration konnte nicht analysiert werden
+  read_file: "Lesen von %{path} fehlgeschlagen"
+  create_dir: "Ordner %{path} konnte nicht erstellt werden"
+  write_file: "Schreiben von %{path} fehlgeschlagen"
+  parse_metadata: srmgui-Metadatendatei konnte nicht analysiert werden
+  metadata_entry: "Metadateneintrag %{index} ist fehlerhaft"
+  metadata_missing_id: "Metadateneintrag %{index} hat keine id"
+  metadata_missing_url: "Metadaten für „%{id}“ haben keine url"
+  parse_sources: srmgui-Datei konnte nicht analysiert werden
+  bad_format: 'Keine srmgui-Spiegeldatei (format = "%{format}" fehlt)'
+  missing_version: In der srmgui-Datei fehlt das Feld version
+  unsupported_version: "Nicht unterstützte srmgui-Dateiversion: %{version}"
+  no_sources: Die srmgui-Datei enthält keine Spiegel-Einträge
+  source_entry_format: "Spiegel-Eintrag %{index} ist fehlerhaft"
+  source_missing_name: "Spiegel-Eintrag %{index} hat keinen Namen"
+  source_missing_id: "Spiegel-Eintrag %{index} hat keine id"
+  source_missing_url: "Spiegel „%{id}“ hat keine url"
+  no_valid_sources: Die srmgui-Datei enthält keine gültigen Spiegel-Einträge
+
+registry:
+  rsproxy:
+    name: RsProxy (ByteDance)
+    description: In China am stabilsten, für den täglichen Einsatz empfohlen
+  aliyun:
+    name: Alibaba Cloud
+    description: Ausweichspiegel; Index oft erreichbar, Downloads teils 404
+  ustc:
+    name: USTC (Uni. Wissenschaft und Technik China)
+    description: Doku noch online, Verbindung schwankt
+  tuna:
+    name: Tsinghua TUNA
+    description: Doku noch online, gelegentlich ohne Antwort
+  sjtu:
+    name: SJTUG (Shanghai Jiao Tong University)
+    description: Universitäts-Spiegel, gut für Notfälle
+  official:
+    name: Offizielles crates.io
+    description: Standardspiegel; vor cargo publish zurückwechseln

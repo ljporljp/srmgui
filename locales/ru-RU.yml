@@ -1,0 +1,156 @@
+app:
+  title: Переключатель зеркал Cargo
+
+about:
+  title: О программе
+  version: Версия %{version}
+  description: Небольшое настольное приложение для переключения зеркал Rust Cargo
+  author: Автор
+  license: Лицензия
+  homepage: Страница проекта
+  ok: ОК
+
+theme:
+  system: Как в системе
+  light: Светлая
+  dark: Тёмная
+
+tab:
+  builtin: Встроенные
+  custom: Пользовательские
+
+button:
+  about_tip: О программе
+  log: Журнал
+  log_collapse: Скрыть журнал
+  add: Добавить
+  add_collapse: Скрыть форму
+  import: Импорт
+  export: Экспорт
+  language_tip: Язык интерфейса
+
+source:
+  current: Активно
+  apply: Применить
+  delete: Удалить
+  tip: "ID: %{id}\nНазвание: %{name}\nОписание: %{description}\nURL реестра: %{url}"
+  none: (нет)
+  empty: Пользовательских зеркал пока нет. Добавьте ниже.
+
+add:
+  label_id: ID
+  label_name: Название
+  label_url: URL реестра
+  label_description: Описание (необязательно)
+  placeholder_id: напр. my-mirror
+  placeholder_name: напр. Моё зеркало
+  placeholder_url: sparse+https://example.com/index/
+  placeholder_description: Необязательно, описание зеркала
+  ok: ОК
+  error_empty: ID и URL обязательны
+  error_builtin: «%{id}» — встроенное зеркало, его нельзя переопределить
+  error_exists: «%{id}» уже существует
+  success: Пользовательское зеркало добавлено
+
+status:
+  hint: Выберите зеркало и нажмите «Применить», чтобы записать ~/.cargo/config.toml
+  applied: "Переключено на %{source}. Конфигурация записана (резервная копия: config.toml.bak)."
+  imported: "Импортировано пользовательских зеркал: %{count}"
+  imported_skipped: "Импортировано пользовательских зеркал: %{count}, пропущено встроенных или дубликатов: %{skipped}"
+  import_empty: "Ничего не импортировано (пропущено встроенных или дубликатов: %{skipped})"
+  import_failed: "Ошибка импорта: %{error}"
+  read_failed: "Не удалось прочитать %{path}: %{error}"
+  import_picker_failed: "Не удалось открыть выбор файла: %{error}"
+  export_empty: Нет пользовательских зеркал для экспорта
+  export_picker_failed: "Не удалось открыть диалог сохранения: %{error}"
+  exported: "Экспортировано пользовательских зеркал: %{count} в %{path}"
+  export_failed: "Не удалось записать %{path}: %{error}"
+
+dialog:
+  import_title: Выберите файл зеркал srmgui
+
+log:
+  title: Журнал
+  empty: Записей пока нет
+  dir: "Каталог журналов: %{dir}"
+  open: Нажмите, чтобы открыть в файловом менеджере
+  app_start: srmgui запущен
+  switch: "Переключение на зеркало: %{source}"
+  config_written: Конфигурация записана, зеркало %{source} активно
+  config_write_failed: "Не удалось записать конфигурацию: %{error}"
+  probe_start: "Начата проверка %{id} (%{url})"
+  probe_done: "Проверка завершена для %{id}: %{summary}"
+  import_start: "Начат импорт файла: %{path}"
+  import_failed: "Ошибка импорта: %{error}"
+  import_done: "Импорт завершён: добавлено %{added}, пропущено %{skipped}"
+  exported: "Экспортировано пользовательских зеркал: %{count} в %{path}"
+  export_failed: "Не удалось записать %{path}: %{error}"
+  custom_delete: "Пользовательское зеркало удалено: %{id}"
+  add_empty: "Не удалось добавить: ID или URL пусты"
+  add_builtin: "Не удалось добавить: «%{id}» — встроенное зеркало"
+  add_exists: "Не удалось добавить: «%{id}» уже существует"
+  add: "Добавлено пользовательское зеркало: %{id} (%{url})"
+
+probe:
+  tcp: TCP-соединение
+  http: HTTP-индекс
+  parse: Разбор индекса
+  download: Скорость загрузки
+  tip_running: "%{title}: проверка…"
+  tip_skipped: "%{title}: пропущено (предыдущий шаг не пройден)"
+  tip_passed: "%{title}: успешно · %{detail}"
+  tip_failed: "%{title}: ошибка · %{error}"
+  summary_download: Загрузка
+  summary_skipped: пропущено
+  summary_running: выполняется
+  summary_failed: "ошибка:%{error}"
+
+net:
+  url_invalid: "Недопустимый URL: %{error}"
+  missing_dl: В config.json отсутствует поле dl/api
+  index_parse_failed: Не удалось разобрать файл индекса
+  empty_download: Загруженное содержимое пусто
+  missing_location: В перенаправлении отсутствует Location
+  too_many_redirects: "Превышено число перенаправлений: %{max}"
+  bad_response: Неверный формат HTTP-ответа
+
+error:
+  home: Не удалось найти домашний каталог
+  parse_cargo_config: Не удалось разобрать конфигурацию cargo
+  read_file: "Не удалось прочитать %{path}"
+  create_dir: "Не удалось создать каталог %{path}"
+  write_file: "Не удалось записать %{path}"
+  parse_metadata: Не удалось разобрать файл метаданных srmgui
+  metadata_entry: "Элемент метаданных %{index} имеет неверный формат"
+  metadata_missing_id: "В элементе метаданных %{index} отсутствует id"
+  metadata_missing_url: "В метаданных «%{id}» отсутствует url"
+  parse_sources: Не удалось разобрать файл srmgui
+  bad_format: 'Это не файл зеркал srmgui (нужен format = "%{format}")'
+  missing_version: В файле srmgui отсутствует поле version
+  unsupported_version: "Неподдерживаемая версия файла srmgui: %{version}"
+  no_sources: В файле srmgui нет записей зеркал
+  source_entry_format: "Запись зеркала %{index} имеет неверный формат"
+  source_missing_name: "В записи зеркала %{index} отсутствует название"
+  source_missing_id: "В записи зеркала %{index} отсутствует id"
+  source_missing_url: "У зеркала «%{id}» отсутствует url"
+  no_valid_sources: В файле srmgui нет допустимых записей зеркал
+
+registry:
+  rsproxy:
+    name: RsProxy (ByteDance)
+    description: Самый стабильный в Китае, рекомендуется для повседневной работы
+  aliyun:
+    name: Alibaba Cloud
+    description: Резервное зеркало; индекс доступен, но загрузки могут отдавать 404
+  ustc:
+    name: USTC (Китайский ун-т науки и технологий)
+    description: Документация ещё доступна, соединение нестабильно
+  tuna:
+    name: Tsinghua TUNA
+    description: Документация ещё доступна, иногда не отвечает
+  sjtu:
+    name: SJTUG (Шанхайский ун-т Цзяо Тун)
+    description: Университетское зеркало, подходит для экстренных случаев
+  official:
+    name: Официальный crates.io
+    description: Зеркало по умолчанию; переключитесь обратно перед cargo publish

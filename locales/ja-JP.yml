@@ -1,0 +1,156 @@
+app:
+  title: Cargo ミラー切り替えツール
+
+about:
+  title: このアプリについて
+  version: バージョン %{version}
+  description: Rust Cargo のミラーを切り替えるデスクトップツール
+  author: 作者
+  license: ライセンス
+  homepage: プロジェクトページ
+  ok: OK
+
+theme:
+  system: システムに従う
+  light: ライト
+  dark: ダーク
+
+tab:
+  builtin: 組み込み
+  custom: カスタム
+
+button:
+  about_tip: このアプリについて
+  log: ログ
+  log_collapse: ログを閉じる
+  add: 追加
+  add_collapse: 追加フォームを閉じる
+  import: インポート
+  export: エクスポート
+  language_tip: 表示言語
+
+source:
+  current: 使用中
+  apply: 適用
+  delete: 削除
+  tip: "ID：%{id}\n名前：%{name}\n説明：%{description}\nレジストリ URL：%{url}"
+  none: （なし）
+  empty: カスタムミラーはまだありません。下から追加してください。
+
+add:
+  label_id: ID
+  label_name: 名前
+  label_url: レジストリ URL
+  label_description: 説明（任意）
+  placeholder_id: 例：my-mirror
+  placeholder_name: 例：マイミラー
+  placeholder_url: sparse+https://example.com/index/
+  placeholder_description: 任意。ミラーの説明
+  ok: OK
+  error_empty: ID と URL は必須です
+  error_builtin: 「%{id}」は組み込みミラーのため上書きできません
+  error_exists: 「%{id}」は既に存在します
+  success: カスタムミラーを追加しました
+
+status:
+  hint: ミラーを選択して「適用」をクリックすると ~/.cargo/config.toml に書き込まれます
+  applied: "%{source} に切り替えました。設定を書き込みました（バックアップ: config.toml.bak）"
+  imported: カスタムミラーを %{count} 件インポートしました
+  imported_skipped: カスタムミラーを %{count} 件インポートし、組み込みまたは重複の %{skipped} 件をスキップしました
+  import_empty: インポートされたミラーはありません（組み込みまたは重複の %{skipped} 件をスキップ）
+  import_failed: "インポートに失敗しました：%{error}"
+  read_failed: "%{path} の読み込みに失敗しました：%{error}"
+  import_picker_failed: "ファイル選択ダイアログを開けませんでした：%{error}"
+  export_empty: エクスポートできるカスタムミラーがありません
+  export_picker_failed: "保存ダイアログを開けませんでした：%{error}"
+  exported: カスタムミラーを %{count} 件、%{path} にエクスポートしました
+  export_failed: "%{path} への書き込みに失敗しました：%{error}"
+
+dialog:
+  import_title: srmgui カスタムミラーファイルを選択
+
+log:
+  title: ログ
+  empty: ログはまだありません
+  dir: "ログフォルダー：%{dir}"
+  open: クリックしてファイルマネージャーで開く
+  app_start: srmgui を起動しました
+  switch: "ミラーを切り替え：%{source}"
+  config_written: 設定を書き込みました。ミラー %{source} が有効です
+  config_write_failed: "設定の書き込みに失敗しました：%{error}"
+  probe_start: "%{id} の速度測定を開始 (%{url})"
+  probe_done: "測定完了 %{id}：%{summary}"
+  import_start: "ファイルのインポートを開始：%{path}"
+  import_failed: "インポートに失敗しました：%{error}"
+  import_done: "インポート完了：追加 %{added} 件、スキップ %{skipped} 件"
+  exported: カスタムミラーを %{count} 件、%{path} にエクスポートしました
+  export_failed: "%{path} への書き込みに失敗しました：%{error}"
+  custom_delete: "カスタムミラーを削除：%{id}"
+  add_empty: "カスタムミラーの追加に失敗：ID または URL が空です"
+  add_builtin: "追加に失敗：「%{id}」は組み込みミラーです"
+  add_exists: "追加に失敗：「%{id}」は既に存在します"
+  add: "カスタムミラーを追加：%{id} (%{url})"
+
+probe:
+  tcp: TCP 接続
+  http: HTTP インデックス
+  parse: インデックス解析
+  download: ダウンロード速度
+  tip_running: "%{title}：測定中…"
+  tip_skipped: "%{title}：スキップ（前の手順が失敗）"
+  tip_passed: "%{title}：合格 · %{detail}"
+  tip_failed: "%{title}：不合格 · %{error}"
+  summary_download: ダウンロード
+  summary_skipped: スキップ
+  summary_running: 実行中
+  summary_failed: "失敗:%{error}"
+
+net:
+  url_invalid: "無効な URL：%{error}"
+  missing_dl: config.json に dl/api フィールドがありません
+  index_parse_failed: インデックスファイルの解析に失敗しました
+  empty_download: ダウンロード内容が空です
+  missing_location: リダイレクトに Location がありません
+  too_many_redirects: リダイレクトが %{max} 回を超えました
+  bad_response: HTTP レスポンスの形式が不正です
+
+error:
+  home: ホームディレクトリが見つかりません
+  parse_cargo_config: cargo 設定の解析に失敗しました
+  read_file: "%{path} の読み込みに失敗しました"
+  create_dir: "フォルダー %{path} の作成に失敗しました"
+  write_file: "%{path} への書き込みに失敗しました"
+  parse_metadata: srmgui メタデータファイルの解析に失敗しました
+  metadata_entry: "%{index} 番目のメタデータ項目の形式が不正です"
+  metadata_missing_id: "%{index} 番目のメタデータに id がありません"
+  metadata_missing_url: "メタデータ「%{id}」に url がありません"
+  parse_sources: srmgui ファイルの解析に失敗しました
+  bad_format: 'srmgui ソースファイルではありません（format = "%{format}" が必要）'
+  missing_version: srmgui ファイルに version フィールドがありません
+  unsupported_version: "サポートされていない srmgui ファイルバージョン：%{version}"
+  no_sources: srmgui ファイルにソース項目がありません
+  source_entry_format: "%{index} 番目のソース項目の形式が不正です"
+  source_missing_name: "%{index} 番目のソースに name がありません"
+  source_missing_id: "%{index} 番目のソースに id がありません"
+  source_missing_url: "ソース「%{id}」に url がありません"
+  no_valid_sources: srmgui ファイルに有効なソース項目がありません
+
+registry:
+  rsproxy:
+    name: RsProxy（ByteDance）
+    description: 中国国内で最も安定。日常利用に最適
+  aliyun:
+    name: Alibaba Cloud（阿里云）
+    description: 予備ミラー。インデックスは通ってもダウンロードが 404 になることがある
+  ustc:
+    name: 中国科学技術大学 USTC
+    description: ドキュメントは健在だが接続が不安定
+  tuna:
+    name: 清華大学 TUNA
+    description: ドキュメントは健在だが応答しないことがある
+  sjtu:
+    name: 上海交通大学 SJTUG
+    description: 大学ミラー。緊急時の利用に
+  official:
+    name: 公式 crates.io
+    description: デフォルトのミラー。cargo publish の前に戻すことを推奨

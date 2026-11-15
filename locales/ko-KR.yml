@@ -1,0 +1,156 @@
+app:
+  title: Cargo 미러 전환 도구
+
+about:
+  title: 정보
+  version: 버전 %{version}
+  description: Rust Cargo 미러를 전환하는 데스크톱 도구
+  author: 작성자
+  license: 라이선스
+  homepage: 프로젝트 홈페이지
+  ok: 확인
+
+theme:
+  system: 시스템 설정
+  light: 밝게
+  dark: 어둡게
+
+tab:
+  builtin: 내장
+  custom: 사용자 정의
+
+button:
+  about_tip: 정보
+  log: 로그
+  log_collapse: 로그 접기
+  add: 추가
+  add_collapse: 추가 폼 접기
+  import: 가져오기
+  export: 내보내기
+  language_tip: 표시 언어
+
+source:
+  current: 사용 중
+  apply: 적용
+  delete: 삭제
+  tip: "ID: %{id}\n이름: %{name}\n설명: %{description}\n레지스트리 URL: %{url}"
+  none: (없음)
+  empty: 사용자 정의 미러가 없습니다. 아래에서 추가하세요.
+
+add:
+  label_id: ID
+  label_name: 이름
+  label_url: 레지스트리 URL
+  label_description: 설명 (선택)
+  placeholder_id: "예: my-mirror"
+  placeholder_name: "예: 내 미러"
+  placeholder_url: sparse+https://example.com/index/
+  placeholder_description: 선택 사항, 미러 설명
+  ok: 확인
+  error_empty: ID와 URL은 필수입니다
+  error_builtin: '"%{id}"은(는) 내장 미러라 덮어쓸 수 없습니다'
+  error_exists: '"%{id}"이(가) 이미 존재합니다'
+  success: 사용자 정의 미러를 추가했습니다
+
+status:
+  hint: 미러를 선택한 뒤 "적용"을 클릭하면 ~/.cargo/config.toml에 기록됩니다
+  applied: "%{source} (으)로 전환했습니다. 설정이 기록되었습니다 (백업: config.toml.bak)"
+  imported: 사용자 정의 미러 %{count}개를 가져왔습니다
+  imported_skipped: 사용자 정의 미러 %{count}개를 가져오고 내장 또는 중복 %{skipped}개를 건너뛰었습니다
+  import_empty: 가져온 미러가 없습니다 (내장 또는 중복 %{skipped}개 건너뜀)
+  import_failed: "가져오기 실패: %{error}"
+  read_failed: "%{path} 읽기 실패: %{error}"
+  import_picker_failed: "파일 선택기를 열지 못했습니다: %{error}"
+  export_empty: 내보낼 사용자 정의 미러가 없습니다
+  export_picker_failed: "저장 대화상자를 열지 못했습니다: %{error}"
+  exported: 사용자 정의 미러 %{count}개를 %{path}에 내보냈습니다
+  export_failed: "%{path} 쓰기 실패: %{error}"
+
+dialog:
+  import_title: srmgui 사용자 정의 미러 파일 선택
+
+log:
+  title: 로그
+  empty: 로그가 없습니다
+  dir: "로그 폴더: %{dir}"
+  open: 클릭하면 파일 관리자에서 열립니다
+  app_start: srmgui 시작됨
+  switch: "미러 전환: %{source}"
+  config_written: 설정이 기록되어 미러 %{source}이(가) 적용되었습니다
+  config_write_failed: "설정 쓰기 실패: %{error}"
+  probe_start: "%{id} 속도 측정 시작 (%{url})"
+  probe_done: "측정 완료 %{id}: %{summary}"
+  import_start: "파일 가져오기 시작: %{path}"
+  import_failed: "가져오기 실패: %{error}"
+  import_done: "가져오기 완료: 추가 %{added}개, 건너뜀 %{skipped}개"
+  exported: 사용자 정의 미러 %{count}개를 %{path}에 내보냈습니다
+  export_failed: "%{path} 쓰기 실패: %{error}"
+  custom_delete: "사용자 정의 미러 삭제: %{id}"
+  add_empty: "사용자 정의 미러 추가 실패: ID 또는 URL이 비어 있습니다"
+  add_builtin: '추가 실패: "%{id}"은(는) 내장 미러입니다'
+  add_exists: '추가 실패: "%{id}"이(가) 이미 존재합니다'
+  add: "사용자 정의 미러 추가: %{id} (%{url})"
+
+probe:
+  tcp: TCP 연결
+  http: HTTP 인덱스
+  parse: 인덱스 파싱
+  download: 다운로드 속도
+  tip_running: "%{title}: 측정 중…"
+  tip_skipped: "%{title}: 건너뜀 (이전 단계 실패)"
+  tip_passed: "%{title}: 통과 · %{detail}"
+  tip_failed: "%{title}: 실패 · %{error}"
+  summary_download: 다운로드
+  summary_skipped: 건너뜀
+  summary_running: 진행 중
+  summary_failed: "실패:%{error}"
+
+net:
+  url_invalid: "잘못된 URL: %{error}"
+  missing_dl: config.json에 dl/api 필드가 없습니다
+  index_parse_failed: 인덱스 파일 파싱 실패
+  empty_download: 다운로드 내용이 비어 있습니다
+  missing_location: 리디렉션에 Location이 없습니다
+  too_many_redirects: 리디렉션이 %{max}회를 초과했습니다
+  bad_response: HTTP 응답 형식이 잘못되었습니다
+
+error:
+  home: 홈 디렉터리를 찾을 수 없습니다
+  parse_cargo_config: cargo 설정 파싱 실패
+  read_file: "%{path} 읽기 실패"
+  create_dir: "폴더 %{path} 생성 실패"
+  write_file: "%{path} 쓰기 실패"
+  parse_metadata: srmgui 메타데이터 파일 파싱 실패
+  metadata_entry: "%{index}번째 메타데이터 항목 형식이 잘못되었습니다"
+  metadata_missing_id: "%{index}번째 메타데이터에 id가 없습니다"
+  metadata_missing_url: '메타데이터 "%{id}"에 url이 없습니다'
+  parse_sources: srmgui 파일 파싱 실패
+  bad_format: 'srmgui 소스 파일이 아닙니다 (format = "%{format}" 필요)'
+  missing_version: srmgui 파일에 version 필드가 없습니다
+  unsupported_version: "지원하지 않는 srmgui 파일 버전: %{version}"
+  no_sources: srmgui 파일에 소스 항목이 없습니다
+  source_entry_format: "%{index}번째 소스 항목 형식이 잘못되었습니다"
+  source_missing_name: "%{index}번째 소스에 name이 없습니다"
+  source_missing_id: "%{index}번째 소스에 id가 없습니다"
+  source_missing_url: '소스 "%{id}"에 url이 없습니다'
+  no_valid_sources: srmgui 파일에 유효한 소스 항목이 없습니다
+
+registry:
+  rsproxy:
+    name: RsProxy (ByteDance)
+    description: 중국 내에서 가장 안정적, 일상 사용 권장
+  aliyun:
+    name: Alibaba Cloud (알리윤)
+    description: 예비 미러, 인덱스는 되지만 다운로드가 404인 경우가 있음
+  ustc:
+    name: 중국과학기술대학 USTC
+    description: 문서는 남아 있으나 연결이 불안정함
+  tuna:
+    name: 칭화대학 TUNA
+    description: 문서는 남아 있으나 응답이 없는 경우가 있음
+  sjtu:
+    name: 상하이교통대학 SJTUG
+    description: 대학 미러, 비상시 사용에 적합
+  official:
+    name: 공식 crates.io
+    description: 기본 미러, cargo publish 전에 되돌리는 것을 권장

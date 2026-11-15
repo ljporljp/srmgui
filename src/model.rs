@@ -139,36 +139,70 @@ pub(crate) enum Language {
     #[default]
     Zh,
     En,
+    Ja,
+    Ko,
+    De,
+    Fr,
+    Es,
+    Ru,
 }
 
 impl Language {
+    /// 全部语言，顺序与语言切换菜单一致。
+    pub(crate) const ALL: [Self; 8] = [
+        Self::Zh,
+        Self::En,
+        Self::Ja,
+        Self::Ko,
+        Self::De,
+        Self::Fr,
+        Self::Es,
+        Self::Ru,
+    ];
+
     /// rust-i18n 使用的 locale 标识。
     pub(crate) fn code(self) -> &'static str {
         match self {
             Self::Zh => "zh-CN",
             Self::En => "en-US",
+            Self::Ja => "ja-JP",
+            Self::Ko => "ko-KR",
+            Self::De => "de-DE",
+            Self::Fr => "fr-FR",
+            Self::Es => "es-ES",
+            Self::Ru => "ru-RU",
+        }
+    }
+
+    /// 语言自身名称，切换菜单中始终以该语言显示。
+    pub(crate) fn native_name(self) -> &'static str {
+        match self {
+            Self::Zh => "中文",
+            Self::En => "English",
+            Self::Ja => "日本語",
+            Self::Ko => "한국어",
+            Self::De => "Deutsch",
+            Self::Fr => "Français",
+            Self::Es => "Español",
+            Self::Ru => "Русский",
         }
     }
 
     /// 从持久化的语言标识解析，无法识别时回退中文。
     pub(crate) fn from_code(code: &str) -> Self {
-        if code.to_ascii_lowercase().starts_with("en") {
-            Self::En
-        } else {
-            Self::Zh
-        }
-    }
-
-    pub(crate) fn index(self) -> usize {
-        match self {
-            Self::Zh => 0,
-            Self::En => 1,
-        }
-    }
-
-    pub(crate) fn from_index(index: usize) -> Self {
-        match index {
-            1 => Self::En,
+        let primary = code
+            .split(['-', '_'])
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        match primary.as_str() {
+            "en" => Self::En,
+            "ja" => Self::Ja,
+            "ko" => Self::Ko,
+            "de" => Self::De,
+            "fr" => Self::Fr,
+            "es" => Self::Es,
+            "ru" => Self::Ru,
             _ => Self::Zh,
         }
     }
@@ -245,6 +279,15 @@ mod tests {
     fn passed_step_drops_version_and_keeps_duration() {
         let (text, _) = level_display(&Level::Passed("1.0.229 · 285 ms".into()), false);
         assert_eq!(text, "285ms");
+    }
+
+    #[test]
+    fn language_code_roundtrip() {
+        for language in Language::ALL {
+            assert_eq!(Language::from_code(language.code()), language);
+        }
+        assert_eq!(Language::from_code("fr_CA"), Language::Fr);
+        assert_eq!(Language::from_code("unknown"), Language::Zh);
     }
 
     #[test]
