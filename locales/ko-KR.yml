@@ -80,6 +80,8 @@ status:
   export_picker_failed: "저장 대화상자를 열지 못했습니다: %{error}"
   exported: 사용자 정의 미러 %{count}개를 %{path}에 내보냈습니다
   export_failed: "%{path} 쓰기 실패: %{error}"
+  snapshot_restored: "%{time} 설정 스냅숏으로 복원했습니다(%{path})"
+  snapshot_restore_failed: "설정 스냅숏 복원 실패: %{error}"
 
 dialog:
   import_title: srmgui 사용자 정의 미러 파일 선택
@@ -102,6 +104,8 @@ log:
   import_done: "가져오기 완료: 추가 %{added}개, 건너뜀 %{skipped}개"
   exported: 사용자 정의 미러 %{count}개를 %{path}에 내보냈습니다
   export_failed: "%{path} 쓰기 실패: %{error}"
+  preview: "쓰기 미리보기 열기: 미러 %{source} -> %{path}"
+  snapshot_restored: "설정 스냅숏 복원 %{time} -> %{path}"
   custom_delete: "사용자 정의 미러 삭제: %{id}"
   add_empty: "사용자 정의 미러 추가 실패: ID 또는 URL이 비어 있습니다"
   add_builtin: '추가 실패: "%{id}"은(는) 내장 미러입니다'
@@ -189,3 +193,23 @@ update:
   log_download_failed: "설치 파일 다운로드 실패: %{error}"
   log_install: "설치 프로그램 실행: %{path}"
   log_install_failed: "설치 프로그램 실행 실패: %{error}"
+
+preview:
+  title: 쓰기 전 미리보기
+  target: "기록 대상: %{path}"
+  hint: 확인해야만 설정이 변경됩니다. 취소하면 아무 것도 바뀌지 않습니다
+  summary: "%{added}줄 추가, %{removed}줄 삭제"
+  no_change: 설정 내용이 변경되지 않았습니다
+  ok: 설정 쓰기
+  cancel: 취소
+  failed: "쓰기 미리보기를 만들지 못했습니다: %{error}"
+
+snapshot:
+  button: 스냅숏
+  tip: 최근 %{count}회 설정 스냅숏을 확인하고 한 번에 복원
+  title: 설정 스냅숏
+  empty: 스냅숏이 없습니다. 미러를 전환하면 최근 %{count}회가 자동으로 보관됩니다
+  meta: "%{time} · %{scope} · 미러 %{source}"
+  restore: 복원
+  restore_tip: 이 스냅숏으로 현재 설정을 덮어씁니다(덮어쓰기 전 파일은 .bak으로도 저장됩니다)
+  close: 닫기

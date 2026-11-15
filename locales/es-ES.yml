@@ -80,6 +80,8 @@ status:
   export_picker_failed: "No se pudo abrir el diálogo de guardado: %{error}"
   exported: "Se exportaron %{count} espejo(s) personalizado(s) a %{path}"
   export_failed: "Error al escribir %{path}: %{error}"
+  snapshot_restored: "Revertido a la instantánea de %{time} (%{path})"
+  snapshot_restore_failed: "Error al revertir la instantánea: %{error}"
 
 dialog:
   import_title: Selecciona un archivo de espejos de srmgui
@@ -102,6 +104,8 @@ log:
   import_done: "Importación terminada: %{added} añadido(s), %{skipped} omitido(s)"
   exported: "Se exportaron %{count} espejo(s) personalizado(s) a %{path}"
   export_failed: "Error al escribir %{path}: %{error}"
+  preview: "Abriendo vista previa de escritura: espejo %{source} -> %{path}"
+  snapshot_restored: "Instantánea de configuración revertida %{time} -> %{path}"
   custom_delete: "Espejo personalizado eliminado: %{id}"
   add_empty: "Error al añadir: el ID o la URL están vacíos"
   add_builtin: "Error al añadir: «%{id}» es un espejo integrado"
@@ -189,3 +193,23 @@ update:
   log_download_failed: "Error al descargar el instalador: %{error}"
   log_install: "Iniciando instalador: %{path}"
   log_install_failed: "Error al iniciar el instalador: %{error}"
+
+preview:
+  title: Vista previa antes de escribir
+  target: "Destino: %{path}"
+  hint: La configuración solo cambia tras confirmar. Cancelar no modifica nada.
+  summary: "%{added} línea(s) añadida(s), %{removed} línea(s) eliminada(s)"
+  no_change: El contenido de la configuración no ha cambiado
+  ok: Escribir configuración
+  cancel: Cancelar
+  failed: "Error al generar la vista previa: %{error}"
+
+snapshot:
+  button: Instantáneas
+  tip: Ver las últimas %{count} instantáneas de configuración y revertir con un clic
+  title: Instantáneas de configuración
+  empty: Aún no hay instantáneas. Los últimos %{count} cambios se guardan automáticamente.
+  meta: "%{time} · %{scope} · espejo %{source}"
+  restore: Restaurar
+  restore_tip: Sobrescribe la configuración actual con esta instantánea (el archivo existente también se guarda como .bak)
+  close: Cerrar

@@ -80,6 +80,8 @@ status:
   export_picker_failed: "Speichern-Dialog konnte nicht geöffnet werden: %{error}"
   exported: "%{count} benutzerdefinierte Spiegel nach %{path} exportiert"
   export_failed: "Schreiben von %{path} fehlgeschlagen: %{error}"
+  snapshot_restored: "Auf den Snapshot von %{time} zurückgesetzt (%{path})"
+  snapshot_restore_failed: "Snapshot konnte nicht zurückgesetzt werden: %{error}"
 
 dialog:
   import_title: srmgui-Spiegeldatei auswählen
@@ -102,6 +104,8 @@ log:
   import_done: "Import abgeschlossen: %{added} hinzugefügt, %{skipped} übersprungen"
   exported: "%{count} benutzerdefinierte Spiegel nach %{path} exportiert"
   export_failed: "Schreiben von %{path} fehlgeschlagen: %{error}"
+  preview: "Schreibvorschau geöffnet: Spiegel %{source} -> %{path}"
+  snapshot_restored: "Konfigurations-Snapshot zurückgesetzt %{time} -> %{path}"
   custom_delete: "Benutzerdefinierten Spiegel gelöscht: %{id}"
   add_empty: "Hinzufügen fehlgeschlagen: ID oder URL ist leer"
   add_builtin: "Hinzufügen fehlgeschlagen: „%{id}“ ist ein integrierter Spiegel"
@@ -189,3 +193,23 @@ update:
   log_download_failed: "Installer-Download fehlgeschlagen: %{error}"
   log_install: "Installer wird gestartet: %{path}"
   log_install_failed: "Installer konnte nicht gestartet werden: %{error}"
+
+preview:
+  title: Vorschau vor dem Schreiben
+  target: "Schreibziel: %{path}"
+  hint: Die Konfiguration wird erst nach der Bestätigung geändert. Abbrechen ändert nichts.
+  summary: "%{added} Zeile(n) hinzugefügt, %{removed} Zeile(n) entfernt"
+  no_change: Der Inhalt der Konfiguration ist unverändert
+  ok: Konfiguration schreiben
+  cancel: Abbrechen
+  failed: "Vorschau konnte nicht erstellt werden: %{error}"
+
+snapshot:
+  button: Snapshots
+  tip: Die letzten %{count} Konfigurations-Snapshots ansehen und mit einem Klick zurücksetzen
+  title: Konfigurations-Snapshots
+  empty: Noch keine Snapshots. Die letzten %{count} Wechsel werden automatisch aufbewahrt.
+  meta: "%{time} · %{scope} · Spiegel %{source}"
+  restore: Wiederherstellen
+  restore_tip: Überschreibt die aktuelle Konfiguration mit diesem Snapshot (die vorhandene Datei wird zusätzlich als .bak gesichert)
+  close: Schließen

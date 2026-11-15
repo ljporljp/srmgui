@@ -80,6 +80,8 @@ status:
   export_picker_failed: "Failed to open save dialog: %{error}"
   exported: Exported %{count} custom source(s) to %{path}
   export_failed: "Failed to write %{path}: %{error}"
+  snapshot_restored: Rolled back to the snapshot from %{time} (%{path})
+  snapshot_restore_failed: "Failed to roll back the snapshot: %{error}"
 
 dialog:
   import_title: Select a srmgui custom sources file
@@ -102,6 +104,8 @@ log:
   import_done: "Import finished: %{added} added, %{skipped} skipped"
   exported: Exported %{count} custom source(s) to %{path}
   export_failed: "Failed to write %{path}: %{error}"
+  preview: "Opening write preview: source %{source} -> %{path}"
+  snapshot_restored: "Rolled back config snapshot %{time} -> %{path}"
   custom_delete: "Deleted custom source: %{id}"
   add_empty: "Add custom source failed: ID or URL is empty"
   add_builtin: 'Add failed: "%{id}" is a built-in source'
@@ -189,3 +193,23 @@ update:
   log_download_failed: "Failed to download installer: %{error}"
   log_install: "Starting installer: %{path}"
   log_install_failed: "Failed to start installer: %{error}"
+
+preview:
+  title: Preview before writing
+  target: "Write to: %{path}"
+  hint: The config is only changed after you confirm. Cancelling changes nothing.
+  summary: "%{added} line(s) added, %{removed} line(s) removed"
+  no_change: Config content is unchanged
+  ok: Write config
+  cancel: Cancel
+  failed: "Failed to build the write preview: %{error}"
+
+snapshot:
+  button: Snapshots
+  tip: View the last %{count} config snapshots and roll back with one click
+  title: Config snapshots
+  empty: No snapshots yet. The last %{count} switches are kept automatically.
+  meta: "%{time} · %{scope} · source %{source}"
+  restore: Restore
+  restore_tip: Overwrite the current config with this snapshot (the existing file is still backed up as .bak)
+  close: Close

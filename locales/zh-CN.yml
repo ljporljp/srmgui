@@ -80,6 +80,8 @@ status:
   export_picker_failed: 打开保存对话框失败：%{error}
   exported: 已导出 %{count} 个自定义源到 %{path}
   export_failed: 写入 %{path} 失败：%{error}
+  snapshot_restored: 已回滚到 %{time} 的配置快照（%{path}）
+  snapshot_restore_failed: 回滚配置快照失败：%{error}
 
 dialog:
   import_title: 选择 srmgui 自定义源文件
@@ -102,6 +104,8 @@ log:
   import_done: 导入完成：新增 %{added} 个，跳过 %{skipped} 个
   exported: 已导出 %{count} 个自定义源到 %{path}
   export_failed: 写入 %{path} 失败：%{error}
+  preview: 打开写入预览：源 %{source} -> %{path}
+  snapshot_restored: 已回滚配置快照 %{time} -> %{path}
   custom_delete: 删除自定义源：%{id}
   add_empty: 添加自定义源失败：标识名或 URL 为空
   add_builtin: 添加失败：「%{id}」是内置源
@@ -189,3 +193,23 @@ update:
   log_download_failed: 下载安装包失败：%{error}
   log_install: 启动安装程序：%{path}
   log_install_failed: 启动安装程序失败：%{error}
+
+preview:
+  title: 写入前预览
+  target: 写入目标：%{path}
+  hint: 确认后才会修改配置，取消不会产生任何改动
+  summary: 新增 %{added} 行，删除 %{removed} 行
+  no_change: 配置内容没有变化
+  ok: 确认写入
+  cancel: 取消
+  failed: 生成写入预览失败：%{error}
+
+snapshot:
+  button: 快照
+  tip: 查看最近 %{count} 次配置快照并一键回滚
+  title: 配置快照
+  empty: 暂无配置快照，切换源后会自动保留最近 %{count} 次
+  meta: "%{time} · %{scope} · 源 %{source}"
+  restore: 恢复
+  restore_tip: 用这次快照覆盖当前配置（覆盖前的文件仍会备份为 .bak）
+  close: 关闭

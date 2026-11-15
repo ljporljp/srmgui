@@ -21,6 +21,7 @@ use gpui_kit::{
 
 use crate::add_form::render_add_form;
 use crate::app::CargoMirrorApp;
+use crate::config_dialog;
 use crate::config_io;
 use crate::config_io::CustomSource;
 use crate::logger;
@@ -267,7 +268,8 @@ impl RootView {
         self.persist_settings(cx);
     }
 
-    pub(crate) fn apply(&mut self, cx: &mut Context<Self>) {
+    /// 应用当前选中的源：先生成合并结果并展示 diff，确认后才真正写入。
+    pub(crate) fn apply(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let selected: String = self.app.read(cx).state.selected.clone().into();
         let customs = self.app.read(cx).state.customs.clone();
         let (project_scope, project_root) = {
@@ -291,10 +293,71 @@ impl RootView {
             // 与 write_config 的目标保持一致（旧版 `config` 优先于 `config.toml`）。
             config_io::config_path().ok()
         };
-        let target_display = target_path
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .unwrap_or_default();
+        let Some(target_path) = target_path else {
+            let message = rust_i18n::t!("preview.failed", error = rust_i18n::t!("error.home"))
+                .to_string();
+            self.app.update(cx, |model, cx| {
+                model.state.status = Status::Error(message.into());
+                cx.notify();
+            });
+            return;
+        };
+
+        // 预先生成合并后的内容：只读取现有文件，不落盘。
+        let content = registry::build_config(&selected, &customs);
+        let old = std::fs::read_to_string(&target_path).unwrap_or_default();
+        let new = match config_io::preview_config(&target_path, &content) {
+            Ok(new) => new,
+            Err(error) => {
+                logger::error(
+                    "apply",
+                    rust_i18n::t!("log.config_write_failed", error = format!("{error:#}"))
+                        .to_string(),
+                );
+                let message =
+                    rust_i18n::t!("preview.failed", error = format!("{error:#}")).to_string();
+                self.app.update(cx, |model, cx| {
+                    model.state.status = Status::Error(message.into());
+                    cx.notify();
+                });
+                return;
+            }
+        };
+
+        logger::info(
+            "apply",
+            rust_i18n::t!(
+                "log.preview",
+                source = selected.as_str(),
+                path = target_path.display().to_string()
+            )
+            .to_string(),
+        );
+
+        let plan = config_dialog::ApplyPlan {
+            target: target_path,
+            old,
+            new,
+            content,
+            source: selected,
+            project_scope,
+        };
+        let entity = cx.entity();
+        config_dialog::open_preview_dialog(window, cx, entity, plan);
+    }
+
+    /// 用户在预览窗口确认后写入配置，并同步刷新界面状态。
+    pub(crate) fn apply_confirmed(
+        &mut self,
+        plan: config_dialog::ApplyPlan,
+        cx: &mut Context<Self>,
+    ) {
+        let customs = self.app.read(cx).state.customs.clone();
+        let project_root = self.app.read(cx).state.project_root.clone();
+        let selected = plan.source.clone();
+        let target_for_status = plan.target.display().to_string();
+        let content = plan.content;
+        let project_scope = plan.project_scope;
 
         logger::info(
             "apply",
@@ -304,18 +367,13 @@ impl RootView {
         // Offload config write to a thread so we never block the UI.
         let selected_for_write = selected.clone();
         let selected_for_log = selected.clone();
-        let target_for_status = target_display.clone();
-        let root_for_write = if project_scope {
-            project_root.clone()
-        } else {
-            None
-        };
         thread::spawn(move || {
             let result = (|| -> Result<_> {
-                let content = registry::build_config(&selected_for_write, &customs);
-                let path = match &root_for_write {
-                    Some(root) => config_io::write_project_config(root, &content)?,
-                    None => config_io::write_config(&content)?,
+                let path = match (&project_root, project_scope) {
+                    (Some(root), true) => {
+                        config_io::write_project_config(root, &content, &selected_for_write)?
+                    }
+                    _ => config_io::write_config(&content, &selected_for_write)?,
                 };
                 // 同步持久化自定义源元数据（name / description）
                 let _ = config_io::write_customs(&customs);
@@ -353,6 +411,57 @@ impl RootView {
             );
             cx.notify();
         });
+    }
+
+    /// 一键回滚：把配置快照写回原文件，并刷新当前源显示。
+    pub(crate) fn restore_snapshot(
+        &mut self,
+        snapshot: config_io::Snapshot,
+        cx: &mut Context<Self>,
+    ) {
+        let time = snapshot.created_at.clone();
+        let target = snapshot.target.display().to_string();
+
+        match config_io::restore_snapshot(&snapshot) {
+            Ok(()) => {
+                logger::info(
+                    "snapshot",
+                    rust_i18n::t!(
+                        "log.snapshot_restored",
+                        time = time.as_str(),
+                        path = target.as_str()
+                    )
+                    .to_string(),
+                );
+                let message = rust_i18n::t!(
+                    "status.snapshot_restored",
+                    time = time.as_str(),
+                    path = target.as_str()
+                )
+                .to_string();
+                self.app.update(cx, |model, cx| {
+                    model.state.status = Status::Success(message.into());
+                    cx.notify();
+                });
+                self.reload_current(cx);
+            }
+            Err(error) => {
+                logger::error(
+                    "snapshot",
+                    rust_i18n::t!("log.config_write_failed", error = format!("{error:#}"))
+                        .to_string(),
+                );
+                let message = rust_i18n::t!(
+                    "status.snapshot_restore_failed",
+                    error = format!("{error:#}")
+                )
+                .to_string();
+                self.app.update(cx, |model, cx| {
+                    model.state.status = Status::Error(message.into());
+                    cx.notify();
+                });
+            }
+        }
     }
 
     /// 对所有内置源与自定义源发起一轮分层测速。
@@ -1076,6 +1185,11 @@ impl Render for RootView {
         } else {
             rust_i18n::t!("scope.select").to_string()
         };
+        let snapshot_tip = rust_i18n::t!(
+            "snapshot.tip",
+            count = config_io::SNAPSHOT_LIMIT.to_string()
+        )
+        .to_string();
 
         v_flex()
             .size_full()
@@ -1112,6 +1226,19 @@ impl Render for RootView {
                                     .small()
                                     .secondary()
                                     .on_click(|_, window, cx| open_about_dialog(window, cx)),
+                            )
+                            .child(
+                                // 配置快照：查看最近 N 次写入并一键回滚
+                                Button::new("open-snapshots")
+                                    .icon(IconName::Undo)
+                                    .label(rust_i18n::t!("snapshot.button").to_string())
+                                    .small()
+                                    .secondary()
+                                    .tooltip(snapshot_tip)
+                                    .on_click(cx.listener(|_view, _ev, window, cx| {
+                                        let entity = cx.entity();
+                                        config_dialog::open_snapshots_dialog(window, cx, entity);
+                                    })),
                             )
                             .child(
                                 h_flex()
@@ -1250,7 +1377,7 @@ impl Render for RootView {
                                                 |view, _ev, _window, cx| view.pick_project(cx),
                                             )),
                                     )
-                                }),
+                                })
                         )
                         .child(
                             TabBar::new("registry-tabs")

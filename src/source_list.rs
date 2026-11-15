@@ -217,12 +217,12 @@ fn source_row(
                         .when(!is_selected, |b| b.secondary())
                         .on_click(cx.listener({
                             let apply_id = id.clone();
-                            move |view, _ev, _window, cx| {
+                            move |view, _ev, window, cx| {
                                 view.app.update(cx, |model, cx| {
                                     model.state.selected = apply_id.clone().into();
                                     cx.notify();
                                 });
-                                view.apply(cx);
+                                view.apply(window, cx);
                             }
                         }))
                         .into_any_element()

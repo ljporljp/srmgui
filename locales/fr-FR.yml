@@ -80,6 +80,8 @@ status:
   export_picker_failed: "Impossible d’ouvrir la boîte de dialogue d’enregistrement : %{error}"
   exported: "%{count} miroir(s) personnalisé(s) exporté(s) vers %{path}"
   export_failed: "Échec d’écriture de %{path} : %{error}"
+  snapshot_restored: "Restauré à l'instantané du %{time} (%{path})"
+  snapshot_restore_failed: "Échec de la restauration de l'instantané : %{error}"
 
 dialog:
   import_title: Choisir un fichier de miroirs srmgui
@@ -102,6 +104,8 @@ log:
   import_done: "Import terminé : %{added} ajouté(s), %{skipped} ignoré(s)"
   exported: "%{count} miroir(s) personnalisé(s) exporté(s) vers %{path}"
   export_failed: "Échec d’écriture de %{path} : %{error}"
+  preview: "Ouverture de l'aperçu d'écriture : miroir %{source} -> %{path}"
+  snapshot_restored: "Instantané de configuration restauré %{time} -> %{path}"
   custom_delete: "Miroir personnalisé supprimé : %{id}"
   add_empty: "Échec de l’ajout : l’ID ou l’URL est vide"
   add_builtin: "Échec de l’ajout : « %{id} » est un miroir intégré"
@@ -189,3 +193,23 @@ update:
   log_download_failed: "Échec du téléchargement de l'installateur : %{error}"
   log_install: "Lancement de l'installateur : %{path}"
   log_install_failed: "Échec du lancement de l'installateur : %{error}"
+
+preview:
+  title: Aperçu avant écriture
+  target: "Destination : %{path}"
+  hint: La configuration n'est modifiée qu'après confirmation. Annuler ne change rien.
+  summary: "%{added} ligne(s) ajoutée(s), %{removed} ligne(s) supprimée(s)"
+  no_change: Le contenu de la configuration est inchangé
+  ok: Écrire la configuration
+  cancel: Annuler
+  failed: "Échec de la génération de l'aperçu : %{error}"
+
+snapshot:
+  button: Instantanés
+  tip: Voir les %{count} derniers instantanés de configuration et restaurer en un clic
+  title: Instantanés de configuration
+  empty: Aucun instantané. Les %{count} derniers changements sont conservés automatiquement.
+  meta: "%{time} · %{scope} · miroir %{source}"
+  restore: Restaurer
+  restore_tip: Remplacer la configuration actuelle par cet instantané (le fichier existant est également sauvegardé en .bak)
+  close: Fermer

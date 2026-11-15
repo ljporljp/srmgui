@@ -80,6 +80,8 @@ status:
   export_picker_failed: "保存ダイアログを開けませんでした：%{error}"
   exported: カスタムミラーを %{count} 件、%{path} にエクスポートしました
   export_failed: "%{path} への書き込みに失敗しました：%{error}"
+  snapshot_restored: "%{time} の設定スナップショットに復元しました（%{path}）"
+  snapshot_restore_failed: "設定スナップショットの復元に失敗しました：%{error}"
 
 dialog:
   import_title: srmgui カスタムミラーファイルを選択
@@ -102,6 +104,8 @@ log:
   import_done: "インポート完了：追加 %{added} 件、スキップ %{skipped} 件"
   exported: カスタムミラーを %{count} 件、%{path} にエクスポートしました
   export_failed: "%{path} への書き込みに失敗しました：%{error}"
+  preview: "書き込みプレビューを開く：ミラー %{source} -> %{path}"
+  snapshot_restored: "設定スナップショットを復元 %{time} -> %{path}"
   custom_delete: "カスタムミラーを削除：%{id}"
   add_empty: "カスタムミラーの追加に失敗：ID または URL が空です"
   add_builtin: "追加に失敗：「%{id}」は組み込みミラーです"
@@ -189,3 +193,23 @@ update:
   log_download_failed: インストーラーのダウンロードに失敗しました：%{error}
   log_install: インストーラーを起動：%{path}
   log_install_failed: インストーラーの起動に失敗しました：%{error}
+
+preview:
+  title: 書き込み前のプレビュー
+  target: "書き込み先：%{path}"
+  hint: 確認後にのみ設定が変更されます。キャンセルしても何も変わりません
+  summary: "%{added} 行を追加、%{removed} 行を削除"
+  no_change: 設定内容に変更はありません
+  ok: 書き込む
+  cancel: キャンセル
+  failed: "書き込みプレビューの作成に失敗しました：%{error}"
+
+snapshot:
+  button: スナップショット
+  tip: 最近 %{count} 回の設定スナップショットを表示し、ワンクリックで復元
+  title: 設定スナップショット
+  empty: スナップショットはまだありません。切り替えると直近 %{count} 回分が自動保存されます
+  meta: "%{time} · %{scope} · ミラー %{source}"
+  restore: 復元
+  restore_tip: このスナップショットで現在の設定を上書きします（上書き前のファイルは .bak としても保存されます）
+  close: 閉じる

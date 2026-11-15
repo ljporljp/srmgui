@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 use toml_edit::{DocumentMut, Item, Table, TableLike};
 
 /// 自定义源导出文件的扩展名。
@@ -11,6 +12,15 @@ const SOURCES_FORMAT: &str = "srmgui.sources";
 
 /// 导出文件的格式版本（v2 起支持 name / description 字段）。
 const SOURCES_VERSION: i64 = 2;
+
+/// 配置快照保留数量（最近 N 次）。
+pub const SNAPSHOT_LIMIT: usize = 10;
+
+/// 全局配置作用域标识。
+pub const SCOPE_GLOBAL: &str = "global";
+
+/// 项目配置作用域标识。
+pub const SCOPE_PROJECT: &str = "project";
 
 /// 单个自定义源的完整信息。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,6 +93,26 @@ pub fn customs_path() -> Result<PathBuf> {
 /// 应用设置文件路径。
 pub fn settings_path() -> Result<PathBuf> {
     Ok(app_dir()?.join("srmgui-settings.toml"))
+}
+
+/// 配置快照目录：`<HOME>/srmgui/snapshots`。
+pub fn snapshot_dir() -> Result<PathBuf> {
+    Ok(app_dir()?.join("snapshots"))
+}
+
+/// 一次配置写入前的快照，用于出问题后一键回滚。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Snapshot {
+    /// 创建时间（`YYYY-MM-DD HH:MM:SS.mmm`）。
+    pub created_at: String,
+    /// 被快照的配置文件路径。
+    pub target: PathBuf,
+    /// 作用域：`global` 或 `project`。
+    pub scope: String,
+    /// 当时生效的源标识。
+    pub source: String,
+    /// 快照内容（完整配置文件文本）。
+    pub content: String,
 }
 
 /// 应用设置：界面语言与配置写入作用域。
@@ -458,18 +488,35 @@ fn quote(value: &str) -> String {
     out
 }
 
-/// Write the new global config, keeping a `.bak` of the previous file.
-pub fn write_config(content: &str) -> Result<PathBuf> {
+/// 写入全局配置，写入前保留 `.bak` 备份与配置快照。
+pub fn write_config(content: &str, source: &str) -> Result<PathBuf> {
     let path = config_path()?;
-    write_config_file(&path, content)?;
+    write_config_scoped(&path, content, SCOPE_GLOBAL, source)?;
     Ok(path)
 }
 
-/// 写入项目级配置 `<项目根>/.cargo/config.toml`，同样保留 `.bak` 备份。
-pub fn write_project_config(root: &Path, content: &str) -> Result<PathBuf> {
+/// 写入项目级配置 `<项目根>/.cargo/config.toml`，同样保留 `.bak` 备份与快照。
+pub fn write_project_config(root: &Path, content: &str, source: &str) -> Result<PathBuf> {
     let path = project_config_path(root);
-    write_config_file(&path, content)?;
+    write_config_scoped(&path, content, SCOPE_PROJECT, source)?;
     Ok(path)
+}
+
+/// 计算写入后的完整配置内容（与现有文件合并，不落盘），用于写入前预览。
+pub fn preview_config(path: &Path, content: &str) -> Result<String> {
+    merge_config(&read_optional(path)?, content)
+}
+
+/// 写入配置文件：内容有变化时先保存配置快照，再保留 `.bak` 并落盘。
+fn write_config_scoped(path: &Path, content: &str, scope: &str, source: &str) -> Result<()> {
+    let existing = read_optional(path)?;
+    let merged = merge_config(&existing, content)?;
+
+    // 内容确实发生变化时保留一份快照，供出问题后一键回滚。
+    if existing != merged && !existing.trim().is_empty() {
+        let _ = save_snapshot(path, scope, source, &existing);
+    }
+    write_merged(path, &merged)
 }
 
 /// 写入配置文件：自动创建父目录，并在覆盖前备份为 `.bak`。
@@ -477,23 +524,44 @@ pub fn write_project_config(root: &Path, content: &str) -> Result<PathBuf> {
 /// `content` 只包含 srmgui 负责的键（`[source.*]` 与 `[net]`），写入时与
 /// 现有文件合并，保留其中其他配置和注释（如链接器、`[build]`、用户自定义源），
 /// 避免整文件覆盖造成误删。
+#[cfg(test)]
 fn write_config_file(path: &Path, content: &str) -> Result<()> {
+    let merged = merge_config(&read_optional(path)?, content)?;
+    write_merged(path, &merged)
+}
+
+/// 把合并后的完整内容写入目标文件，覆盖前保留 `.bak`。
+fn write_merged(path: &Path, merged: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).with_context(|| {
             rust_i18n::t!("error.create_dir", path = parent.display().to_string()).to_string()
         })?;
     }
 
-    let existing = match std::fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(err) => {
-            return Err(err).with_context(|| {
-                rust_i18n::t!("error.read_file", path = path.display().to_string()).to_string()
-            });
-        }
-    };
+    if path.exists() {
+        let mut backup = path.as_os_str().to_os_string();
+        backup.push(".bak");
+        let _ = std::fs::copy(path, PathBuf::from(backup));
+    }
+    std::fs::write(path, merged).with_context(|| {
+        rust_i18n::t!("error.write_file", path = path.display().to_string()).to_string()
+    })?;
+    Ok(())
+}
 
+/// 读取文件内容，文件不存在时视为空内容。
+fn read_optional(path: &Path) -> Result<String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(text),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(err) => Err(err).with_context(|| {
+            rust_i18n::t!("error.read_file", path = path.display().to_string()).to_string()
+        }),
+    }
+}
+
+/// 把 srmgui 管理的键合并进现有内容并返回完整结果（不落盘）。
+fn merge_config(existing: &str, content: &str) -> Result<String> {
     let managed: DocumentMut = content
         .parse()
         .with_context(|| rust_i18n::t!("error.parse_cargo_config").to_string())?;
@@ -506,17 +574,151 @@ fn write_config_file(path: &Path, content: &str) -> Result<()> {
             .with_context(|| rust_i18n::t!("error.parse_cargo_config").to_string())?
     };
     merge_managed(&mut merged, &managed);
+    Ok(merged.to_string())
+}
 
-    if path.exists() {
-        let mut backup = path.as_os_str().to_os_string();
-        backup.push(".bak");
-        let _ = std::fs::copy(path, PathBuf::from(backup));
+/// 保存一次配置快照，并清理超出保留数量的旧快照。
+pub fn save_snapshot(target: &Path, scope: &str, source: &str, content: &str) -> Result<()> {
+    let dir = snapshot_dir()?;
+    write_snapshot_file(&dir, target, scope, source, content)?;
+    prune_snapshots(&dir);
+    Ok(())
+}
+
+/// 读取全部配置快照，按时间从新到旧排序。
+pub fn read_snapshots() -> Vec<Snapshot> {
+    snapshot_dir()
+        .map(|dir| read_snapshots_in(&dir))
+        .unwrap_or_default()
+}
+
+/// 把快照内容写回原来的配置文件，覆盖前保留 `.bak`。
+pub fn restore_snapshot(snapshot: &Snapshot) -> Result<()> {
+    snapshot
+        .content
+        .parse::<toml::Table>()
+        .with_context(|| rust_i18n::t!("error.parse_cargo_config").to_string())?;
+
+    if let Some(parent) = snapshot.target.parent() {
+        std::fs::create_dir_all(parent).with_context(|| {
+            rust_i18n::t!("error.create_dir", path = parent.display().to_string()).to_string()
+        })?;
     }
-    std::fs::write(path, merged.to_string()).with_context(|| {
-        rust_i18n::t!("error.write_file", path = path.display().to_string()).to_string()
+    if snapshot.target.exists() {
+        let mut backup = snapshot.target.as_os_str().to_os_string();
+        backup.push(".bak");
+        let _ = std::fs::copy(&snapshot.target, PathBuf::from(backup));
+    }
+    std::fs::write(&snapshot.target, &snapshot.content).with_context(|| {
+        rust_i18n::t!("error.write_file", path = snapshot.target.display().to_string()).to_string()
     })?;
     Ok(())
 }
+
+/// 在指定目录写出一份快照文件。
+fn write_snapshot_file(
+    dir: &Path,
+    target: &Path,
+    scope: &str,
+    source: &str,
+    content: &str,
+) -> Result<()> {
+    std::fs::create_dir_all(dir).with_context(|| {
+        rust_i18n::t!("error.create_dir", path = dir.display().to_string()).to_string()
+    })?;
+
+    // 文件名带时间戳保证从新到旧可按名称排序，同一毫秒内追加序号避免覆盖。
+    let stamp = now_millis();
+    let file = (0u32..)
+        .map(|index| dir.join(format!("snapshot-{stamp:013}-{index:03}.toml")))
+        .find(|path| !path.exists())
+        .expect("unbounded snapshot file search");
+
+    let mut out = String::from("# srmgui 配置快照（由 srmgui 管理，请勿手动编辑）\n");
+    out.push_str("version = 1\n");
+    out.push_str(&format!(
+        "created_at = {}\n",
+        quote(&crate::logger::format_timestamp())
+    ));
+    out.push_str(&format!(
+        "target = {}\n",
+        quote(&target.display().to_string())
+    ));
+    out.push_str(&format!("scope = {}\n", quote(scope)));
+    out.push_str(&format!("source = {}\n", quote(source)));
+    out.push_str(&format!("content = {}\n", quote(content)));
+
+    std::fs::write(&file, out).with_context(|| {
+        rust_i18n::t!("error.write_file", path = file.display().to_string()).to_string()
+    })?;
+    Ok(())
+}
+
+/// 读取指定目录下的快照，按时间从新到旧排序。
+fn read_snapshots_in(dir: &Path) -> Vec<Snapshot> {
+    let mut files = snapshot_files(dir);
+    files.sort();
+    files.reverse();
+    files
+        .into_iter()
+        .filter_map(|file| {
+            let text = std::fs::read_to_string(&file).ok()?;
+            parse_snapshot(&text)
+        })
+        .collect()
+}
+
+/// 解析单个快照文件，格式不正确时返回 `None`。
+fn parse_snapshot(text: &str) -> Option<Snapshot> {
+    let root: toml::Table = text.parse().ok()?;
+    let field = |key: &str| {
+        root.get(key)
+            .and_then(toml::Value::as_str)
+            .map(str::to_string)
+    };
+    Some(Snapshot {
+        created_at: field("created_at")?,
+        target: PathBuf::from(field("target")?),
+        scope: field("scope").unwrap_or_else(|| SCOPE_GLOBAL.to_string()),
+        source: field("source").unwrap_or_default(),
+        content: field("content")?,
+    })
+}
+
+/// 只保留最近 [`SNAPSHOT_LIMIT`] 份快照。
+fn prune_snapshots(dir: &Path) {
+    let mut files = snapshot_files(dir);
+    files.sort();
+    let excess = files.len().saturating_sub(SNAPSHOT_LIMIT);
+    for file in files.into_iter().take(excess) {
+        let _ = std::fs::remove_file(file);
+    }
+}
+
+/// 目录下的快照文件列表。
+fn snapshot_files(dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with("snapshot-"))
+                && path.extension().is_some_and(|ext| ext == "toml")
+        })
+        .collect()
+}
+
+/// 当前时间的毫秒时间戳，用于快照文件名排序。
+fn now_millis() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0)
+}
+
 
 /// 把 srmgui 管理的配置合并进现有文档，其他内容保持不变。
 fn merge_managed(config: &mut DocumentMut, managed: &DocumentMut) {
@@ -778,5 +980,83 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "not = [valid\n");
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn preview_config_merges_without_writing() {
+        let dir = std::env::temp_dir().join(format!("srmgui-preview-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        let original = "[source.crates-io]\nreplace-with = \"old\"\n";
+        std::fs::write(&path, original).unwrap();
+
+        let preview = preview_config(&path, "[source.crates-io]\nreplace-with = \"new\"\n").unwrap();
+        assert!(preview.contains("replace-with = \"new\""));
+        assert!(!preview.contains("replace-with = \"old\""));
+        // 预览不能改动磁盘上的文件
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn snapshot_roundtrip_reads_newest_first_and_prunes() {
+        let dir = std::env::temp_dir().join(format!("srmgui-snap-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("config.toml");
+
+        for index in 0..(SNAPSHOT_LIMIT + 3) {
+            let content = format!("[net]\nvalue = {index}\n");
+            write_snapshot_file(&dir, &target, SCOPE_GLOBAL, "rsproxy", &content).unwrap();
+        }
+        prune_snapshots(&dir);
+
+        let snapshots = read_snapshots_in(&dir);
+        assert_eq!(snapshots.len(), SNAPSHOT_LIMIT);
+        // 最新写入的快照排在最前
+        assert!(snapshots[0].content.contains(&format!(
+            "value = {}",
+            SNAPSHOT_LIMIT + 2
+        )));
+        assert_eq!(snapshots[0].target, target);
+        assert_eq!(snapshots[0].scope, SCOPE_GLOBAL);
+        assert_eq!(snapshots[0].source, "rsproxy");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn restore_snapshot_writes_content_back() {
+        let dir = std::env::temp_dir().join(format!("srmgui-restore-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("config.toml");
+        std::fs::write(&target, "[source.crates-io]\nreplace-with = \"broken\"\n").unwrap();
+
+        let snapshot = Snapshot {
+            created_at: "2026-11-15 22:00:00.000".to_string(),
+            target: target.clone(),
+            scope: SCOPE_GLOBAL.to_string(),
+            source: "rsproxy".to_string(),
+            content: "[source.crates-io]\nreplace-with = \"rsproxy\"\n".to_string(),
+        };
+        restore_snapshot(&snapshot).unwrap();
+
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), snapshot.content);
+        // 覆盖前保留 .bak
+        assert!(dir.join("config.toml.bak").exists());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn restore_snapshot_rejects_invalid_content() {
+        let snapshot = Snapshot {
+            created_at: "2026-11-15 22:00:00.000".to_string(),
+            target: PathBuf::from("config.toml"),
+            scope: SCOPE_GLOBAL.to_string(),
+            source: "rsproxy".to_string(),
+            content: "not = [valid\n".to_string(),
+        };
+        assert!(restore_snapshot(&snapshot).is_err());
     }
 }

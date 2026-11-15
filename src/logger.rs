@@ -254,7 +254,7 @@ fn rotate_files(path: &Path) {
 }
 
 /// 生成 `YYYY-MM-DD HH:MM:SS.mmm` 格式的 UTC 时间戳。
-fn format_timestamp() -> String {
+pub(crate) fn format_timestamp() -> String {
     let now = SystemTime::now();
     let dur = now.duration_since(UNIX_EPOCH).unwrap_or_default();
     let secs = dur.as_secs() as i64;
