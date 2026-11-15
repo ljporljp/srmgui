@@ -32,7 +32,11 @@ pub fn config_path() -> Result<PathBuf> {
     Ok(if toml.exists() { toml } else { legacy })
 }
 
-/// Read which source id is referenced by `[source.crates-io] replace-with`.
+/// Read which source id is currently in effect.
+///
+/// `replace-with` 决定被替换成的源；没有该字段时 cargo 直接使用默认的
+/// crates.io（即内置的 `official`），因此返回 `official` 而不是 `None`。
+/// 只有配置文件不存在（从未写入过配置）时才返回 `None`。
 pub fn current_source() -> Result<Option<String>> {
     let path = config_path()?;
     if !path.exists() {
@@ -50,7 +54,7 @@ pub fn current_source() -> Result<Option<String>> {
             }
         }
     }
-    Ok(None)
+    Ok(Some("official".to_string()))
 }
 
 /// Read user-defined registries (id -> registry url) from cargo config.

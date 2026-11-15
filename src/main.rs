@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 mod config_io;
 mod net;
 mod registry;
