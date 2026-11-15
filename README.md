@@ -4,6 +4,14 @@
 
 一个基于 [GPUI Kit](https://crates.io/crates/gpui-kit) 的桌面小工具，用于查看、测速并切换 Rust Cargo 的镜像源，配置直接写入 `~/.cargo/config.toml`。
 
+## 界面预览
+
+| 内置源（测速结果） | 自定义源 |
+| --- | --- |
+| ![内置源](.screenshots/01-builtin-sources.png) | ![自定义源](.screenshots/04-custom-sources.png) |
+| 日志面板 | 深色模式 |
+| ![日志面板](.screenshots/03-log.png) | ![深色模式](.screenshots/02-dark-mode.png) |
+
 ## 功能特性
 
 - **内置常用镜像源**：RsProxy、阿里云、中科大 USTC、清华 TUNA、上海交大 SJTUG、官方 crates.io，一键切换。
