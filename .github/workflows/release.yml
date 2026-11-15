@@ -99,9 +99,15 @@ jobs:
         run: |
           version="${{ steps.ver.outputs.version }}"
           platform="${{ matrix.platform }}"
+          # Linux 走本机默认 target，macOS 走交叉编译 target 目录
+          if [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
+            bin_path="target/release/${{ matrix.bin }}"
+          else
+            bin_path="target/${{ matrix.target }}/release/${{ matrix.bin }}"
+          fi
           stage="stage/srmgui-$version-$platform"
           mkdir -p "$stage" dist
-          cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "$stage/"
+          cp "$bin_path" "$stage/"
           cp README.md LICENSE "$stage/"
           tar -czf "dist/srmgui-$version-$platform-portable.tar.gz" -C stage "srmgui-$version-$platform"
 
