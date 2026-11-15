@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=srmgui
+GenericName=Cargo Registry Mirror Switcher
+Comment=Switch Rust Cargo registry mirrors
+Exec=srmgui
+Icon=srmgui
+Terminal=false
+Categories=Development;Utility;
+StartupWMClass=srmgui

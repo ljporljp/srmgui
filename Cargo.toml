@@ -1,6 +1,6 @@
 [package]
 name = "srmgui"
-version = "1.2.0"
+version = "1.2.1"
 edition = "2024"
 authors = ["liujinpeng <imljp@foxmail.com>"]
 description = "GUI tool to switch Rust Cargo registry mirrors, built with GPUI Kit"
@@ -17,6 +17,24 @@ toml = "0.8"
 rust-i18n = "4"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 webpki-roots = "0.26"
+
+[package.metadata.deb]
+maintainer = "liujinpeng <imljp@foxmail.com>"
+copyright = "2026, liujinpeng"
+license-file = ["LICENSE", "0"]
+section = "utils"
+priority = "optional"
+depends = "libc6, libgcc-s1, libfontconfig1, libfreetype6, libvulkan1, libwayland-client0, libx11-6, libxkbcommon0, libasound2"
+extended-description = """
+A small desktop tool to check, benchmark and switch Rust Cargo registry
+mirrors. Built with GPUI Kit, it probes each mirror over TCP, HTTP index
+and sparse registry config, measures download speed, and writes the chosen
+mirror into ~/.cargo/config.toml (with automatic backup)."""
+assets = [
+    ["target/release/srmgui", "usr/bin/", "755"],
+    ["packaging/linux/srmgui.desktop", "usr/share/applications/", "644"],
+    ["assets/logo.png", "usr/share/icons/hicolor/512x512/apps/srmgui.png", "644"],
+]
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "3"
