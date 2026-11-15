@@ -295,6 +295,17 @@ enum ThemeChoice {
     Dark,
 }
 
+/// 底部共享面板的当前内容：添加表单 / 日志面板 / 无。
+///
+/// 添加按钮与日志按钮共享同一块底部布局，遵循「先来后到」互斥规则：
+/// 点击任一按钮，若对应面板已展开则收起，否则展开该面板并收起另一个。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BottomPanel {
+    None,
+    AddForm,
+    LogPanel,
+}
+
 impl ThemeChoice {
     fn from_index(index: usize) -> Self {
         match index {
@@ -396,8 +407,7 @@ fn main() {
 /// The single root view, split into three panels.
 struct RootView {
     app: Entity<CargoMirrorApp>,
-    show_add_form: bool,
-    show_log_panel: bool,
+    bottom_panel: BottomPanel,
     new_id_input: Entity<InputState>,
     new_name_input: Entity<InputState>,
     new_url_input: Entity<InputState>,
@@ -413,8 +423,7 @@ impl RootView {
         let new_desc_input = cx.new(|cx| InputState::new(window, cx).placeholder("可选，源的说明文字"));
         let view = Self {
             app,
-            show_add_form: false,
-            show_log_panel: false,
+            bottom_panel: BottomPanel::None,
             new_id_input,
             new_name_input,
             new_url_input,
@@ -1180,9 +1189,10 @@ impl RootView {
             Status::Success(t) => (t.clone(), cx.theme().success),
             Status::Error(t) => (t.clone(), cx.theme().danger),
         };
-        let log_btn = if self.show_log_panel {
+        let is_log_active = self.bottom_panel == BottomPanel::LogPanel;
+        let log_btn = if is_log_active {
             Button::new("toggle-log")
-                .label("日志")
+                .label("收起日志")
                 .primary()
         } else {
             Button::new("toggle-log")
@@ -1190,7 +1200,10 @@ impl RootView {
                 .secondary()
         }
         .on_click(cx.listener(|view, _ev, _window, cx| {
-            view.show_log_panel = !view.show_log_panel;
+            view.bottom_panel = match view.bottom_panel {
+                BottomPanel::LogPanel => BottomPanel::None,
+                _ => BottomPanel::LogPanel,
+            };
             cx.notify();
         }));
 
@@ -1346,19 +1359,23 @@ impl Render for RootView {
                                     .justify_end()
                                     .gap_2()
                                     .child({
+                                        let is_add_active = self.bottom_panel == BottomPanel::AddForm;
                                         let add_btn = Button::new("toggle-add-form")
-                                            .label(if self.show_add_form {
+                                            .label(if is_add_active {
                                                 "收起添加"
                                             } else {
                                                 "添加"
                                             });
-                                        if self.show_add_form {
+                                        if is_add_active {
                                             add_btn.primary()
                                         } else {
                                             add_btn.secondary()
                                         }
                                         .on_click(cx.listener(|view, _ev, _window, cx| {
-                                            view.show_add_form = !view.show_add_form;
+                                            view.bottom_panel = match view.bottom_panel {
+                                                BottomPanel::AddForm => BottomPanel::None,
+                                                _ => BottomPanel::AddForm,
+                                            };
                                             cx.notify();
                                         }))
                                     })
@@ -1380,29 +1397,27 @@ impl Render for RootView {
                                     ),
                             )
                             .child(self.render_custom_list(cx))
-                            .children(if self.show_add_form {
-                                vec![div()
-                                    .with_animation(
-                                        "add-form-slide-in",
-                                        Animation::new(Duration::from_millis(200)),
-                                        |this, delta| {
-                                            this.opacity(delta)
-                                                .mt(px(-8.0 * (1.0 - delta)))
-                                        },
-                                    )
-                                    .child(self.render_add_form(cx))
-                                    .into_any_element()]
-                            } else {
-                                vec![]
-                            })
                             .into_any_element()
                     }),
             )
-            .children(if self.show_log_panel {
-                vec![div()
-                    .id("log-panel-slide")
+            .children(match self.bottom_panel {
+                BottomPanel::None => vec![],
+                BottomPanel::AddForm => vec![div()
+                    .id("bottom-panel-slide")
                     .with_animation(
-                        "log-panel-slide-in",
+                        "bottom-panel-slide-in",
+                        Animation::new(Duration::from_millis(220)),
+                        |this, delta| {
+                            this.opacity(delta)
+                                .mt(px(16.0 * (1.0 - delta)))
+                        },
+                    )
+                    .child(self.render_add_form(cx))
+                    .into_any_element()],
+                BottomPanel::LogPanel => vec![div()
+                    .id("bottom-panel-slide")
+                    .with_animation(
+                        "bottom-panel-slide-in",
                         Animation::new(Duration::from_millis(220)),
                         |this, delta| {
                             this.opacity(delta)
@@ -1410,9 +1425,7 @@ impl Render for RootView {
                         },
                     )
                     .child(self.render_log_panel(viewport_height, cx))
-                    .into_any_element()]
-            } else {
-                vec![]
+                    .into_any_element()],
             })
             .child(self.render_status_bar(cx))
     }
