@@ -347,10 +347,13 @@ pub(crate) fn open_settings_dialog(
                         cx.refresh_windows();
                         return;
                     }
+                    // 只有配置确实变化时才通知调用方重建定时任务、刷新测速。
+                    let changed = next != original;
                     logger::info("settings", rust_i18n::t!("settings.saved").to_string());
                     *error.borrow_mut() = None;
-                    // 通知调用方配置已变更（重建定时任务、立即刷新测速等）。
-                    on_saved(window, cx);
+                    if changed {
+                        on_saved(window, cx);
+                    }
                     window.close_dialog(cx);
                 })
         };
