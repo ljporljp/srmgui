@@ -230,6 +230,36 @@ update:
   log_install: "Starting installer: %{path}"
   log_install_failed: "Failed to start installer: %{error}"
 
+manifest:
+  invalid: "Invalid source manifest: %{error}"
+  empty: The source manifest contains no valid source
+  link_invalid: Not a valid srmgui share link
+  decode_failed: "Unable to decode the share link: %{error}"
+  log_start: "Refreshing built-in source manifest: %{url}"
+  log_done: "Built-in source manifest updated: %{count} source(s)"
+  log_failed: "Failed to refresh the built-in source manifest: %{error}"
+  refreshed: Built-in source manifest updated, %{count} source(s)
+  refresh_failed: "Failed to fetch the built-in source manifest: %{error}"
+
+share:
+  button: Share
+  import_link: Import link
+  refresh: Refresh list
+  refresh_tip: Fetch the built-in source manifest again from the remote
+  title: Import share link
+  hint: Paste an srmgui source link shared by others; it can be used right after import
+  placeholder: srmgui://source?data=...
+  ok: Import
+  cancel: Cancel
+  copied: Copied the share link for "%{name}"
+  none: Select a source before sharing
+  selected: '"%{name}" is already in the list and has been selected'
+  imported: Imported %{count} source(s) from the share link
+  imported_skipped: Imported %{count} source(s) from the share link, skipped %{skipped} existing source(s)
+  import_empty: The share link contains no importable source
+  log_copy: "Copied source share link: %{id}"
+  log_import: "Imported %{count} source(s) from a share link"
+
 preview:
   title: Preview before writing
   target: "Write to: %{path}"

@@ -1,0 +1,43 @@
+{
+  "format": "srmgui.manifest",
+  "version": 1,
+  "updated": "2026-11-16",
+  "sources": [
+    {
+      "id": "rsproxy",
+      "name": "RsProxy（字节）",
+      "description": "国内实测最稳，推荐日常使用",
+      "url": "sparse+https://rsproxy.cn/index/"
+    },
+    {
+      "id": "aliyun",
+      "name": "阿里云",
+      "description": "备用源，偶发索引通但下载 404",
+      "url": "sparse+https://mirrors.aliyun.com/crates.io-index/"
+    },
+    {
+      "id": "ustc",
+      "name": "中科大 USTC",
+      "description": "文档仍在，连通性波动较大",
+      "url": "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
+    },
+    {
+      "id": "tuna",
+      "name": "清华 TUNA",
+      "description": "帮助文档仍在，偶发无响应",
+      "url": "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"
+    },
+    {
+      "id": "sjtu",
+      "name": "上海交大 SJTUG",
+      "description": "高校源，适合应急",
+      "url": "sparse+https://mirrors.sjtug.sjtu.edu.cn/crates.io-index/"
+    },
+    {
+      "id": "official",
+      "name": "官方 crates.io",
+      "description": "默认源，cargo publish 前建议切回",
+      "url": "sparse+https://index.crates.io/"
+    }
+  ]
+}

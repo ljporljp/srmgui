@@ -230,6 +230,36 @@ update:
   log_install: "Lancement de l'installateur : %{path}"
   log_install_failed: "Échec du lancement de l'installateur : %{error}"
 
+manifest:
+  invalid: "Manifeste de sources invalide : %{error}"
+  empty: Le manifeste de sources ne contient aucune source valide
+  link_invalid: Lien de partage srmgui invalide
+  decode_failed: "Impossible de décoder le lien de partage : %{error}"
+  log_start: "Actualisation du manifeste des sources intégrées : %{url}"
+  log_done: "Manifeste des sources intégrées actualisé : %{count} source(s)"
+  log_failed: "Échec de l'actualisation du manifeste des sources intégrées : %{error}"
+  refreshed: Manifeste des sources intégrées actualisé, %{count} source(s)
+  refresh_failed: "Échec de la récupération du manifeste des sources intégrées : %{error}"
+
+share:
+  button: Partager
+  import_link: Importer un lien
+  refresh: Actualiser la liste
+  refresh_tip: Récupérer à nouveau le manifeste des sources intégrées depuis le serveur distant
+  title: Importer un lien de partage
+  hint: Collez un lien de source srmgui partagé par quelqu'un ; il sera utilisable immédiatement après l'import
+  placeholder: srmgui://source?data=...
+  ok: Importer
+  cancel: Annuler
+  copied: Lien de partage de « %{name} » copié
+  none: Sélectionnez d'abord une source à partager
+  selected: « %{name} » est déjà dans la liste et a été sélectionnée
+  imported: "%{count} source(s) importée(s) depuis le lien de partage"
+  imported_skipped: "%{count} source(s) importée(s) depuis le lien de partage, %{skipped} source(s) existante(s) ignorée(s)"
+  import_empty: Le lien de partage ne contient aucune source importable
+  log_copy: "Lien de partage de source copié : %{id}"
+  log_import: "%{count} source(s) importée(s) depuis un lien de partage"
+
 preview:
   title: Aperçu avant écriture
   target: "Destination : %{path}"

@@ -5,12 +5,15 @@ use gpui_kit::{App, AppContext as _, Entity, SharedString};
 
 use crate::config_io;
 use crate::config_io::{CustomSource, PrivateRegistry};
+use crate::manifest::{self, ManifestSource};
 use crate::model::{Language, Probe, Status, ThemeChoice};
 use crate::update::UpdateState;
 
 /// Source of truth for the whole UI.
 #[derive(Debug, Clone)]
 pub(crate) struct State {
+    /// 当前生效的内置源清单（远端订阅 → 本地缓存 → 编译期兜底）。
+    pub(crate) builtins: Vec<ManifestSource>,
     pub(crate) selected: SharedString,
     pub(crate) current: Option<SharedString>,
     pub(crate) active_tab: usize,
@@ -39,6 +42,7 @@ impl State {
     ) -> Self {
         let selected = current.clone().unwrap_or_else(|| "rsproxy".to_string());
         Self {
+            builtins: manifest::current_sources(),
             selected: selected.into(),
             current: current.map(Into::into),
             active_tab: 0,

@@ -152,7 +152,13 @@ fn source_row(
                                 view.app.update(cx, |model, cx| {
                                     model.state.customs.remove(&delete_id);
                                     if model.state.selected.as_ref() == delete_id {
-                                        model.state.selected = "rsproxy".into();
+                                        model.state.selected = model
+                                            .state
+                                            .builtins
+                                            .first()
+                                            .map(|source| source.id.clone())
+                                            .unwrap_or_else(|| "rsproxy".to_string())
+                                            .into();
                                     }
                                     cx.notify();
                                 });

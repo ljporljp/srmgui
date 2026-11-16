@@ -8,8 +8,8 @@ use gpui_kit::prelude::*;
 use crate::config_io;
 use crate::config_io::CustomSource;
 use crate::logger;
+use crate::manifest;
 use crate::model::Status;
-use crate::registry;
 use crate::root_view::RootView;
 use crate::util::{normalize_registry_index, normalize_registry_url, valid_registry_name};
 
@@ -28,7 +28,7 @@ pub(crate) fn render_add_form(view: &RootView, cx: &mut Context<RootView>) -> An
             });
             return;
         }
-        if registry::builtins().iter().any(|r| r.id == id) {
+        if manifest::current_sources().iter().any(|r| r.id == id) {
             logger::warn(
                 "custom",
                 rust_i18n::t!("log.add_builtin", id = id.as_str()).to_string(),

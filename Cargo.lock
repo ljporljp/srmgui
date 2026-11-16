@@ -5947,11 +5947,14 @@ name = "srmgui"
 version = "1.9.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "embed-resource",
  "gpui-kit",
  "rust-i18n",
  "rustls",
  "rustls-native-certs",
+ "serde",
+ "serde_json",
  "toml 0.8.23",
  "toml_edit 0.22.27",
  "webpki-roots 0.26.11",

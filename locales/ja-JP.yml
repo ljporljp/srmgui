@@ -230,6 +230,36 @@ update:
   log_install: インストーラーを起動：%{path}
   log_install_failed: インストーラーの起動に失敗しました：%{error}
 
+manifest:
+  invalid: "ソースリストの形式が正しくありません：%{error}"
+  empty: ソースリストに有効なソースがありません
+  link_invalid: 有効な srmgui 共有リンクではありません
+  decode_failed: "共有リンクを解析できません：%{error}"
+  log_start: "組み込みソースリストを更新中：%{url}"
+  log_done: 組み込みソースリストを更新しました：%{count} 件
+  log_failed: "組み込みソースリストの更新に失敗しました：%{error}"
+  refreshed: 組み込みソースリストを更新しました（%{count} 件）
+  refresh_failed: "組み込みソースリストの取得に失敗しました：%{error}"
+
+share:
+  button: 共有
+  import_link: リンクをインポート
+  refresh: リストを更新
+  refresh_tip: リモートから組み込みソースリストを再取得します
+  title: 共有リンクをインポート
+  hint: 他の人が共有した srmgui ソースリンクを貼り付けてください。インポート後すぐに使用できます
+  placeholder: srmgui://source?data=...
+  ok: インポート
+  cancel: キャンセル
+  copied: 「%{name}」の共有リンクをコピーしました
+  none: 共有するソースを先に選択してください
+  selected: 「%{name}」は既にリストにあります。選択しました
+  imported: 共有リンクから %{count} 件のソースをインポートしました
+  imported_skipped: 共有リンクから %{count} 件のソースをインポートし、既存の %{skipped} 件をスキップしました
+  import_empty: 共有リンクにインポートできるソースがありません
+  log_copy: "ソースの共有リンクをコピーしました：%{id}"
+  log_import: 共有リンクから %{count} 件のソースをインポートしました
+
 preview:
   title: 書き込み前のプレビュー
   target: "書き込み先：%{path}"

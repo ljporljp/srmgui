@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::config_io::CustomSource;
+use crate::manifest::ManifestSource;
 
 /// One Cargo registry source. 展示名称与说明是本地化文案，按 `registry.{id}.*` 查找。
 #[derive(Debug, Clone)]
@@ -9,7 +10,7 @@ pub struct Registry {
     pub url: &'static str,
 }
 
-/// All built-in registries. Order = display order in the list.
+/// 编译期内置的兜底源清单。远端订阅与本地缓存都不可用时使用，顺序即展示顺序。
 pub fn builtins() -> Vec<Registry> {
     vec![
         Registry {
@@ -41,6 +42,8 @@ pub fn builtins() -> Vec<Registry> {
 
 /// Build the `[source.crates-io]` replacement block for a chosen source id.
 ///
+/// `sources` 是当前生效的内置源清单（可能来自远端订阅），`customs` 是用户自定义源。
+///
 /// Duplicate filtering rules applied while writing:
 /// - The built-in `official` source points at crates.io itself and must NOT be
 ///   emitted as its own `[source.official]` block — cargo forbids defining a
@@ -49,7 +52,11 @@ pub fn builtins() -> Vec<Registry> {
 /// - Custom sources whose id collides with a built-in source are skipped,
 ///   since the built-in block is always emitted first. A duplicate
 ///   `[source.<id>]` section would produce invalid / redundant TOML.
-pub fn build_config(selected: &str, customs: &HashMap<String, CustomSource>) -> String {
+pub fn build_config(
+    selected: &str,
+    sources: &[ManifestSource],
+    customs: &HashMap<String, CustomSource>,
+) -> String {
     let mut out = String::new();
     out.push_str("[source.crates-io]\n");
     if selected != "official" {
@@ -57,9 +64,9 @@ pub fn build_config(selected: &str, customs: &HashMap<String, CustomSource>) -> 
     }
     out.push('\n');
 
-    let builtin_ids: Vec<&str> = builtins().iter().map(|r| r.id).collect();
+    let builtin_ids: Vec<&str> = sources.iter().map(|r| r.id.as_str()).collect();
 
-    for r in builtins() {
+    for r in sources {
         // `official` is crates.io itself; never emit a [source.official] block.
         if r.id == "official" {
             continue;

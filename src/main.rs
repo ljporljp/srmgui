@@ -10,6 +10,7 @@ mod diff;
 mod health;
 mod log_panel;
 mod logger;
+mod manifest;
 mod model;
 mod net;
 mod private_list;

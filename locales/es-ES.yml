@@ -230,6 +230,36 @@ update:
   log_install: "Iniciando instalador: %{path}"
   log_install_failed: "Error al iniciar el instalador: %{error}"
 
+manifest:
+  invalid: "Manifiesto de fuentes no válido: %{error}"
+  empty: El manifiesto de fuentes no contiene ninguna fuente válida
+  link_invalid: No es un enlace de compartir srmgui válido
+  decode_failed: "No se pudo decodificar el enlace de compartir: %{error}"
+  log_start: "Actualizando el manifiesto de fuentes integradas: %{url}"
+  log_done: "Manifiesto de fuentes integradas actualizado: %{count} fuente(s)"
+  log_failed: "Error al actualizar el manifiesto de fuentes integradas: %{error}"
+  refreshed: Manifiesto de fuentes integradas actualizado, %{count} fuente(s)
+  refresh_failed: "Error al obtener el manifiesto de fuentes integradas: %{error}"
+
+share:
+  button: Compartir
+  import_link: Importar enlace
+  refresh: Actualizar lista
+  refresh_tip: Volver a obtener el manifiesto de fuentes integradas desde el servidor remoto
+  title: Importar enlace de compartir
+  hint: Pega un enlace de fuente srmgui compartido por otra persona; podrás usarlo justo después de importarlo
+  placeholder: srmgui://source?data=...
+  ok: Importar
+  cancel: Cancelar
+  copied: Enlace de compartir de «%{name}» copiado
+  none: Selecciona primero una fuente para compartir
+  selected: «%{name}» ya está en la lista y se ha seleccionado
+  imported: "Se importaron %{count} fuente(s) desde el enlace de compartir"
+  imported_skipped: "Se importaron %{count} fuente(s) desde el enlace de compartir; se omitieron %{skipped} existente(s)"
+  import_empty: El enlace de compartir no contiene ninguna fuente importable
+  log_copy: "Enlace de compartir de la fuente copiado: %{id}"
+  log_import: "Se importaron %{count} fuente(s) desde un enlace de compartir"
+
 preview:
   title: Vista previa antes de escribir
   target: "Destino: %{path}"

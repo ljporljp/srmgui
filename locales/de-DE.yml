@@ -230,6 +230,36 @@ update:
   log_install: "Installer wird gestartet: %{path}"
   log_install_failed: "Installer konnte nicht gestartet werden: %{error}"
 
+manifest:
+  invalid: "Ungültiges Quellenmanifest: %{error}"
+  empty: Das Quellenmanifest enthält keine gültige Quelle
+  link_invalid: Kein gültiger srmgui-Freigabelink
+  decode_failed: "Freigabelink konnte nicht dekodiert werden: %{error}"
+  log_start: "Integriertes Quellenmanifest wird aktualisiert: %{url}"
+  log_done: "Integriertes Quellenmanifest aktualisiert: %{count} Quelle(n)"
+  log_failed: "Aktualisieren des integrierten Quellenmanifests fehlgeschlagen: %{error}"
+  refreshed: Integriertes Quellenmanifest aktualisiert, %{count} Quelle(n)
+  refresh_failed: "Abrufen des integrierten Quellenmanifests fehlgeschlagen: %{error}"
+
+share:
+  button: Teilen
+  import_link: Link importieren
+  refresh: Liste aktualisieren
+  refresh_tip: Integriertes Quellenmanifest erneut vom Remote-Server abrufen
+  title: Freigabelink importieren
+  hint: Fügen Sie einen von anderen geteilten srmgui-Quellenlink ein; nach dem Import ist die Quelle sofort nutzbar
+  placeholder: srmgui://source?data=...
+  ok: Importieren
+  cancel: Abbrechen
+  copied: Freigabelink für „%{name}“ kopiert
+  none: Wählen Sie zuerst eine Quelle zum Teilen aus
+  selected: „%{name}“ ist bereits in der Liste und wurde ausgewählt
+  imported: "%{count} Quelle(n) aus dem Freigabelink importiert"
+  imported_skipped: "%{count} Quelle(n) aus dem Freigabelink importiert, %{skipped} vorhandene übersprungen"
+  import_empty: Der Freigabelink enthält keine importierbare Quelle
+  log_copy: "Quellen-Freigabelink kopiert: %{id}"
+  log_import: "%{count} Quelle(n) aus einem Freigabelink importiert"
+
 preview:
   title: Vorschau vor dem Schreiben
   target: "Schreibziel: %{path}"

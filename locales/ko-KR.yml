@@ -227,6 +227,36 @@ update:
   log_download_start: "설치 파일 다운로드 시작: %{url}"
   log_downloaded: "설치 파일 다운로드 완료: %{path}"
   log_download_failed: "설치 파일 다운로드 실패: %{error}"
+
+manifest:
+  invalid: "소스 목록 형식이 올바르지 않습니다: %{error}"
+  empty: 소스 목록에 유효한 소스가 없습니다
+  link_invalid: 올바른 srmgui 공유 링크가 아닙니다
+  decode_failed: "공유 링크를 해석할 수 없습니다: %{error}"
+  log_start: "내장 소스 목록 새로고침: %{url}"
+  log_done: "내장 소스 목록이 업데이트되었습니다: %{count}개"
+  log_failed: "내장 소스 목록 새로고침 실패: %{error}"
+  refreshed: 내장 소스 목록이 업데이트되었습니다. 총 %{count}개
+  refresh_failed: "내장 소스 목록을 가져오지 못했습니다: %{error}"
+
+share:
+  button: 공유
+  import_link: 링크 가져오기
+  refresh: 목록 새로고침
+  refresh_tip: 원격에서 내장 소스 목록을 다시 가져옵니다
+  title: 공유 링크 가져오기
+  hint: 다른 사람이 공유한 srmgui 소스 링크를 붙여넣으세요. 가져온 뒤 바로 사용할 수 있습니다
+  placeholder: srmgui://source?data=...
+  ok: 가져오기
+  cancel: 취소
+  copied: '"%{name}"의 공유 링크를 복사했습니다'
+  none: 공유할 소스를 먼저 선택하세요
+  selected: '"%{name}"은(는) 이미 목록에 있어 선택했습니다'
+  imported: 공유 링크에서 소스 %{count}개를 가져왔습니다
+  imported_skipped: 공유 링크에서 소스 %{count}개를 가져오고 기존 소스 %{skipped}개를 건너뛰었습니다
+  import_empty: 공유 링크에 가져올 수 있는 소스가 없습니다
+  log_copy: "소스 공유 링크 복사: %{id}"
+  log_import: 공유 링크에서 소스 %{count}개를 가져왔습니다
   log_install: "설치 프로그램 실행: %{path}"
   log_install_failed: "설치 프로그램 실행 실패: %{error}"
 

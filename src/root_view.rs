@@ -16,8 +16,8 @@ use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::component::{IconName, TitleBar};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    Anchor, Animation, AnimationExt as _, AnyElement, Entity, SharedString, Task, Window, div, px,
-    rgb,
+    Anchor, Animation, AnimationExt as _, AnyElement, ClipboardItem, Entity, SharedString, Task,
+    Window, div, px, rgb,
 };
 
 use crate::add_form::{render_add_form, render_private_form};
@@ -28,6 +28,7 @@ use crate::config_io::CustomSource;
 use crate::health;
 use crate::log_panel::render_log_panel;
 use crate::logger;
+use crate::manifest::{self, ManifestSource};
 use crate::model::{
     Language, Level, LevelTone, Probe, Status, ThemeChoice, apply_theme,
     level_display, probe_summary,
@@ -136,6 +137,8 @@ impl RootView {
         // 测速与更新检查各自由一个定时任务驱动，配置变更时重建任务。
         view.start_probe_timer(cx);
         view.start_update_timer(cx, true);
+        // 启动时后台刷新内置源清单（失败时继续沿用缓存 / 兜底清单）。
+        view.refresh_manifest(false, cx);
 
         view
     }
@@ -173,6 +176,8 @@ impl RootView {
             loop {
                 cx.background_executor().timer(interval).await;
                 let _ = view.update(cx, |view, cx| view.check_for_updates(cx));
+                // 与更新检查同周期刷新内置源清单，保持订阅内容最新。
+                let _ = view.update(cx, |view, cx| view.refresh_manifest(false, cx));
             }
         }));
     }
@@ -344,6 +349,7 @@ impl RootView {
     pub(crate) fn apply(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let selected: String = self.app.read(cx).state.selected.clone().into();
         let customs = self.app.read(cx).state.customs.clone();
+        let builtins = self.app.read(cx).state.builtins.clone();
         let (project_scope, project_root) = {
             let state = &self.app.read(cx).state;
             (state.project_scope, state.project_root.clone())
@@ -376,7 +382,7 @@ impl RootView {
         };
 
         // 预先生成合并后的内容：只读取现有文件，不落盘。
-        let content = registry::build_config(&selected, &customs);
+        let content = registry::build_config(&selected, &builtins, &customs);
         let old = std::fs::read_to_string(&target_path).unwrap_or_default();
         let new = match config_io::preview_config(&target_path, &content) {
             Ok(new) => new,
@@ -683,16 +689,16 @@ impl RootView {
 
     /// 对所有内置源与自定义源发起一轮分层测速。
     fn measure_all(&mut self, cx: &mut Context<Self>) {
-        let builtins = registry::builtins();
-        let builtin_ids: Vec<&str> = builtins.iter().map(|r| r.id).collect();
+        let (builtins, customs) = {
+            let state = &self.app.read(cx).state;
+            (state.builtins.clone(), state.customs.clone())
+        };
+        let builtin_ids: Vec<&str> = builtins.iter().map(|r| r.id.as_str()).collect();
         let targets: Vec<(String, String)> = builtins
             .iter()
-            .map(|r| (r.id.to_string(), r.url.to_string()))
+            .map(|r| (r.id.clone(), r.url.clone()))
             .chain(
-                self.app
-                    .read(cx)
-                    .state
-                    .customs
+                customs
                     .iter()
                     .filter(|(id, _)| !builtin_ids.contains(&id.as_str()))
                     .map(|(id, src)| (id.clone(), src.url.clone())),
@@ -1000,12 +1006,21 @@ impl RootView {
             }
         };
 
-        let builtin_ids: Vec<&str> = registry::builtins().iter().map(|r| r.id).collect();
+        let builtin_ids: Vec<String> = self
+            .app
+            .read(cx)
+            .state
+            .builtins
+            .iter()
+            .map(|r| r.id.clone())
+            .collect();
         let mut added: Vec<(String, String)> = Vec::new();
         let mut skipped = 0usize;
         self.app.update(cx, |model, cx| {
             for (id, src) in imported {
-                if builtin_ids.contains(&id.as_str()) || model.state.customs.contains_key(&id) {
+                if builtin_ids.iter().any(|builtin| builtin == &id)
+                    || model.state.customs.contains_key(&id)
+                {
                     skipped += 1;
                     continue;
                 }
@@ -1056,18 +1071,240 @@ impl RootView {
         }
     }
 
-    /// 将自定义源导出为 srmgui 格式文件。
-    fn export_customs(&mut self, cx: &mut Context<Self>) {
-        let builtin_ids: Vec<&str> = registry::builtins().iter().map(|r| r.id).collect();
-        let customs: HashMap<String, CustomSource> = self
+    /// 后台刷新内置源清单，成功后替换列表并补测新增或地址变化的源。
+    fn refresh_manifest(&mut self, notify: bool, cx: &mut Context<Self>) {
+        logger::info(
+            "manifest",
+            rust_i18n::t!("manifest.log_start", url = manifest::MANIFEST_URL).to_string(),
+        );
+        cx.spawn(async move |view, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async { manifest::fetch_remote() })
+                .await;
+            let _ = view.update(cx, |view, cx| view.finish_manifest(result, notify, cx));
+        })
+        .detach();
+    }
+
+    /// 处理清单拉取结果：失败时保留现有列表，手动刷新时在状态栏提示。
+    fn finish_manifest(
+        &mut self,
+        result: Result<Vec<ManifestSource>, String>,
+        notify: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let sources = match result {
+            Ok(sources) => sources,
+            Err(error) => {
+                logger::error(
+                    "manifest",
+                    rust_i18n::t!("manifest.log_failed", error = error.as_str()).to_string(),
+                );
+                if notify {
+                    self.app.update(cx, |model, cx| {
+                        model.state.status = Status::Error(
+                            rust_i18n::t!("manifest.refresh_failed", error = error)
+                                .to_string()
+                                .into(),
+                        );
+                        cx.notify();
+                    });
+                }
+                return;
+            }
+        };
+
+        logger::info(
+            "manifest",
+            rust_i18n::t!("manifest.log_done", count = sources.len()).to_string(),
+        );
+
+        let previous: HashMap<String, String> = self
             .app
             .read(cx)
             .state
-            .customs
+            .builtins
             .iter()
-            .filter(|(id, _)| !builtin_ids.contains(&id.as_str()))
-            .map(|(id, src)| (id.clone(), src.clone()))
+            .map(|source| (source.id.clone(), source.url.clone()))
             .collect();
+        let changed: Vec<(String, String)> = sources
+            .iter()
+            .filter(|source| previous.get(&source.id) != Some(&source.url))
+            .map(|source| (source.id.clone(), source.url.clone()))
+            .collect();
+
+        self.app.update(cx, |model, cx| {
+            model.state.builtins = sources;
+            let selected = model.state.selected.to_string();
+            let still_exists = model.state.builtins.iter().any(|source| source.id == selected)
+                || model.state.customs.contains_key(&selected);
+            if !still_exists {
+                if let Some(first) = model.state.builtins.first().map(|source| source.id.clone()) {
+                    model.state.selected = first.into();
+                }
+            }
+            if notify {
+                model.state.status = Status::Success(
+                    rust_i18n::t!("manifest.refreshed", count = model.state.builtins.len())
+                        .to_string()
+                        .into(),
+                );
+            }
+            cx.notify();
+        });
+
+        for (id, url) in changed {
+            self.measure(id, url, cx);
+        }
+    }
+
+    /// 复制当前选中源的分享链接到剪贴板。
+    fn share_selected(&mut self, cx: &mut Context<Self>) {
+        let (selected, builtins, customs) = {
+            let state = &self.app.read(cx).state;
+            (
+                state.selected.to_string(),
+                state.builtins.clone(),
+                state.customs.clone(),
+            )
+        };
+        let source = builtins
+            .iter()
+            .find(|source| source.id == selected)
+            .map(|source| {
+                ManifestSource::new(
+                    source.id.clone(),
+                    manifest::display_name(source),
+                    manifest::display_description(source),
+                    source.url.clone(),
+                )
+            })
+            .or_else(|| {
+                customs.get(&selected).map(|source| {
+                    ManifestSource::new(
+                        selected.clone(),
+                        source.name.clone(),
+                        source.description.clone(),
+                        source.url.clone(),
+                    )
+                })
+            });
+
+        let Some(source) = source else {
+            self.app.update(cx, |model, cx| {
+                model.state.status =
+                    Status::Error(rust_i18n::t!("share.none").to_string().into());
+                cx.notify();
+            });
+            return;
+        };
+
+        let link = manifest::share_link(&source);
+        cx.write_to_clipboard(ClipboardItem::new_string(link));
+        logger::info(
+            "share",
+            rust_i18n::t!("share.log_copy", id = source.id.as_str()).to_string(),
+        );
+        let name = source.name.clone();
+        self.app.update(cx, |model, cx| {
+            model.state.status = Status::Success(
+                rust_i18n::t!("share.copied", name = name.as_str())
+                    .to_string()
+                    .into(),
+            );
+            cx.notify();
+        });
+    }
+
+    /// 导入分享链接中的源：已存在则直接选中，新增项作为自定义源并立即测速。
+    pub(crate) fn import_shared_sources(
+        &mut self,
+        sources: Vec<ManifestSource>,
+        cx: &mut Context<Self>,
+    ) {
+        let (builtins, customs) = {
+            let state = &self.app.read(cx).state;
+            (state.builtins.clone(), state.customs.clone())
+        };
+        let mut merged = customs;
+        let mut selected: Option<String> = None;
+        let mut added: Vec<(String, String)> = Vec::new();
+        let mut skipped = 0usize;
+        for source in sources {
+            let id = source.id.clone();
+            if builtins.iter().any(|builtin| builtin.id == id) || merged.contains_key(&id) {
+                selected = Some(id);
+                skipped += 1;
+                continue;
+            }
+            let url = normalize_registry_url(&source.url);
+            merged.insert(
+                id.clone(),
+                CustomSource::new(source.name, url.clone(), source.description),
+            );
+            added.push((id, url));
+        }
+
+        if added.is_empty() {
+            let status = match selected {
+                Some(id) => Status::Success(
+                    rust_i18n::t!("share.selected", name = id.as_str())
+                        .to_string()
+                        .into(),
+                ),
+                None => Status::Error(rust_i18n::t!("share.import_empty").to_string().into()),
+            };
+            self.app.update(cx, |model, cx| {
+                model.state.status = status;
+                cx.notify();
+            });
+            return;
+        }
+
+        let count = added.len();
+        let first_id = added[0].0.clone();
+        self.app.update(cx, |model, cx| {
+            model.state.customs = merged;
+            model.state.selected = first_id.into();
+            model.state.status = if skipped == 0 {
+                Status::Success(
+                    rust_i18n::t!("share.imported", count = count)
+                        .to_string()
+                        .into(),
+                )
+            } else {
+                Status::Success(
+                    rust_i18n::t!("share.imported_skipped", count = count, skipped = skipped)
+                        .to_string()
+                        .into(),
+                )
+            };
+            cx.notify();
+        });
+
+        let _ = config_io::write_customs(&self.app.read(cx).state.customs);
+        logger::info(
+            "share",
+            rust_i18n::t!("share.log_import", count = count).to_string(),
+        );
+        for (id, url) in added {
+            self.measure(id, url, cx);
+        }
+    }
+
+    /// 将自定义源导出为 srmgui 格式文件。
+    fn export_customs(&mut self, cx: &mut Context<Self>) {
+        let customs: HashMap<String, CustomSource> = {
+            let state = &self.app.read(cx).state;
+            let builtin_ids: Vec<&str> = state.builtins.iter().map(|r| r.id.as_str()).collect();
+            state
+                .customs
+                .iter()
+                .filter(|(id, _)| !builtin_ids.contains(&id.as_str()))
+                .map(|(id, src)| (id.clone(), src.clone()))
+                .collect()
+        };
 
         if customs.is_empty() {
             self.app.update(cx, |model, cx| {
@@ -1228,28 +1465,28 @@ impl RootView {
         let state = &self.app.read(cx).state;
         let selected = state.selected.clone();
         let current = state.current.clone();
+        let builtins = state.builtins.clone();
 
-        let items = registry::builtins()
-            .into_iter()
+        let items = builtins
+            .iter()
             .map(|r| {
-                let id = r.id.to_string();
-                let name = rust_i18n::t!(format!("registry.{}.name", r.id)).to_string();
-                let description =
-                    rust_i18n::t!(format!("registry.{}.description", r.id)).to_string();
+                let id = r.id.clone();
+                let name = manifest::display_name(r);
+                let description = manifest::display_description(r);
                 SourceItem {
                     name: name.clone().into(),
                     detail: description.clone().into(),
                     tip: rust_i18n::t!(
                         "source.tip",
-                        id = r.id,
+                        id = id.as_str(),
                         name = name.as_str(),
                         description = description.as_str(),
-                        url = r.url
+                        url = r.url.as_str()
                     )
                     .to_string()
                     .into(),
-                    is_selected: selected.as_ref() == r.id,
-                    is_current: current.as_ref().map(|c| c.as_ref()) == Some(r.id),
+                    is_selected: selected.as_ref() == id,
+                    is_current: current.as_ref().map(|c| c.as_ref()) == Some(id.as_str()),
                     name_size: 18.,
                     deletable: false,
                     id,
@@ -1267,11 +1504,10 @@ impl RootView {
         let customs = state.customs.clone();
         let selected = state.selected.clone();
         let current = state.current.clone();
-
-        let builtin_ids: Vec<&str> = registry::builtins().iter().map(|r| r.id).collect();
+        let builtin_ids: Vec<String> = state.builtins.iter().map(|r| r.id.clone()).collect();
         let items = customs
             .into_iter()
-            .filter(|(id, _)| !builtin_ids.contains(&id.as_str()))
+            .filter(|(id, _)| !builtin_ids.contains(id))
             .map(|(id, src)| {
                 let is_selected = selected.as_ref() == id;
                 let is_current = current.as_ref().map(|c| c.as_ref()) == Some(id.as_str());
@@ -1723,7 +1959,64 @@ impl Render for RootView {
                                     ),
                             )
                             .child(if active_tab == 0 {
-                                self.render_preset_list(cx)
+                                v_flex()
+                                    .flex_1()
+                                    .min_h_0()
+                                    .gap_3()
+                                    .child(
+                                        h_flex()
+                                            .items_center()
+                                            .justify_end()
+                                            .gap_2()
+                                            .child(
+                                                Button::new("refresh-manifest")
+                                                    .label(
+                                                        rust_i18n::t!("share.refresh").to_string(),
+                                                    )
+                                                    .tooltip(
+                                                        rust_i18n::t!("share.refresh_tip")
+                                                            .to_string(),
+                                                    )
+                                                    .secondary()
+                                                    .on_click(cx.listener(
+                                                        |view, _ev, _window, cx| {
+                                                            view.refresh_manifest(true, cx);
+                                                        },
+                                                    )),
+                                            )
+                                            .child(
+                                                Button::new("share-source")
+                                                    .label(
+                                                        rust_i18n::t!("share.button").to_string(),
+                                                    )
+                                                    .secondary()
+                                                    .on_click(cx.listener(
+                                                        |view, _ev, _window, cx| {
+                                                            view.share_selected(cx);
+                                                        },
+                                                    )),
+                                            )
+                                            .child(
+                                                Button::new("import-share-link")
+                                                    .label(
+                                                        rust_i18n::t!("share.import_link")
+                                                            .to_string(),
+                                                    )
+                                                    .secondary()
+                                                    .on_click(cx.listener(
+                                                        |_view, _ev, window, cx| {
+                                                            let entity = cx.entity();
+                                                            config_dialog::open_import_link_dialog(
+                                                                window,
+                                                                cx,
+                                                                entity,
+                                                            );
+                                                        },
+                                                    )),
+                                            ),
+                                    )
+                                    .child(self.render_preset_list(cx))
+                                    .into_any_element()
                             } else if active_tab == 1 {
                                 v_flex()
                                     .flex_1()
@@ -1779,6 +2072,36 @@ impl Render for RootView {
                                                     .on_click(cx.listener(
                                                         |view, _ev, _window, cx| {
                                                             view.export_customs(cx);
+                                                        },
+                                                    )),
+                                            )
+                                            .child(
+                                                Button::new("share-custom-source")
+                                                    .label(
+                                                        rust_i18n::t!("share.button").to_string(),
+                                                    )
+                                                    .secondary()
+                                                    .on_click(cx.listener(
+                                                        |view, _ev, _window, cx| {
+                                                            view.share_selected(cx);
+                                                        },
+                                                    )),
+                                            )
+                                            .child(
+                                                Button::new("import-custom-share-link")
+                                                    .label(
+                                                        rust_i18n::t!("share.import_link")
+                                                            .to_string(),
+                                                    )
+                                                    .secondary()
+                                                    .on_click(cx.listener(
+                                                        |_view, _ev, window, cx| {
+                                                            let entity = cx.entity();
+                                                            config_dialog::open_import_link_dialog(
+                                                                window,
+                                                                cx,
+                                                                entity,
+                                                            );
                                                         },
                                                     )),
                                             ),

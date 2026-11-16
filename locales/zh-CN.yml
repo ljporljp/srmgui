@@ -230,6 +230,36 @@ update:
   log_install: 启动安装程序：%{path}
   log_install_failed: 启动安装程序失败：%{error}
 
+manifest:
+  invalid: "源清单格式错误：%{error}"
+  empty: 源清单中没有有效的源
+  link_invalid: 不是有效的 srmgui 分享链接
+  decode_failed: "分享链接内容无法解析：%{error}"
+  log_start: "开始刷新内置源清单：%{url}"
+  log_done: 内置源清单已更新：%{count} 个源
+  log_failed: "刷新内置源清单失败：%{error}"
+  refreshed: 内置源清单已更新，共 %{count} 个源
+  refresh_failed: "拉取内置源清单失败：%{error}"
+
+share:
+  button: 分享
+  import_link: 导入链接
+  refresh: 刷新清单
+  refresh_tip: 从远端重新拉取内置源清单
+  title: 导入分享链接
+  hint: 粘贴他人分享的 srmgui 源链接，导入后可直接使用
+  placeholder: srmgui://source?data=...
+  ok: 导入
+  cancel: 取消
+  copied: 已复制「%{name}」的分享链接
+  none: 请先选择一个源再分享
+  selected: 「%{name}」已在列表中，已选中
+  imported: 已从分享链接导入 %{count} 个源
+  imported_skipped: 已从分享链接导入 %{count} 个源，跳过 %{skipped} 个已存在的源
+  import_empty: 分享链接中没有可导入的源
+  log_copy: 已复制源分享链接：%{id}
+  log_import: 从分享链接导入 %{count} 个源
+
 preview:
   title: 写入前预览
   target: 写入目标：%{path}

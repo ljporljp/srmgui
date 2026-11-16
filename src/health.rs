@@ -13,7 +13,6 @@ use anyhow::{Context, Result};
 use toml_edit::{DocumentMut, Item};
 
 use crate::config_io;
-use crate::registry;
 
 /// 问题类型。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -152,9 +151,9 @@ pub(crate) fn fix(path: &Path, scope: &str) -> Result<FixSummary> {
 
 /// srmgui 认为合法的源标识：全部内置源 + 元数据中登记的自定义源。
 fn managed_source_ids() -> HashSet<String> {
-    let mut ids: HashSet<String> = registry::builtins()
-        .iter()
-        .map(|source| source.id.to_string())
+    let mut ids: HashSet<String> = crate::manifest::current_sources()
+        .into_iter()
+        .map(|source| source.id)
         .collect();
     ids.extend(config_io::custom_metadata_ids());
     ids
