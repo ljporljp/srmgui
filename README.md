@@ -2,7 +2,7 @@
 
 # srmgui
 
-一个基于 [GPUI Kit](https://crates.io/crates/gpui-kit) 的桌面小工具，用于查看、测速并切换 Rust Cargo 的镜像源，同时支持企业私有 Registry 的索引与认证 token 管理，配置直接写入 Cargo 配置与凭据文件。
+一个基于 [GPUI Kit](https://crates.io/crates/gpui-kit) 的桌面小工具，用于查看、测速并切换 Rust Cargo 的镜像源，可按所在地区推荐并一键应用，同时支持企业私有 Registry 的索引与认证 token 管理、Cargo 缓存清理，配置直接写入 Cargo 配置与凭据文件。
 
 ## 界面预览
 
@@ -13,14 +13,18 @@
 | ![私有 Registry](.screenshots/05-private-registry.png) | ![添加私有 Registry](.screenshots/06-private-add.png) |
 | 配置健康检查 | 写入前预览 |
 | ![配置健康检查](.screenshots/07-health-check.png) | ![写入前预览](.screenshots/08-write-preview.png) |
-| 日志面板 | 深色模式 |
-| ![日志面板](.screenshots/03-log.png) | ![深色模式](.screenshots/02-dark-mode.png) |
-| 应用设置 | |
-| ![应用设置](.screenshots/09-settings.png) | |
+| 配置快照 | 快照对比 |
+| ![配置快照](.screenshots/10-config-snapshots.png) | ![快照对比](.screenshots/11-snapshot-diff.png) |
+| Cargo 缓存管理 | 日志面板 |
+| ![Cargo 缓存管理](.screenshots/12-cargo-cache.png) | ![日志面板](.screenshots/03-log.png) |
+| 深色模式 | 应用设置 |
+| ![深色模式](.screenshots/02-dark-mode.png) | ![应用设置](.screenshots/09-settings.png) |
 
 ## 功能特性
 
-- **内置常用镜像源**：RsProxy、阿里云、中科大 USTC、清华 TUNA、上海交大 SJTUG、官方 crates.io，一键切换。
+- **内置镜像源**：内置 RsProxy、阿里云、华为云、中科大 USTC、清华 TUNA、上海交大 SJTUG 等 14 个国内镜像与官方 crates.io，一键切换。
+- **在线清单订阅**：启动时从仓库的 `sources.json` 拉取最新内置源清单，新增镜像无需发版；结果缓存在本地，离线仍可用，也可点击「刷新清单」手动更新。
+- **地区识别与推荐**：识别出口 IP 所在的国家与省份，结合实测下载速度与索引延迟给出推荐条；中国大陆优先同省可用源，境外推荐官方源，识别失败时沿用上次结果。
 - **四层自动探测**：逐层检测并展示每个源是否真正可用：
   1. TCP 连接
   2. HTTP 索引探测
@@ -32,6 +36,10 @@
 - **导入 / 导出**：自定义源可导出为 srmgui 自定义的 `.srmgui` 文件，也可从该格式导入并自动合并（跳过内置源与重复标识）。
 - **主题切换**：跟随系统 / 浅色 / 深色。
 - **细节体验**：固定列宽布局，过长文字循环滚动显示，悬停显示完整详情 tips。
+- **源分享**：任一源可生成 `srmgui://source?data=...` 分享链接，复制给他人后可用「导入链接」直接导入。
+- **Cargo 缓存管理**：按来源统计 registry 索引、下载包与解压源码的占用，可删除单个来源缓存并清理无效条目。
+- **日志面板**：按级别多选过滤、关键字搜索，并支持一键导出诊断包（配置、设置、探测结果与运行环境）。
+- **多语言界面**：内置简体中文、English、日本語、한국어、Deutsch、Français、Español、Русский 8 种语言，工具栏切换后立即生效并持久化。
 - **写入前预览**：点击「应用」先展示合并后的配置差异（行级 diff，`+` / `-` 着色），确认后才落盘，取消不产生任何改动。
 - **配置快照与回滚**：每次写入前自动保留配置快照（默认最多最近 10 份），可一键恢复到任意一次；快照标签标注「切换前源」，与内容始终一致。
 - **快照对比**：每条快照支持「与当前对比」，也可选定另一条快照互相对比，直观看出切换前后的配置变化。
@@ -43,23 +51,36 @@
 
 ## 内置源
 
-| 标识名 | 名称 | Registry URL | 说明 |
-| --- | --- | --- | --- |
-| `rsproxy` | RsProxy（字节） | `sparse+https://rsproxy.cn/index/` | 国内实测最稳，推荐日常使用 |
-| `aliyun` | 阿里云 | `sparse+https://mirrors.aliyun.com/crates.io-index/` | 备用源，偶发索引通但下载 404 |
-| `ustc` | 中科大 USTC | `sparse+https://mirrors.ustc.edu.cn/crates.io-index/` | 文档仍在，连通性波动较大 |
-| `tuna` | 清华 TUNA | `sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/` | 帮助文档仍在，偶发无响应 |
-| `sjtu` | 上海交大 SJTUG | `sparse+https://mirrors.sjtug.sjtu.edu.cn/crates.io-index/` | 高校源，适合应急 |
-| `official` | 官方 crates.io | `sparse+https://index.crates.io/` | 默认源，`cargo publish` 前建议切回 |
+| 标识名 | 名称 | 地区 | Registry URL | 说明 |
+| --- | --- | --- | --- | --- |
+| `rsproxy` | RsProxy（字节） | 北京 | `sparse+https://rsproxy.cn/index/` | 国内实测最快，推荐日常使用 |
+| `aliyun` | 阿里云 | 浙江 | `sparse+https://mirrors.aliyun.com/crates.io-index/` | 企业级镜像，下载稳定 |
+| `ustc` | 中科大 USTC | 安徽 | `sparse+https://mirrors.ustc.edu.cn/crates.io-index/` | 华东教育网镜像，连通性好 |
+| `tuna` | 清华 TUNA | 北京 | `sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/` | 华北教育网镜像，更新及时 |
+| `sjtu` | 上海交大 SJTUG | 上海 | `sparse+https://mirrors.sjtug.sjtu.edu.cn/crates.io-index/` | 华东高校镜像，适合应急 |
+| `huawei` | 华为云 | 广东 | `sparse+https://mirrors.huaweicloud.com/crates.io-index/` | 企业级镜像，覆盖全国 |
+| `cernet` | CERNET 联合镜像 | — | `sparse+https://mirrors.cernet.edu.cn/crates.io-index/` | 教育网联合镜像，自动调度 |
+| `nju` | 南京大学 | 江苏 | `sparse+https://mirrors.nju.edu.cn/crates.io-index/` | 江苏高校镜像，华东备用 |
+| `bfsu` | 北外 BFSU | 北京 | `sparse+https://mirrors.bfsu.edu.cn/crates.io-index/` | 北京教育网镜像，华北备用 |
+| `sdu` | 山东大学 | 山东 | `sparse+https://mirrors.sdu.edu.cn/crates.io-index/` | 山东高校镜像，华北备用 |
+| `hust` | 华中科技大学 | 湖北 | `sparse+https://mirrors.hust.edu.cn/crates.io-index/` | 华中高校镜像，中部备用 |
+| `zju` | 浙江大学 | 浙江 | `sparse+https://mirrors.zju.edu.cn/crates.io-index/` | 浙江高校镜像，华东备用 |
+| `neusoft` | 东软 | 辽宁 | `sparse+https://mirrors.neusoft.edu.cn/crates.io-index/` | 东北镜像，北方备用 |
+| `nyist` | 南阳理工学院 | 河南 | `sparse+https://mirror.nyist.edu.cn/crates.io-index/` | 河南高校镜像，中原备用 |
+| `official` | 官方 crates.io | 全球 | `sparse+https://index.crates.io/` | 默认源，`cargo publish` 前建议切回 |
+
+内置源清单来自仓库根目录的 [`sources.json`](sources.json)（格式 `srmgui.manifest` v3），应用启动时会拉取最新版本并缓存到 `<应用目录>/srmgui-sources.json`；离线或拉取失败时使用本地缓存，缓存也没有时回退到编译期内置清单。
 
 ## 使用
 
-1. 启动程序，等待自动测速完成（每行依次显示 TCP / HTTP / 解析 / 下载四个步骤的结果）。
+1. 启动程序，等待自动测速完成（每行依次显示 TCP / HTTP / 解析 / 下载四个步骤的结果）；顶部推荐条会显示识别到的地区与推荐源，可点击「应用推荐源」直接切换。
 2. 点击目标源右侧的「应用」，在弹出的「写入前预览」中查看目标路径、变更摘要与 `+` / `-` 着色 diff，确认无误后点击「确认写入」，配置才会写入 `~/.cargo/config.toml`（优先使用 `$CARGO_HOME`）；点击「取消」不会产生任何改动。
 3. 当前生效的源会在行尾显示「当前生效 ✅」。
 4. 如需回退，点击标题栏的「快照」按钮，在列表中选择某次快照点击「恢复」即可。
 5. 如果配置被其他工具改坏，点击标题栏的「健康检查」，扫描并一键修复问题。
-6. 如需调整超时、测速 / 更新周期、快照保留数与日志参数，点击标题栏的「设置」修改，保存后立即生效。
+6. 需要清理磁盘时点击标题栏的「缓存」，查看 registry 索引、下载包与源码的占用，并按来源删除。
+7. 选中任一源后点击「分享」可复制 `srmgui://source?data=...` 链接；收到链接时点击「导入链接」粘贴即可。
+8. 如需调整超时、测速 / 更新周期、快照保留数与日志参数，点击标题栏的「设置」修改，保存后立即生效；右上角语言菜单可切换 8 种界面语言。
 
 ### 写入前预览
 
@@ -68,6 +89,29 @@
 - 顶部显示本次写入的目标文件路径；
 - 中间显示新增 / 删除行数与 diff 内容（`+` 为新增，`-` 为删除）；
 - 只在点击「确认写入」后才写入，取消则完全不改动配置。
+
+### 地区推荐
+
+启动后（以及每轮测速结束）会按出口 IP 识别所在国家与省份，并在源列表顶部给出推荐条：
+
+- 中国大陆：优先同省可用源，其次按实测下载速度与索引延迟排序；
+- 其他地区：优先官方 crates.io 等全球源；
+- 尚无测速结果时使用内置兜底优先级，识别失败则沿用上次结果；
+- 点击「应用推荐源」直接进入写入前预览流程。
+
+### 源清单与分享
+
+- **在线清单**：启动与每次更新检查时拉取仓库根目录的 `sources.json`，成功后替换列表并写入本地缓存；也可点击「刷新清单」手动触发。
+- **分享源**：选中源后点击「分享」，复制 `srmgui://source?data=...` 链接（URL-safe Base64 编码的标识名、名称、URL、说明与地区）。
+- **导入链接**：粘贴他人分享的链接即可导入，已存在的标识会自动跳过并提示数量。
+
+### Cargo 缓存管理
+
+点击标题栏的「缓存」扫描 `$CARGO_HOME`（默认 `~/.cargo`）：
+
+- 按来源汇总 registry 索引、下载包与解压源码的占用，兼容 sparse 与 git 索引；
+- 支持删除单个来源的缓存，以及清理无法对应到任何来源的无效条目；
+- 扫描结果会缓存在应用目录，下次打开直接展示，缓存体积变化后自动重新扫描。
 
 ### 配置快照与回滚
 
@@ -264,28 +308,44 @@ xcode-select --install
 srmgui/
 ├── assets/           # logo 源文件（svg）、界面用 png、exe 图标 ico、资源脚本 rc
 ├── build.rs          # Windows 下将 ico 嵌入可执行文件（Linux/macOS 跳过）
+├── sources.json      # 内置源清单（启动时在线拉取，离线回退到缓存/内置清单）
 ├── src/
 │   ├── main.rs       # 程序入口与窗口初始化
-│   ├── root_view.rs  # 主界面布局、应用/回滚等交互
+│   ├── app.rs        # 应用状态（源、地区、缓存、更新等）与配置持久化
+│   ├── model.rs      # 状态类型、语言与主题枚举
+│   ├── root_view.rs  # 主界面布局、应用/回滚/测速/推荐等交互
 │   ├── source_list.rs # 源列表与测速结果展示
 │   ├── private_list.rs # 私有 Registry 列表与删除
 │   ├── add_form.rs   # 自定义源与私有 Registry 添加表单
 │   ├── config_dialog.rs # 写入前预览、快照列表、diff 查看对话框
+│   ├── cache_dialog.rs # Cargo 缓存管理对话框
 │   ├── settings_dialog.rs # 应用设置对话框：网络、周期、快照与日志参数
+│   ├── log_panel.rs  # 日志面板：级别过滤、关键字搜索与诊断包导出
+│   ├── ui.rs         # 共用 UI 片段（滚动文字、分隔线、底部滑入面板等）
 │   ├── diff.rs       # 行级 LCS diff 算法
-│   ├── registry.rs   # 内置源列表与 config.toml 内容生成
-│   ├── config_io.rs  # 配置读取/写入、快照保存与恢复、自定义源与私有 Registry 管理
-│   ├── health.rs     # 配置健康检查：扫描重复表头、残留替换块、孤立源段与语法错误并修复
+│   ├── registry.rs   # 编译期内置源清单与 config.toml 内容生成
+│   ├── manifest.rs   # 在线源清单订阅与 srmgui:// 分享链接
+│   ├── region.rs     # 出口 IP 地区识别与按地区/测速推荐
+│   ├── config_io.rs  # 配置读写、快照、自定义源、私有 Registry 与设置持久化
+│   ├── health.rs     # 配置健康检查：重复表头、残留替换块、孤立源段与语法错误
+│   ├── cache.rs      # Cargo 缓存扫描、按来源统计与清理
+│   ├── diagnostics.rs # 诊断包导出（不含认证凭据）
+│   ├── logger.rs     # 内存/文件日志与本地时间戳
 │   ├── update.rs     # 检查 GitHub Releases、下载并启动安装包
-│   └── net.rs        # 四层网络探测
+│   ├── net.rs        # 四层网络探测
+│   ├── util.rs       # URL 规范化等小工具
+│   └── cli.rs        # 命令行子命令实现
 └── Cargo.toml
 ```
 
 ## 技术栈
 
 - Rust 2024 + [GPUI](https://gpui.rs) / [gpui-kit](https://crates.io/crates/gpui-kit)（含 gpui-component）
-- `rustls` + `webpki-roots` 发起 HTTPS 探测
-- `toml` 解析与生成配置
+- `rustls` + `rustls-native-certs` / `webpki-roots` 发起 HTTPS 探测
+- `toml` / `toml_edit` 解析与生成配置
+- `rust-i18n` 提供 8 种语言的界面文案
+- `serde` / `serde_json` / `base64` 处理源清单与分享链接
+- `chrono` 生成带时区的本地时间戳
 
 ## 关于
 
