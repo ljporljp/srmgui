@@ -147,7 +147,7 @@ pub(crate) fn open_snapshots_dialog(
         let body = if snapshots.is_empty() {
             v_flex().w_full().py_4().items_center().child(
                 Label::new(
-                    rust_i18n::t!("snapshot.empty", count = config_io::SNAPSHOT_LIMIT.to_string())
+                    rust_i18n::t!("snapshot.empty", count = config_io::effective_config(&config_io::read_settings()).snapshot_limit.to_string())
                         .to_string(),
                 )
                 .text_sm()

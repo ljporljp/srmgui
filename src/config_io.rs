@@ -13,9 +13,6 @@ const SOURCES_FORMAT: &str = "srmgui.sources";
 /// 导出文件的格式版本（v2 起支持 name / description 字段）。
 const SOURCES_VERSION: i64 = 2;
 
-/// 配置快照保留数量（最近 N 次）。
-pub const SNAPSHOT_LIMIT: usize = 10;
-
 /// 全局配置作用域标识。
 pub const SCOPE_GLOBAL: &str = "global";
 
@@ -195,7 +192,9 @@ pub struct Snapshot {
     pub content: String,
 }
 
-/// 应用设置：界面语言与配置写入作用域。
+/// 可持久化的应用设置：界面语言、配置作用域、网络与测速参数。
+///
+/// 所有 `Option` 字段为 `None` 时表示用户未自定义，运行时会回退到默认值。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Settings {
     /// 持久化的界面语言（如 `zh-CN` / `en-US`）。
@@ -204,6 +203,94 @@ pub struct Settings {
     pub project_root: Option<PathBuf>,
     /// 是否写入项目级配置（`<项目根>/.cargo/config.toml`）。
     pub project_scope: bool,
+    /// 网络请求超时（秒）。
+    pub timeout_secs: Option<u64>,
+    /// 下载测速的字节上限（KB）。
+    pub download_max_kb: Option<u64>,
+    /// 测速用的示例 crate 名称。
+    pub sample_crate: Option<String>,
+    /// 最多跟随的重定向次数。
+    pub max_redirects: Option<u64>,
+    /// 自动测速周期（秒）。
+    pub probe_interval_secs: Option<u64>,
+    /// 自动检查更新周期（秒）。
+    pub update_interval_secs: Option<u64>,
+    /// 快照保留数量。
+    pub snapshot_limit: Option<usize>,
+    /// 单个日志文件最大（MB）。
+    pub max_log_mb: Option<u64>,
+    /// 保留的滚动日志文件数量。
+    pub max_rotated_logs: Option<usize>,
+    /// 内存中保留的日志条数。
+    pub max_log_entries: Option<usize>,
+}
+
+/// 运行时有效配置：所有字段都有确定值。
+#[derive(Debug, Clone)]
+pub struct AppConfig {
+    pub timeout_secs: u64,
+    pub download_max_kb: u64,
+    pub sample_crate: String,
+    pub max_redirects: u64,
+    pub probe_interval_secs: u64,
+    pub update_interval_secs: u64,
+    pub snapshot_limit: usize,
+    pub max_log_mb: u64,
+    pub max_rotated_logs: usize,
+    pub max_log_entries: usize,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            timeout_secs: 8,
+            download_max_kb: 512,
+            sample_crate: "serde".to_string(),
+            max_redirects: 5,
+            probe_interval_secs: 180,
+            update_interval_secs: 6 * 60 * 60,
+            snapshot_limit: 10,
+            max_log_mb: 10,
+            max_rotated_logs: 5,
+            max_log_entries: 1000,
+        }
+    }
+}
+
+/// 合并 Settings 与默认值，产出运行时有效配置。
+pub fn effective_config(settings: &Settings) -> AppConfig {
+    let defaults = AppConfig::default();
+    AppConfig {
+        timeout_secs: settings.timeout_secs.unwrap_or(defaults.timeout_secs).max(1),
+        download_max_kb: settings
+            .download_max_kb
+            .unwrap_or(defaults.download_max_kb)
+            .max(1),
+        sample_crate: settings
+            .sample_crate
+            .clone()
+            .filter(|s| !s.is_empty())
+            .unwrap_or(defaults.sample_crate),
+        max_redirects: settings.max_redirects.unwrap_or(defaults.max_redirects).min(20),
+        probe_interval_secs: settings
+            .probe_interval_secs
+            .unwrap_or(defaults.probe_interval_secs)
+            .max(10),
+        update_interval_secs: settings
+            .update_interval_secs
+            .unwrap_or(defaults.update_interval_secs)
+            .max(60),
+        snapshot_limit: settings.snapshot_limit.unwrap_or(defaults.snapshot_limit).clamp(1, 100),
+        max_log_mb: settings.max_log_mb.unwrap_or(defaults.max_log_mb).max(1),
+        max_rotated_logs: settings
+            .max_rotated_logs
+            .unwrap_or(defaults.max_rotated_logs)
+            .clamp(1, 50),
+        max_log_entries: settings
+            .max_log_entries
+            .unwrap_or(defaults.max_log_entries)
+            .clamp(100, 100000),
+    }
 }
 
 /// 读取应用设置，文件不存在或解析失败时回退默认值。
@@ -217,6 +304,27 @@ pub fn read_settings() -> Settings {
     let Ok(root) = text.parse::<toml::Table>() else {
         return Settings::default();
     };
+    // 把可能的默认值映射回 None，避免写回时产生冗余行。
+    let defaults = AppConfig::default();
+    let opt_u64 = |key: &str, def: u64| -> Option<u64> {
+        root.get(key)
+            .and_then(toml::Value::as_integer)
+            .map(|v| v as u64)
+            .filter(|v| *v != def)
+    };
+    let opt_usize = |key: &str, def: usize| -> Option<usize> {
+        root.get(key)
+            .and_then(toml::Value::as_integer)
+            .map(|v| v as usize)
+            .filter(|v| *v != def)
+    };
+    let opt_str = |key: &str, def: &str| -> Option<String> {
+        root.get(key)
+            .and_then(toml::Value::as_str)
+            .map(str::to_string)
+            .filter(|s| s != def)
+    };
+
     Settings {
         language: root
             .get("language")
@@ -227,10 +335,20 @@ pub fn read_settings() -> Settings {
             .and_then(toml::Value::as_str)
             .map(PathBuf::from),
         project_scope: root.get("scope").and_then(toml::Value::as_str) == Some("project"),
+        timeout_secs: opt_u64("timeout_secs", defaults.timeout_secs),
+        download_max_kb: opt_u64("download_max_kb", defaults.download_max_kb),
+        sample_crate: opt_str("sample_crate", &defaults.sample_crate),
+        max_redirects: opt_u64("max_redirects", defaults.max_redirects),
+        probe_interval_secs: opt_u64("probe_interval_secs", defaults.probe_interval_secs),
+        update_interval_secs: opt_u64("update_interval_secs", defaults.update_interval_secs),
+        snapshot_limit: opt_usize("snapshot_limit", defaults.snapshot_limit),
+        max_log_mb: opt_u64("max_log_mb", defaults.max_log_mb),
+        max_rotated_logs: opt_usize("max_rotated_logs", defaults.max_rotated_logs),
+        max_log_entries: opt_usize("max_log_entries", defaults.max_log_entries),
     }
 }
 
-/// 持久化应用设置。
+/// 持久化应用设置。只写入与默认值不同的字段，保持文件简洁。
 pub fn write_settings(settings: &Settings) -> Result<()> {
     let path = settings_path()?;
     if let Some(parent) = path.parent() {
@@ -238,6 +356,7 @@ pub fn write_settings(settings: &Settings) -> Result<()> {
             rust_i18n::t!("error.create_dir", path = parent.display().to_string()).to_string()
         })?;
     }
+    let defaults = AppConfig::default();
     let mut content = String::from("# srmgui 设置（由 srmgui 管理，请勿手动编辑）\n");
     if let Some(code) = &settings.language {
         content.push_str(&format!("language = {}\n", quote(code)));
@@ -253,6 +372,59 @@ pub fn write_settings(settings: &Settings) -> Result<()> {
             "project_root = {}\n",
             quote(&root.display().to_string())
         ));
+    }
+    // 仅写入与默认值不同的参数
+    if let Some(value) = settings.timeout_secs.filter(|v| *v != defaults.timeout_secs) {
+        content.push_str(&format!("timeout_secs = {value}\n"));
+    }
+    if let Some(value) = settings
+        .download_max_kb
+        .filter(|v| *v != defaults.download_max_kb)
+    {
+        content.push_str(&format!("download_max_kb = {value}\n"));
+    }
+    if let Some(krate) = settings
+        .sample_crate
+        .as_deref()
+        .filter(|v| *v != defaults.sample_crate)
+    {
+        content.push_str(&format!("sample_crate = {}\n", quote(krate)));
+    }
+    if let Some(value) = settings.max_redirects.filter(|v| *v != defaults.max_redirects) {
+        content.push_str(&format!("max_redirects = {value}\n"));
+    }
+    if let Some(value) = settings
+        .probe_interval_secs
+        .filter(|v| *v != defaults.probe_interval_secs)
+    {
+        content.push_str(&format!("probe_interval_secs = {value}\n"));
+    }
+    if let Some(value) = settings
+        .update_interval_secs
+        .filter(|v| *v != defaults.update_interval_secs)
+    {
+        content.push_str(&format!("update_interval_secs = {value}\n"));
+    }
+    if let Some(value) = settings
+        .snapshot_limit
+        .filter(|v| *v != defaults.snapshot_limit)
+    {
+        content.push_str(&format!("snapshot_limit = {value}\n"));
+    }
+    if let Some(value) = settings.max_log_mb.filter(|v| *v != defaults.max_log_mb) {
+        content.push_str(&format!("max_log_mb = {value}\n"));
+    }
+    if let Some(value) = settings
+        .max_rotated_logs
+        .filter(|v| *v != defaults.max_rotated_logs)
+    {
+        content.push_str(&format!("max_rotated_logs = {value}\n"));
+    }
+    if let Some(value) = settings
+        .max_log_entries
+        .filter(|v| *v != defaults.max_log_entries)
+    {
+        content.push_str(&format!("max_log_entries = {value}\n"));
     }
     std::fs::write(&path, content).with_context(|| {
         rust_i18n::t!("error.write_file", path = path.display().to_string()).to_string()
@@ -953,11 +1125,12 @@ fn parse_snapshot(text: &str) -> Option<Snapshot> {
     })
 }
 
-/// 只保留最近 [`SNAPSHOT_LIMIT`] 份快照。
+/// 只保留最近 [`AppConfig::snapshot_limit`] 份快照（值来自用户设置，回退默认 10）。
 fn prune_snapshots(dir: &Path) {
+    let limit = effective_config(&read_settings()).snapshot_limit;
     let mut files = snapshot_files(dir);
     files.sort();
-    let excess = files.len().saturating_sub(SNAPSHOT_LIMIT);
+    let excess = files.len().saturating_sub(limit);
     for file in files.into_iter().take(excess) {
         let _ = std::fs::remove_file(file);
     }
@@ -1329,7 +1502,8 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let target = dir.join("config.toml");
 
-        for index in 0..(SNAPSHOT_LIMIT + 3) {
+        let limit = AppConfig::default().snapshot_limit;
+        for index in 0..(limit + 3) {
             let content = format!(
                 "[source.crates-io]\nreplace-with = \"rsproxy\"\n\n[net]\nvalue = {index}\n"
             );
@@ -1338,12 +1512,12 @@ mod tests {
         prune_snapshots(&dir);
 
         let snapshots = read_snapshots_in(&dir);
-        assert_eq!(snapshots.len(), SNAPSHOT_LIMIT);
+        assert_eq!(snapshots.len(), limit);
         // 最新写入的快照排在最前
         assert!(
             snapshots[0]
                 .content
-                .contains(&format!("value = {}", SNAPSHOT_LIMIT + 2))
+                .contains(&format!("value = {}", limit + 2))
         );
         assert_eq!(snapshots[0].target, target);
         assert_eq!(snapshots[0].scope, SCOPE_GLOBAL);
