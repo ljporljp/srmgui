@@ -5,7 +5,7 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::label::Label;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{ActiveTheme, StyledExt, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, WindowExt as _, h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{AnyElement, App, Entity, SharedString, Window, div, px};
 
@@ -27,7 +27,7 @@ pub(crate) fn open_cache_dialog(window: &mut Window, cx: &mut App, view: Entity<
         dialog
             .title(rust_i18n::t!("cache.title").to_string())
             .w(px(720.))
-            .child(render_body(&state, cx))
+            .child(render_body(&state, &view, cx))
             .footer(
                 h_flex()
                     .w_full()
@@ -64,7 +64,7 @@ pub(crate) fn open_cache_dialog(window: &mut Window, cx: &mut App, view: Entity<
 }
 
 /// 根据缓存状态渲染对话框主体。
-fn render_body(state: &CacheState, cx: &App) -> AnyElement {
+fn render_body(state: &CacheState, view: &Entity<RootView>, cx: &App) -> AnyElement {
     let muted = cx.theme().muted_foreground;
     match state {
         CacheState::Idle | CacheState::Scanning => v_flex()
@@ -97,12 +97,12 @@ fn render_body(state: &CacheState, cx: &App) -> AnyElement {
                     .text_color(cx.theme().danger),
             )
             .into_any_element(),
-        CacheState::Ready(report) => render_report(report, cx),
+        CacheState::Ready(report) => render_report(report, view, cx),
     }
 }
 
 /// 扫描完成后的统计详情。
-fn render_report(report: &CacheReport, cx: &App) -> AnyElement {
+fn render_report(report: &CacheReport, view: &Entity<RootView>, cx: &App) -> AnyElement {
     let muted = cx.theme().muted_foreground;
     let home = report.home.display().to_string();
     let home_tip: SharedString = home.clone().into();
@@ -153,6 +153,7 @@ fn render_report(report: &CacheReport, cx: &App) -> AnyElement {
             report.registry_bytes,
             SourceKind::Registry,
             report,
+            view,
             cx,
         ) {
             body = body.child(group);
@@ -162,6 +163,7 @@ fn render_report(report: &CacheReport, cx: &App) -> AnyElement {
             report.git_bytes,
             SourceKind::Git,
             report,
+            view,
             cx,
         ) {
             body = body.child(group);
@@ -183,6 +185,7 @@ fn render_sources(
     total: u64,
     kind: SourceKind,
     report: &CacheReport,
+    view: &Entity<RootView>,
     cx: &App,
 ) -> Option<AnyElement> {
     let sources: Vec<&cache::Source> = report
@@ -223,6 +226,7 @@ fn render_sources(
                             format!("cache-source-{kind:?}-{index}"),
                             source,
                             &report.home,
+                            view,
                             cx,
                         )
                     })),
@@ -236,9 +240,14 @@ fn render_source(
     id: String,
     source: &cache::Source,
     home: &std::path::Path,
+    view: &Entity<RootView>,
     cx: &App,
 ) -> AnyElement {
     let muted = cx.theme().muted_foreground;
+    let delete_id = format!("cache-delete-{id}");
+    let target_home = home.to_path_buf();
+    let target = source.clone();
+    let view_for_delete = view.clone();
     let detail = source
         .parts
         .iter()
@@ -302,6 +311,19 @@ fn render_source(
                         .flex_shrink_0()
                         .text_sm()
                         .font_semibold(),
+                )
+                .child(
+                    Button::new(delete_id)
+                        .label(rust_i18n::t!("cache.delete_source").to_string())
+                        .tooltip(rust_i18n::t!("cache.delete_source_tip").to_string())
+                        .small()
+                        .danger()
+                        .on_click(move |_, _window, cx| {
+                            let home = target_home.clone();
+                            let source = target.clone();
+                            let _ = view_for_delete
+                                .update(cx, |view, cx| view.delete_cache_source(home, source, cx));
+                        }),
                 ),
         )
         .child(

@@ -334,7 +334,7 @@ cache:
   title: Cargo-Cache-Verwaltung
   home: "CARGO_HOME: %{path}"
   scanning: Cache-Größe wird gemessen…
-  cleaning: Ungültiger Cache wird bereinigt…
+  cleaning: Cache wird bereinigt…
   failed: "Cache-Messung fehlgeschlagen: %{error}"
   empty: Kein registry-/git-Cache gefunden
   total: Gesamte Cache-Größe
@@ -363,6 +363,10 @@ cache:
   clean_failed: "Bereinigen des ungültigen Caches fehlgeschlagen: %{error}"
   log_scan_failed: "Cargo-Cache-Messung fehlgeschlagen: %{error}"
   log_clean_failed: "Bereinigen des ungültigen Caches fehlgeschlagen: %{error}"
+  delete_source: Löschen
+  delete_source_tip: "Den gesamten Cache dieser Quelle löschen; er wird beim nächsten Build erneut heruntergeladen"
+  source_deleted: "Cache von %{name} gelöscht, %{size} freigegeben"
+  source_delete_partial: "Löschen des Caches von %{name} teilweise fehlgeschlagen: %{failed} Verzeichnis(se) konnten nicht entfernt werden"
 
 settings:
   title: Anwendungseinstellungen

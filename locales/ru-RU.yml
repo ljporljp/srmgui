@@ -334,7 +334,7 @@ cache:
   title: Управление кэшем Cargo
   home: "CARGO_HOME: %{path}"
   scanning: Измерение размера кэша…
-  cleaning: Очистка недействительного кэша…
+  cleaning: Очистка кэша…
   failed: "Не удалось измерить кэш: %{error}"
   empty: Кэш registry / git не найден
   total: Общий размер кэша
@@ -363,6 +363,10 @@ cache:
   clean_failed: "Не удалось очистить недействительный кэш: %{error}"
   log_scan_failed: "Не удалось измерить кэш Cargo: %{error}"
   log_clean_failed: "Не удалось очистить недействительный кэш: %{error}"
+  delete_source: Удалить
+  delete_source_tip: "Удалить весь кэш этого источника; при следующей сборке он будет загружен заново"
+  source_deleted: "Кэш %{name} удалён, освобождено %{size}"
+  source_delete_partial: "Часть кэша %{name} не удалена: не удалось удалить каталогов — %{failed}"
 
 settings:
   title: Настройки приложения

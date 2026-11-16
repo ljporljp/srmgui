@@ -334,7 +334,7 @@ cache:
   title: Gestión de la caché de Cargo
   home: "CARGO_HOME: %{path}"
   scanning: Midiendo el tamaño de la caché…
-  cleaning: Limpiando la caché no válida…
+  cleaning: Limpiando la caché…
   failed: "Error al medir la caché: %{error}"
   empty: No se encontró caché registry / git
   total: Tamaño total de la caché
@@ -363,6 +363,10 @@ cache:
   clean_failed: "Error al limpiar la caché no válida: %{error}"
   log_scan_failed: "Error al medir la caché de Cargo: %{error}"
   log_clean_failed: "Error al limpiar la caché no válida: %{error}"
+  delete_source: Eliminar
+  delete_source_tip: "Eliminar toda la caché de esta fuente; se volverá a descargar en la próxima compilación"
+  source_deleted: "Se eliminó la caché de %{name} y se liberaron %{size}"
+  source_delete_partial: "Error parcial al eliminar la caché de %{name}: no se pudieron eliminar %{failed} directorio(s)"
 
 settings:
   title: Ajustes de la aplicación

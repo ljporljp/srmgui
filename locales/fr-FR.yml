@@ -334,7 +334,7 @@ cache:
   title: Gestion du cache Cargo
   home: "CARGO_HOME : %{path}"
   scanning: Mesure de la taille du cache…
-  cleaning: Nettoyage des caches invalides…
+  cleaning: Nettoyage du cache…
   failed: "Échec de la mesure du cache : %{error}"
   empty: Aucun cache registry / git trouvé
   total: Taille totale du cache
@@ -363,6 +363,10 @@ cache:
   clean_failed: "Échec du nettoyage des caches invalides : %{error}"
   log_scan_failed: "Échec de la mesure du cache Cargo : %{error}"
   log_clean_failed: "Échec du nettoyage des caches invalides : %{error}"
+  delete_source: Supprimer
+  delete_source_tip: "Supprimer tout le cache de cette source ; il sera retéléchargé lors de la prochaine compilation"
+  source_deleted: "Cache de %{name} supprimé, %{size} libérés"
+  source_delete_partial: "Suppression partielle du cache de %{name} : %{failed} dossier(s) n'ont pas pu être supprimés"
 
 settings:
   title: Paramètres de l'application

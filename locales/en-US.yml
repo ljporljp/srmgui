@@ -334,7 +334,7 @@ cache:
   title: Cargo Cache Management
   home: "CARGO_HOME: %{path}"
   scanning: Measuring cache size…
-  cleaning: Cleaning invalid cache…
+  cleaning: Cleaning cache…
   failed: "Failed to measure cache: %{error}"
   empty: No registry / git cache found
   total: Total cache size
@@ -363,6 +363,10 @@ cache:
   clean_failed: "Failed to clean invalid cache: %{error}"
   log_scan_failed: "Failed to measure Cargo cache: %{error}"
   log_clean_failed: "Failed to clean invalid cache: %{error}"
+  delete_source: Delete
+  delete_source_tip: "Delete all cache of this source; it will be re-downloaded on the next build"
+  source_deleted: "Deleted cache of %{name}, %{size} freed"
+  source_delete_partial: "Failed to delete part of the cache of %{name}: %{failed} director(ies) could not be removed"
 
 settings:
   title: Application Settings

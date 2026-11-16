@@ -334,7 +334,7 @@ cache:
   title: Cargo キャッシュ管理
   home: "CARGO_HOME：%{path}"
   scanning: キャッシュ容量を計測中…
-  cleaning: 無効なキャッシュを削除中…
+  cleaning: キャッシュを削除中…
   failed: "キャッシュの計測に失敗しました：%{error}"
   empty: registry / git キャッシュが見つかりません
   total: キャッシュ合計サイズ
@@ -363,6 +363,10 @@ cache:
   clean_failed: "無効なキャッシュの削除に失敗しました：%{error}"
   log_scan_failed: "Cargo キャッシュの計測に失敗しました：%{error}"
   log_clean_failed: "無効なキャッシュの削除に失敗しました：%{error}"
+  delete_source: 削除
+  delete_source_tip: "このソースのキャッシュをすべて削除します。次回ビルド時に再ダウンロードされます"
+  source_deleted: "%{name} のキャッシュを削除し、%{size} を解放しました"
+  source_delete_partial: "%{name} のキャッシュ削除で一部失敗：%{failed} 件のディレクトリを削除できませんでした"
 
 settings:
   title: アプリ設定

@@ -810,6 +810,72 @@ impl RootView {
         }
     }
 
+    /// 删除指定来源的全部缓存，完成后重新统计。
+    pub(crate) fn delete_cache_source(
+        &mut self,
+        home: PathBuf,
+        source: cache::Source,
+        cx: &mut Context<Self>,
+    ) {
+        if matches!(
+            self.app.read(cx).state.cache,
+            cache::CacheState::Scanning | cache::CacheState::Cleaning
+        ) {
+            return;
+        }
+        self.set_cache_state(cache::CacheState::Cleaning, cx);
+
+        let name = source.url.clone().unwrap_or_else(|| source.name.clone());
+        cx.spawn(async move |view, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    let deleted = cache::delete_source(&home, &source);
+                    (deleted, cache::scan())
+                })
+                .await;
+            let _ = view.update(cx, |view, cx| view.finish_cache_delete(&name, result, cx));
+        })
+        .detach();
+    }
+
+    /// 处理来源删除结果：更新状态栏，并用重新统计的结果刷新对话框。
+    fn finish_cache_delete(
+        &mut self,
+        name: &str,
+        result: (cache::CleanReport, Result<cache::CacheReport>),
+        cx: &mut Context<Self>,
+    ) {
+        let (deleted, rescanned) = result;
+        let status = if deleted.failed > 0 {
+            let message = rust_i18n::t!(
+                "cache.source_delete_partial",
+                name = name.to_string(),
+                failed = deleted.failed.to_string()
+            )
+            .to_string();
+            logger::warn("cache", message.clone());
+            Status::Error(message.into())
+        } else {
+            let message = rust_i18n::t!(
+                "cache.source_deleted",
+                name = name.to_string(),
+                size = cache::format_size(deleted.bytes)
+            )
+            .to_string();
+            logger::info("cache", message.clone());
+            Status::Success(message.into())
+        };
+        self.app.update(cx, |model, cx| {
+            model.state.status = status;
+            cx.notify();
+        });
+        match rescanned {
+            Ok(report) => self.set_cache_state(cache::CacheState::Ready(report), cx),
+            Err(error) => self.set_cache_state(cache::CacheState::Failed(format!("{error:#}")), cx),
+        }
+    }
+
     /// 更新缓存管理状态并触发重绘；统计结果同时写入应用缓存，供下次直接读取。
     fn set_cache_state(&mut self, state: cache::CacheState, cx: &mut Context<Self>) {
         if let cache::CacheState::Ready(report) = &state {

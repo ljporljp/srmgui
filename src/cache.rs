@@ -505,6 +505,28 @@ pub(crate) fn clean_at(home: &Path) -> CleanReport {
     report
 }
 
+/// 删除指定来源的全部缓存目录，返回删除结果。
+///
+/// 只删除位于 `home` 之下、由扫描得到的缓存目录，避免误删其他路径。
+pub(crate) fn delete_source(home: &Path, source: &Source) -> CleanReport {
+    let mut report = CleanReport::default();
+    for path in &source.paths {
+        if !path.starts_with(home) || path == home {
+            report.failed += 1;
+            continue;
+        }
+        let (bytes, _) = size_of(path);
+        match remove_path(path) {
+            Ok(()) => {
+                report.removed += 1;
+                report.bytes += bytes;
+            }
+            Err(_) => report.failed += 1,
+        }
+    }
+    report
+}
+
 /// 递归统计目录下普通文件的数量与总字节数；符号链接不计入，读取失败的条目跳过。
 pub(crate) fn size_of(path: &Path) -> (u64, u64) {
     let mut bytes = 0;
@@ -985,5 +1007,58 @@ mod tests {
         assert!(load_report_at(&sandbox.home.join("another")).is_none());
 
         config_io::set_test_app_dir(None);
+    }
+
+    #[test]
+    fn deletes_only_the_chosen_source() {
+        let sandbox = fixture("delete-source");
+        let report = scan_at_with_urls(&sandbox.home, &[]);
+        let source = report
+            .sources
+            .iter()
+            .find(|source| source.name == "index.crates.io-abc")
+            .unwrap()
+            .clone();
+
+        let deleted = delete_source(&sandbox.home, &source);
+        assert_eq!(deleted.removed, 3);
+        assert_eq!(deleted.failed, 0);
+        assert_eq!(deleted.bytes, 4 + 10 + 13);
+
+        let rescanned = scan_at_with_urls(&sandbox.home, &[]);
+        assert!(
+            rescanned
+                .sources
+                .iter()
+                .all(|source| source.name != "index.crates.io-abc")
+        );
+        // 其他来源的缓存保持不变。
+        assert!(sandbox.home.join("git/db/gpui-123/config").is_file());
+        assert!(
+            sandbox
+                .home
+                .join("registry/cache/gone-xyz/old-1.0.0.crate")
+                .is_file()
+        );
+    }
+
+    #[test]
+    fn refuses_to_delete_paths_outside_cargo_home() {
+        let sandbox = Sandbox::new("outside-home");
+        let other = Sandbox::new("outside-target");
+        other.write("keep.txt", 1);
+
+        let source = Source {
+            kind: SourceKind::Registry,
+            name: "outside".to_string(),
+            paths: vec![other.home.clone()],
+            bytes: 1,
+            parts: Vec::new(),
+            url: None,
+        };
+        let report = delete_source(&sandbox.home, &source);
+        assert_eq!(report.removed, 0);
+        assert_eq!(report.failed, 1);
+        assert!(other.home.join("keep.txt").is_file());
     }
 }

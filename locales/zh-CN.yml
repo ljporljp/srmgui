@@ -334,7 +334,7 @@ cache:
   title: Cargo 缓存管理
   home: "CARGO_HOME：%{path}"
   scanning: 正在统计缓存体积…
-  cleaning: 正在清理无效缓存…
+  cleaning: 正在清理缓存…
   failed: "统计缓存失败：%{error}"
   empty: 未找到 registry / git 缓存
   total: 缓存总大小
@@ -363,6 +363,10 @@ cache:
   clean_failed: "清理无效缓存失败：%{error}"
   log_scan_failed: "统计 Cargo 缓存失败：%{error}"
   log_clean_failed: "清理无效缓存失败：%{error}"
+  delete_source: 删除
+  delete_source_tip: "删除该来源的全部缓存，下次构建时会重新下载"
+  source_deleted: "已删除 %{name} 的缓存，释放 %{size}"
+  source_delete_partial: "删除 %{name} 的缓存时部分失败：%{failed} 个目录无法删除"
 
 settings:
   title: 应用设置

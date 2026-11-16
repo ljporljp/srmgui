@@ -334,7 +334,7 @@ cache:
   title: Cargo 캐시 관리
   home: "CARGO_HOME: %{path}"
   scanning: 캐시 크기 측정 중…
-  cleaning: 잘못된 캐시 정리 중…
+  cleaning: 캐시 정리 중…
   failed: "캐시 측정 실패: %{error}"
   empty: registry / git 캐시를 찾을 수 없습니다
   total: 전체 캐시 크기
@@ -363,6 +363,10 @@ cache:
   clean_failed: "잘못된 캐시 정리 실패: %{error}"
   log_scan_failed: "Cargo 캐시 측정 실패: %{error}"
   log_clean_failed: "잘못된 캐시 정리 실패: %{error}"
+  delete_source: 삭제
+  delete_source_tip: "이 소스의 캐시를 모두 삭제합니다. 다음 빌드 시 다시 다운로드됩니다"
+  source_deleted: "%{name} 캐시를 삭제하고 %{size}를 확보했습니다"
+  source_delete_partial: "%{name} 캐시 삭제 중 일부 실패: %{failed}개 디렉터리를 삭제하지 못했습니다"
 
 settings:
   title: 애플리케이션 설정
