@@ -209,7 +209,23 @@ snapshot:
   tip: Ver las últimas %{count} instantáneas de configuración y revertir con un clic
   title: Instantáneas de configuración
   empty: Aún no hay instantáneas. Los últimos %{count} cambios se guardan automáticamente.
-  meta: "%{time} · %{scope} · espejo %{source}"
+  meta: "%{time} · %{scope} · antes: %{source}"
   restore: Restaurar
   restore_tip: Sobrescribe la configuración actual con esta instantánea (el archivo existente también se guarda como .bak)
+  close: Cerrar
+  diff_current: Comparar con la actual
+  diff_current_tip: Compara esta instantánea (la configuración antes del cambio) con el archivo de configuración actual
+  diff: Comparar
+  diff_tip: Elegir otra instantánea para comparar
+  diff_title: "Comparación: %{left} ↔ %{right}"
+  diff_picker_title: Elegir instantánea para comparar
+  diff_picker_hint: Elija una instantánea para comparar con «%{time}»
+  diff_select: Seleccionar
+  current_config: Configuración actual
+
+diff:
+  left: Base
+  right: Comparar
+  summary: "%{added} línea(s) añadida(s), %{removed} línea(s) eliminada(s)"
+  no_change: Los dos contenidos son idénticos
   close: Cerrar

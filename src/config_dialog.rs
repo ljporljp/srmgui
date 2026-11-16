@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use gpui_kit::base::Disableable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::label::Label;
 use gpui_kit::component::scroll::ScrollableElement;
@@ -131,7 +132,7 @@ pub(crate) fn open_preview_dialog(
     });
 }
 
-/// 快照回滚：列出最近的配置快照，点击即可恢复。
+/// 快照回滚：列出最近的配置快照，可一键恢复或对比差异。
 pub(crate) fn open_snapshots_dialog(
     window: &mut Window,
     cx: &mut App,
@@ -158,18 +159,15 @@ pub(crate) fn open_snapshots_dialog(
                 .max_h(px(320.))
                 .gap_2()
                 .overflow_y_scrollbar()
-                .children(
-                    snapshots
-                        .iter()
-                        .enumerate()
-                        .map(|(index, snapshot)| snapshot_row(index, snapshot, view.clone(), cx)),
-                )
+                .children(snapshots.iter().enumerate().map(|(index, snapshot)| {
+                    snapshot_row(index, snapshot, &snapshots, view.clone(), cx)
+                }))
                 .into_any_element()
         };
 
         dialog
             .title(rust_i18n::t!("snapshot.title").to_string())
-            .w(px(640.))
+            .w(px(720.))
             .child(body)
             .footer(
                 h_flex().w_full().justify_end().child(
@@ -182,24 +180,173 @@ pub(crate) fn open_snapshots_dialog(
     });
 }
 
-/// 一行 diff：新增 / 删除 / 上下文使用不同颜色与前缀。
-fn diff_row(line: &DiffLine, muted: Hsla, success: Hsla, danger: Hsla) -> AnyElement {
-    let (prefix, color) = match line.kind {
-        LineKind::Context => (" ", muted),
-        LineKind::Added => ("+", success),
-        LineKind::Removed => ("-", danger),
-    };
-    Label::new(format!("{prefix} {}", line.text))
-        .text_size(px(12.))
-        .text_color(color)
-        .into_any_element()
+/// 通用 diff 查看器：展示两段文本的行级差异（只读，无写入动作）。
+pub(crate) fn open_diff_dialog(
+    window: &mut Window,
+    cx: &mut App,
+    title: String,
+    left_label: String,
+    left: String,
+    right_label: String,
+    right: String,
+) {
+    let lines = diff_lines(&left, &right);
+    let added = lines.iter().filter(|line| line.kind == LineKind::Added).count();
+    let removed = lines
+        .iter()
+        .filter(|line| line.kind == LineKind::Removed)
+        .count();
+
+    let title_for_dialog = title.clone();
+    window.open_dialog(cx, move |dialog, _window, cx| {
+        let muted = cx.theme().muted_foreground;
+        let summary = if left == right {
+            rust_i18n::t!("diff.no_change").to_string()
+        } else {
+            rust_i18n::t!(
+                "diff.summary",
+                added = added.to_string(),
+                removed = removed.to_string()
+            )
+            .to_string()
+        };
+
+        dialog
+            .title(title_for_dialog.clone())
+            .w(px(640.))
+            .child(
+                v_flex()
+                    .w_full()
+                    .gap_2()
+                    .child(
+                        h_flex()
+                            .w_full()
+                            .gap_2()
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(
+                                        Label::new(
+                                            rust_i18n::t!("diff.left").to_string(),
+                                        )
+                                        .text_sm()
+                                        .text_color(muted),
+                                    )
+                                    .child(
+                                        Label::new(left_label.clone())
+                                            .text_sm()
+                                            .font_semibold()
+                                            .whitespace_nowrap()
+                                            .text_ellipsis(),
+                                    ),
+                            )
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(
+                                        Label::new(
+                                            rust_i18n::t!("diff.right").to_string(),
+                                        )
+                                        .text_sm()
+                                        .text_color(muted),
+                                    )
+                                    .child(
+                                        Label::new(right_label.clone())
+                                            .text_sm()
+                                            .font_semibold()
+                                            .whitespace_nowrap()
+                                            .text_ellipsis(),
+                                    ),
+                            ),
+                    )
+                    .child(Label::new(summary).text_sm().font_semibold())
+                    .child(
+                        v_flex()
+                            .id("diff-content")
+                            .w_full()
+                            .max_h(px(360.))
+                            .p_3()
+                            .gap_0p5()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .bg(cx.theme().muted)
+                            .overflow_y_scrollbar()
+                            .children(lines.iter().map(|line| {
+                                diff_row(
+                                    line,
+                                    muted,
+                                    cx.theme().success,
+                                    cx.theme().danger,
+                                )
+                            })),
+                    ),
+            )
+            .footer(
+                h_flex().w_full().justify_end().child(
+                    Button::new("diff-close")
+                        .label(rust_i18n::t!("diff.close").to_string())
+                        .secondary()
+                        .on_click(|_, window, cx| window.close_dialog(cx)),
+                ),
+            )
+    });
 }
 
-/// 一条快照记录：时间、作用域、源、目标路径与恢复按钮。
-fn snapshot_row(
+/// 让用户从全部快照中挑选一份，与基准快照进行对比。
+fn open_compare_picker(
+    window: &mut Window,
+    cx: &mut App,
+    base: config_io::Snapshot,
+    snapshots: Vec<config_io::Snapshot>,
+) {
+    let base_label = base.created_at.clone();
+    window.open_dialog(cx, move |dialog, _window, cx| {
+        let muted = cx.theme().muted_foreground;
+        let hint = rust_i18n::t!(
+            "snapshot.diff_picker_hint",
+            time = base_label.as_str()
+        )
+        .to_string();
+
+        dialog
+            .title(rust_i18n::t!("snapshot.diff_picker_title").to_string())
+            .w(px(640.))
+            .child(
+                v_flex()
+                    .w_full()
+                    .gap_2()
+                    .child(Label::new(hint).text_sm().text_color(muted))
+                    .child(
+                        v_flex()
+                            .id("compare-picker")
+                            .w_full()
+                            .max_h(px(320.))
+                            .gap_2()
+                            .overflow_y_scrollbar()
+                            .children(snapshots.iter().enumerate().map(|(index, snapshot)| {
+                                compare_picker_row(index, snapshot, &base, cx)
+                            })),
+                    ),
+            )
+            .footer(
+                h_flex().w_full().justify_end().child(
+                    Button::new("picker-cancel")
+                        .label(rust_i18n::t!("snapshot.close").to_string())
+                        .secondary()
+                        .on_click(|_, window, cx| window.close_dialog(cx)),
+                ),
+            )
+    });
+}
+
+/// 对比选择器中的一行快照。
+fn compare_picker_row(
     index: usize,
     snapshot: &config_io::Snapshot,
-    view: Entity<RootView>,
+    base: &config_io::Snapshot,
     cx: &App,
 ) -> AnyElement {
     let muted = cx.theme().muted_foreground;
@@ -216,8 +363,10 @@ fn snapshot_row(
     )
     .to_string();
     let target = snapshot.target.display().to_string();
-    let tip = rust_i18n::t!("snapshot.restore_tip").to_string();
+    // 基准快照本身不可选，避免对比自己。
+    let is_base = snapshot.target == base.target && snapshot.created_at == base.created_at;
     let snapshot_for_click = snapshot.clone();
+    let base_for_click = base.clone();
 
     h_flex()
         .w_full()
@@ -242,13 +391,154 @@ fn snapshot_row(
                 ),
         )
         .child(
+            Button::new(format!("compare-select-{index}"))
+                .label(rust_i18n::t!("snapshot.diff_select").to_string())
+                .small()
+                .secondary()
+                .disabled(is_base)
+                .on_click(move |_, window, cx| {
+                    let base = base_for_click.clone();
+                    let picked = snapshot_for_click.clone();
+                    let title = rust_i18n::t!(
+                        "snapshot.diff_title",
+                        left = base.created_at.as_str(),
+                        right = picked.created_at.as_str()
+                    )
+                    .to_string();
+                    let left_label = base.created_at.clone();
+                    let right_label = picked.created_at.clone();
+                    window.close_dialog(cx);
+                    open_diff_dialog(
+                        window,
+                        cx,
+                        title,
+                        left_label,
+                        base.content,
+                        right_label,
+                        picked.content,
+                    );
+                }),
+        )
+        .into_any_element()
+}
+
+/// 一行 diff：新增 / 删除 / 上下文使用不同颜色与前缀。
+fn diff_row(line: &DiffLine, muted: Hsla, success: Hsla, danger: Hsla) -> AnyElement {
+    let (prefix, color) = match line.kind {
+        LineKind::Context => (" ", muted),
+        LineKind::Added => ("+", success),
+        LineKind::Removed => ("-", danger),
+    };
+    Label::new(format!("{prefix} {}", line.text))
+        .text_size(px(12.))
+        .text_color(color)
+        .into_any_element()
+}
+
+/// 一条快照记录：时间、作用域、源、目标路径，以及恢复 / 对比当前 / 对比其它快照。
+fn snapshot_row(
+    index: usize,
+    snapshot: &config_io::Snapshot,
+    all_snapshots: &[config_io::Snapshot],
+    view: Entity<RootView>,
+    cx: &App,
+) -> AnyElement {
+    let muted = cx.theme().muted_foreground;
+    let scope = if snapshot.scope == config_io::SCOPE_PROJECT {
+        rust_i18n::t!("scope.project").to_string()
+    } else {
+        rust_i18n::t!("scope.global").to_string()
+    };
+    let meta = rust_i18n::t!(
+        "snapshot.meta",
+        time = snapshot.created_at.as_str(),
+        scope = scope,
+        source = snapshot.source.as_str()
+    )
+    .to_string();
+    let target = snapshot.target.display().to_string();
+    let tip = rust_i18n::t!("snapshot.restore_tip").to_string();
+    let snapshot_for_restore = snapshot.clone();
+    let snapshot_for_diff_current = snapshot.clone();
+    let snapshot_for_picker = snapshot.clone();
+    let all_for_picker: Vec<config_io::Snapshot> = all_snapshots.to_vec();
+
+    h_flex()
+        .w_full()
+        .items_center()
+        .gap_3()
+        .p_2()
+        .rounded_md()
+        .border_1()
+        .border_color(cx.theme().border)
+        .child(
+            v_flex()
+                .flex_1()
+                .min_w_0()
+                .gap_1()
+                .child(Label::new(meta).text_sm().font_semibold())
+                .child(
+                    Label::new(target)
+                        .text_sm()
+                        .text_color(muted)
+                        .whitespace_nowrap()
+                        .text_ellipsis(),
+                ),
+        )
+        .child(
+            Button::new(format!("snapshot-diff-current-{index}"))
+                .label(rust_i18n::t!("snapshot.diff_current").to_string())
+                .small()
+                .secondary()
+                .tooltip(rust_i18n::t!("snapshot.diff_current_tip").to_string())
+                .on_click(move |_, window, cx| {
+                    let snapshot = snapshot_for_diff_current.clone();
+                    let current_label = rust_i18n::t!("snapshot.current_config").to_string();
+                    let title = rust_i18n::t!(
+                        "snapshot.diff_title",
+                        left = snapshot.created_at.as_str(),
+                        right = current_label.as_str()
+                    )
+                    .to_string();
+                    let left_label = snapshot.created_at.clone();
+                    let right_label = current_label;
+                    // 读不到当前文件时按空内容处理，让 diff 展示整份快照。
+                    let current = config_io::read_config_content(&snapshot.target)
+                        .unwrap_or_default();
+                    open_diff_dialog(
+                        window,
+                        cx,
+                        title,
+                        left_label,
+                        snapshot.content,
+                        right_label,
+                        current,
+                    );
+                }),
+        )
+        .child(
+            Button::new(format!("snapshot-diff-{index}"))
+                .label(rust_i18n::t!("snapshot.diff").to_string())
+                .small()
+                .secondary()
+                .tooltip(rust_i18n::t!("snapshot.diff_tip").to_string())
+                .on_click(move |_, window, cx| {
+                    open_compare_picker(
+                        window,
+                        cx,
+                        snapshot_for_picker.clone(),
+                        all_for_picker.clone(),
+                    );
+                }),
+        )
+        .child(
             Button::new(format!("snapshot-restore-{index}"))
                 .label(rust_i18n::t!("snapshot.restore").to_string())
                 .small()
                 .secondary()
                 .tooltip(tip)
                 .on_click(move |_, window, cx| {
-                    let snapshot = snapshot_for_click.clone();
+                    let snapshot = snapshot_for_restore.clone();
                     view.update(cx, |view, cx| view.restore_snapshot(snapshot, cx));
                     window.close_dialog(cx);
                 }),

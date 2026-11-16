@@ -209,7 +209,23 @@ snapshot:
   tip: 查看最近 %{count} 次配置快照并一键回滚
   title: 配置快照
   empty: 暂无配置快照，切换源后会自动保留最近 %{count} 次
-  meta: "%{time} · %{scope} · 源 %{source}"
+  meta: "%{time} · %{scope} · 切换前源 %{source}"
   restore: 恢复
   restore_tip: 用这次快照覆盖当前配置（覆盖前的文件仍会备份为 .bak）
+  close: 关闭
+  diff_current: 与当前对比
+  diff_current_tip: 对比该快照（切换前的配置）与当前配置文件
+  diff: 对比
+  diff_tip: 选择另一份快照进行对比
+  diff_title: 对比：%{left} ↔ %{right}
+  diff_picker_title: 选择对比快照
+  diff_picker_hint: 选择要与「%{time}」对比的快照
+  diff_select: 选择
+  current_config: 当前配置
+
+diff:
+  left: 基准
+  right: 对比
+  summary: 新增 %{added} 行，删除 %{removed} 行
+  no_change: 两份内容没有差异
   close: 关闭

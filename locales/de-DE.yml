@@ -209,7 +209,23 @@ snapshot:
   tip: Die letzten %{count} Konfigurations-Snapshots ansehen und mit einem Klick zurücksetzen
   title: Konfigurations-Snapshots
   empty: Noch keine Snapshots. Die letzten %{count} Wechsel werden automatisch aufbewahrt.
-  meta: "%{time} · %{scope} · Spiegel %{source}"
+  meta: "%{time} · %{scope} · vorher: %{source}"
   restore: Wiederherstellen
   restore_tip: Überschreibt die aktuelle Konfiguration mit diesem Snapshot (die vorhandene Datei wird zusätzlich als .bak gesichert)
+  close: Schließen
+  diff_current: Mit aktueller vergleichen
+  diff_current_tip: Diesen Snapshot (die Konfiguration vor dem Wechsel) mit der aktuellen Konfigurationsdatei vergleichen
+  diff: Vergleichen
+  diff_tip: Einen anderen Snapshot zum Vergleich auswählen
+  diff_title: "Vergleich: %{left} ↔ %{right}"
+  diff_picker_title: Vergleichs-Snapshot auswählen
+  diff_picker_hint: Wählen Sie einen Snapshot zum Vergleich mit „%{time}“
+  diff_select: Auswählen
+  current_config: Aktuelle Konfiguration
+
+diff:
+  left: Basis
+  right: Vergleich
+  summary: "%{added} Zeile(n) hinzugefügt, %{removed} Zeile(n) entfernt"
+  no_change: Die beiden Inhalte sind identisch
   close: Schließen

@@ -209,7 +209,23 @@ snapshot:
   tip: View the last %{count} config snapshots and roll back with one click
   title: Config snapshots
   empty: No snapshots yet. The last %{count} switches are kept automatically.
-  meta: "%{time} · %{scope} · source %{source}"
+  meta: "%{time} · %{scope} · before: %{source}"
   restore: Restore
   restore_tip: Overwrite the current config with this snapshot (the existing file is still backed up as .bak)
+  close: Close
+  diff_current: Compare with current
+  diff_current_tip: Compare this snapshot (the config before the switch) with the current config file
+  diff: Compare
+  diff_tip: Pick another snapshot to compare with
+  diff_title: "Compare: %{left} ↔ %{right}"
+  diff_picker_title: Pick a snapshot to compare
+  diff_picker_hint: Pick a snapshot to compare with "%{time}"
+  diff_select: Select
+  current_config: Current config
+
+diff:
+  left: Base
+  right: Compare
+  summary: "%{added} line(s) added, %{removed} line(s) removed"
+  no_change: The two contents are identical
   close: Close

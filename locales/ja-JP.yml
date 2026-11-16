@@ -209,7 +209,23 @@ snapshot:
   tip: 最近 %{count} 回の設定スナップショットを表示し、ワンクリックで復元
   title: 設定スナップショット
   empty: スナップショットはまだありません。切り替えると直近 %{count} 回分が自動保存されます
-  meta: "%{time} · %{scope} · ミラー %{source}"
+  meta: "%{time} · %{scope} · 切替前のミラー %{source}"
   restore: 復元
   restore_tip: このスナップショットで現在の設定を上書きします（上書き前のファイルは .bak としても保存されます）
+  close: 閉じる
+  diff_current: 現在と比較
+  diff_current_tip: このスナップショット（切替前の設定）と現在の設定ファイルを比較します
+  diff: 比較
+  diff_tip: 比較する別のスナップショットを選択します
+  diff_title: 比較：%{left} ↔ %{right}
+  diff_picker_title: 比較するスナップショットを選択
+  diff_picker_hint: 「%{time}」と比較するスナップショットを選択してください
+  diff_select: 選択
+  current_config: 現在の設定
+
+diff:
+  left: 基準
+  right: 比較
+  summary: "%{added} 行追加、%{removed} 行削除"
+  no_change: 2 つの内容は同じです
   close: 閉じる

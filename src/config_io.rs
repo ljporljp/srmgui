@@ -100,6 +100,22 @@ pub fn snapshot_dir() -> Result<PathBuf> {
     Ok(app_dir()?.join("snapshots"))
 }
 
+/// 从配置内容解析当前生效的源：有 `replace-with` 时取它，否则为 `official`。
+///
+/// 快照保存的是写入前的配置，记录源时必须从内容本身推导，
+/// 否则写入前的内容会配上写入后的源标签，导致错位一格。
+fn source_in_config(content: &str) -> Option<String> {
+    let root: toml::Table = content.parse().ok()?;
+    let replaced = root
+        .get("source")
+        .and_then(toml::Value::as_table)
+        .and_then(|sources| sources.get("crates-io"))
+        .and_then(toml::Value::as_table)
+        .and_then(|crates_io| crates_io.get("replace-with"))
+        .and_then(toml::Value::as_str);
+    Some(replaced.unwrap_or("official").to_string())
+}
+
 /// 一次配置写入前的快照，用于出问题后一键回滚。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Snapshot {
@@ -549,6 +565,11 @@ fn write_merged(path: &Path, merged: &str) -> Result<()> {
     Ok(())
 }
 
+/// 读取配置文件内容，文件不存在时返回空字符串（供快照对比当前配置使用）。
+pub fn read_config_content(path: &Path) -> Result<String> {
+    read_optional(path)
+}
+
 /// 读取文件内容，文件不存在时视为空内容。
 fn read_optional(path: &Path) -> Result<String> {
     match std::fs::read_to_string(path) {
@@ -645,7 +666,9 @@ fn write_snapshot_file(
         quote(&target.display().to_string())
     ));
     out.push_str(&format!("scope = {}\n", quote(scope)));
-    out.push_str(&format!("source = {}\n", quote(source)));
+    // 快照内容是写入前的配置，源按内容推导，保证行内标签与内容一致。
+    let snapshot_source = source_in_config(content).unwrap_or_else(|| source.to_string());
+    out.push_str(&format!("source = {}\n", quote(&snapshot_source)));
     out.push_str(&format!("content = {}\n", quote(content)));
 
     std::fs::write(&file, out).with_context(|| {
@@ -680,7 +703,10 @@ fn parse_snapshot(text: &str) -> Option<Snapshot> {
         created_at: field("created_at")?,
         target: PathBuf::from(field("target")?),
         scope: field("scope").unwrap_or_else(|| SCOPE_GLOBAL.to_string()),
-        source: field("source").unwrap_or_default(),
+        // 旧快照文件里记录的可能是写入后的源，读取时一律以内容为准。
+        source: source_in_config(&field("content")?)
+            .or_else(|| field("source"))
+            .unwrap_or_default(),
         content: field("content")?,
     })
 }
@@ -1006,7 +1032,9 @@ mod tests {
         let target = dir.join("config.toml");
 
         for index in 0..(SNAPSHOT_LIMIT + 3) {
-            let content = format!("[net]\nvalue = {index}\n");
+            let content = format!(
+                "[source.crates-io]\nreplace-with = \"rsproxy\"\n\n[net]\nvalue = {index}\n"
+            );
             write_snapshot_file(&dir, &target, SCOPE_GLOBAL, "rsproxy", &content).unwrap();
         }
         prune_snapshots(&dir);
@@ -1023,6 +1051,17 @@ mod tests {
         assert_eq!(snapshots[0].source, "rsproxy");
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn snapshot_source_follows_content() {
+        // 旧快照文件里记录的是写入后的源，读取时应以内容中的实际源为准。
+        let text = "version = 1\ncreated_at = \"2026-11-16 10:00:00.000\"\ntarget = \"config.toml\"\nscope = \"global\"\nsource = \"aliyun\"\ncontent = \"[source.crates-io]\\nreplace-with = \\\"rsproxy\\\"\\n\"\n";
+        assert_eq!(parse_snapshot(text).unwrap().source, "rsproxy");
+
+        // 内容里没有 replace-with 时表示官方源。
+        let official = "version = 1\ncreated_at = \"t\"\ntarget = \"config.toml\"\nscope = \"global\"\nsource = \"aliyun\"\ncontent = \"[net]\\ngit-fetch-with-cli = true\\n\"\n";
+        assert_eq!(parse_snapshot(official).unwrap().source, "official");
     }
 
     #[test]
