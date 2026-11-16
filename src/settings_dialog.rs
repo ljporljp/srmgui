@@ -101,7 +101,13 @@ fn read_number(
 }
 
 /// 打开设置对话框。
-pub(crate) fn open_settings_dialog(window: &mut Window, cx: &mut App) {
+///
+/// `on_saved` 在设置成功写盘后调用，供调用方按新配置重建定时任务等。
+pub(crate) fn open_settings_dialog(
+    window: &mut Window,
+    cx: &mut App,
+    on_saved: impl Fn(&mut Window, &mut App) + 'static,
+) {
     let current = read_settings();
     let defaults = AppConfig::default();
     let editing = effective_config(&current);
@@ -172,6 +178,9 @@ pub(crate) fn open_settings_dialog(window: &mut Window, cx: &mut App) {
     // 校验失败时的提示文案，保存成功或恢复默认后清空。
     let error: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
 
+    // 对话框构建器每帧重建，回调用 Rc 共享。
+    let on_saved: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(on_saved);
+
     window.open_dialog(cx, move |dialog, _window, cx| {
         let muted = cx.theme().muted_foreground;
 
@@ -228,6 +237,7 @@ pub(crate) fn open_settings_dialog(window: &mut Window, cx: &mut App) {
             let original = current.clone();
             let d = defaults.clone();
             let error = error.clone();
+            let on_saved = on_saved.clone();
 
             Button::new("settings-ok")
                 .label(rust_i18n::t!("settings.ok").to_string())
@@ -339,6 +349,8 @@ pub(crate) fn open_settings_dialog(window: &mut Window, cx: &mut App) {
                     }
                     logger::info("settings", rust_i18n::t!("settings.saved").to_string());
                     *error.borrow_mut() = None;
+                    // 通知调用方配置已变更（重建定时任务、立即刷新测速等）。
+                    on_saved(window, cx);
                     window.close_dialog(cx);
                 })
         };

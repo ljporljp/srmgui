@@ -16,7 +16,8 @@ use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::component::{IconName, TitleBar};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    Anchor, Animation, AnimationExt as _, AnyElement, Entity, SharedString, Window, div, px, rgb,
+    Anchor, Animation, AnimationExt as _, AnyElement, Entity, SharedString, Task, Window, div, px,
+    rgb,
 };
 
 use crate::add_form::{render_add_form, render_private_form};
@@ -63,6 +64,10 @@ pub(crate) struct RootView {
     pub(crate) new_registry_name_input: Entity<InputState>,
     pub(crate) new_registry_index_input: Entity<InputState>,
     pub(crate) new_registry_token_input: Entity<InputState>,
+    /// 测速定时任务，配置变更时丢弃并以新周期重建。
+    probe_task: Option<Task<()>>,
+    /// 更新检查定时任务，配置变更时丢弃并以新周期重建。
+    update_task: Option<Task<()>>,
 }
 
 impl RootView {
@@ -102,7 +107,7 @@ impl RootView {
         new_registry_token_input.update(cx, |state, cx| {
             state.set_masked(true, window, cx);
         });
-        let view = Self {
+        let mut view = Self {
             app,
             bottom_panel: BottomPanel::None,
             new_id_input,
@@ -112,6 +117,8 @@ impl RootView {
             new_registry_name_input,
             new_registry_index_input,
             new_registry_token_input,
+            probe_task: None,
+            update_task: None,
         };
 
         logger::info("app", rust_i18n::t!("log.app_start").to_string());
@@ -126,33 +133,54 @@ impl RootView {
         })
         .detach();
 
-        // 启动时立即测速，之后按配置周期自动重新测速。
-        cx.spawn(async move |view, cx| {
-            loop {
-                let _ = view.update(cx, |view, cx| view.measure_all(cx));
-                let settings = config_io::read_settings();
-                let interval = std::time::Duration::from_secs(
-                    config_io::effective_config(&settings).probe_interval_secs,
-                );
-                cx.background_executor().timer(interval).await;
-            }
-        })
-        .detach();
-
-        // 后台自动检查更新，发现新版本后在窗口右上角提示。
-        cx.spawn(async move |view, cx| {
-            loop {
-                let _ = view.update(cx, |view, cx| view.check_for_updates(cx));
-                let settings = config_io::read_settings();
-                let interval = std::time::Duration::from_secs(
-                    config_io::effective_config(&settings).update_interval_secs,
-                );
-                cx.background_executor().timer(interval).await;
-            }
-        })
-        .detach();
+        // 测速与更新检查各自由一个定时任务驱动，配置变更时重建任务。
+        view.start_probe_timer(cx);
+        view.start_update_timer(cx, true);
 
         view
+    }
+
+    /// 启动测速定时任务：先立即测速一次，之后按配置周期重复。
+    ///
+    /// 任务句柄保存在 `probe_task`，配置变更时丢弃旧句柄即可取消旧周期。
+    fn start_probe_timer(&mut self, cx: &mut Context<Self>) {
+        let interval = Duration::from_secs(
+            config_io::effective_config(&config_io::read_settings()).probe_interval_secs,
+        );
+        // 先取消旧任务（丢弃即取消），避免新旧周期短暂并存。
+        self.probe_task.take();
+        self.probe_task = Some(cx.spawn(async move |view, cx| {
+            let _ = view.update(cx, |view, cx| view.measure_all(cx));
+            loop {
+                cx.background_executor().timer(interval).await;
+                let _ = view.update(cx, |view, cx| view.measure_all(cx));
+            }
+        }));
+    }
+
+    /// 启动更新检查定时任务。
+    ///
+    /// `check_now` 为 false 时只按新周期等待，避免每次保存设置都请求一次接口。
+    fn start_update_timer(&mut self, cx: &mut Context<Self>, check_now: bool) {
+        let interval = Duration::from_secs(
+            config_io::effective_config(&config_io::read_settings()).update_interval_secs,
+        );
+        self.update_task.take();
+        self.update_task = Some(cx.spawn(async move |view, cx| {
+            if check_now {
+                let _ = view.update(cx, |view, cx| view.check_for_updates(cx));
+            }
+            loop {
+                cx.background_executor().timer(interval).await;
+                let _ = view.update(cx, |view, cx| view.check_for_updates(cx));
+            }
+        }));
+    }
+
+    /// 设置保存成功后调用：按新配置重建定时任务，并立即刷新测速结果。
+    fn on_settings_saved(&mut self, cx: &mut Context<Self>) {
+        self.start_probe_timer(cx);
+        self.start_update_timer(cx, false);
     }
 
     /// 语言切换后刷新输入框占位文字。
@@ -1491,7 +1519,21 @@ impl Render for RootView {
                                     .small()
                                     .secondary()
                                     .tooltip(rust_i18n::t!("settings.button_tip").to_string())
-                                    .on_click(|_, window, cx| settings_dialog::open_settings_dialog(window, cx)),
+                                    .on_click({
+                                        let view = cx.entity().downgrade();
+                                        move |_, window, cx| {
+                                            let view = view.clone();
+                                            settings_dialog::open_settings_dialog(
+                                                window,
+                                                cx,
+                                                move |_window, cx| {
+                                                    let _ = view.update(cx, |view, cx| {
+                                                        view.on_settings_saved(cx);
+                                                    });
+                                                },
+                                            );
+                                        }
+                                    }),
                             )
                             .child(
                                 h_flex()
