@@ -40,7 +40,7 @@ source:
   empty: Aún no hay espejos personalizados. Añade uno.
 
 scope:
-  label: Destino
+  label: Destino de la fuente Cargo
   global: Global
   project: Proyecto
   select: Elegir proyecto

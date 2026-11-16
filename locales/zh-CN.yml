@@ -40,7 +40,7 @@ source:
   empty: 还没有自定义源，请添加
 
 scope:
-  label: 配置位置
+  label: Cargo 源配置位置
   global: 全局
   project: 项目
   select: 选择项目

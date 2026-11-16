@@ -40,7 +40,7 @@ source:
   empty: Aucun miroir personnalisé pour l’instant. Veuillez en ajouter un.
 
 scope:
-  label: Destination
+  label: Destination de la source Cargo
   global: Global
   project: Projet
   select: Choisir un projet

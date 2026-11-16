@@ -40,7 +40,7 @@ source:
   empty: カスタムミラーはまだありません。追加してください。
 
 scope:
-  label: 設定の出力先
+  label: Cargo ソースの設定先
   global: グローバル
   project: プロジェクト
   select: プロジェクトを選択

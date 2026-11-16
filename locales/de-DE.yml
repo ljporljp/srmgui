@@ -40,7 +40,7 @@ source:
   empty: Noch keine benutzerdefinierten Spiegel. Bitte fügen Sie einen hinzu.
 
 scope:
-  label: Konfigurationsziel
+  label: Cargo-Quellen-Konfigurationsziel
   global: Global
   project: Projekt
   select: Projekt wählen

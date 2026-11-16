@@ -16,7 +16,7 @@ use gpui_kit::component::{IconName, TitleBar};
 use gpui_kit::base::Selectable;
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    Anchor, Animation, AnimationExt as _, AnyElement, Entity, SharedString, Window, div, px,
+    Anchor, Animation, AnimationExt as _, AnyElement, Entity, SharedString, Window, div, px, rgb,
 };
 
 use crate::add_form::render_add_form;
@@ -1222,6 +1222,16 @@ impl Render for RootView {
         )
         .to_string();
 
+        // 目标配置（全局 / 项目）选中态样式：柔和的蓝色，深浅主题下醒目但不刺眼
+        let scope_selected_style = {
+            let (bg, border, fg) = if cx.theme().is_dark() {
+                (rgb(0x1e3a8a), rgb(0x3b82f6), rgb(0xdbeafe))
+            } else {
+                (rgb(0xdbeafe), rgb(0x60a5fa), rgb(0x1d4ed8))
+            };
+            move |button: Button| button.bg(bg).border_color(border).text_color(fg)
+        };
+
         v_flex()
             .size_full()
             .bg(cx.theme().background)
@@ -1359,17 +1369,25 @@ impl Render for RootView {
                                         .text_color(cx.theme().muted_foreground),
                                 )
                                 .child(
+                                    // 选中态用柔和的蓝色高亮，深浅主题下都醒目但不刺眼
                                     ButtonGroup::new("scope-group")
                                         .small()
                                         .child(
                                             Button::new("scope-global")
                                                 .label(rust_i18n::t!("scope.global").to_string())
-                                                .selected(!project_scope),
+                                                .selected(!project_scope)
+                                                .when(!project_scope, |button| {
+                                                    scope_selected_style(button)
+                                                }),
                                         )
                                         .child(
                                             Button::new("scope-project")
                                                 .label(rust_i18n::t!("scope.project").to_string())
-                                                .selected(project_scope),
+                                                .selected(project_scope)
+                                                .when(project_scope, |button| {
+                                                    // 末尾按钮默认无左边框，选中时补上，避免高亮边框开口
+                                                    scope_selected_style(button).border_l_1()
+                                                }),
                                         )
                                         .on_click(cx.listener(
                                             |view, clicks: &Vec<usize>, _window, cx| {

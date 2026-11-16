@@ -40,7 +40,7 @@ source:
   empty: No custom sources yet. Please add one.
 
 scope:
-  label: Config target
+  label: Cargo source location
   global: Global
   project: Project
   select: Choose project
