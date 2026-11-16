@@ -155,14 +155,11 @@ fn build_location(country: &str, province_name: Option<String>) -> Location {
     let province_name = province_name
         .map(|name| name.trim().to_string())
         .filter(|name| !name.is_empty());
-    let province = (country == REGION_CN)
-        .then(|| {
-            province_name
-                .as_deref()
-                .and_then(match_province)
-                .map(|province| province.code.to_string())
-        })
-        .flatten();
+    let province = province_name
+        .as_deref()
+        .filter(|_| country == REGION_CN)
+        .and_then(match_province)
+        .map(|province| province.code.to_string());
     Location {
         country,
         province,
@@ -305,11 +302,10 @@ struct Metric {
 }
 
 fn probe_metric(probe: &Probe) -> Option<Metric> {
-    let download = match &probe.download {
-        Level::Passed(detail) => detail.to_string(),
-        _ => return None,
+    let Level::Passed(download) = &probe.download else {
+        return None;
     };
-    let speed = parse_speed(&download)?;
+    let speed = parse_speed(download)?;
     let latency = match &probe.http {
         Level::Passed(detail) => parse_ms(detail),
         _ => None,

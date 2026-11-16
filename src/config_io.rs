@@ -1,6 +1,8 @@
 use anyhow::{Context, Result, bail};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use toml_edit::{DocumentMut, Item, Table, TableLike};
 
@@ -83,10 +85,10 @@ pub fn cargo_home() -> Result<PathBuf> {
     Ok(home_dir()?.join(".cargo"))
 }
 
-/// 测试专用的应用目录覆盖。
-///
-/// 集成测试会读写快照与自定义源元数据，必须重定向到临时目录，
-/// 不能污染真实的 `<HOME>/srmgui`。按线程保存，避免并行测试互相干扰。
+// 测试专用的应用目录覆盖。
+//
+// 集成测试会读写快照与自定义源元数据，必须重定向到临时目录，
+// 不能污染真实的 `<HOME>/srmgui`。按线程保存，避免并行测试互相干扰。
 #[cfg(test)]
 thread_local! {
     static TEST_APP_DIR: std::cell::RefCell<Option<PathBuf>> =
@@ -97,6 +99,7 @@ thread_local! {
 #[cfg(test)]
 pub(crate) fn set_test_app_dir(dir: Option<PathBuf>) {
     TEST_APP_DIR.with(|cell| *cell.borrow_mut() = dir);
+    invalidate_config_cache();
 }
 
 /// 应用配置目录：`<HOME>/srmgui`，与日志目录 `<HOME>/srmgui/logs` 同级。
@@ -175,6 +178,21 @@ fn source_in_config(content: &str) -> Option<String> {
         .and_then(|crates_io| crates_io.get("replace-with"))
         .and_then(toml::Value::as_str);
     Some(replaced.unwrap_or("official").to_string())
+}
+
+/// 将快照记录中的 UTC 时间（`YYYY-MM-DD HH:MM:SS.mmm`）转换为本地时间展示。
+///
+/// 落盘时间保持 UTC 以保证文件名与跨时区一致；界面展示需与系统时间一致，
+/// 无法解析的旧格式内容按原样返回，避免展示层出错。
+pub(crate) fn snapshot_local_time(created_at: &str) -> String {
+    match chrono::NaiveDateTime::parse_from_str(created_at, "%Y-%m-%d %H:%M:%S%.3f") {
+        Ok(utc) => utc
+            .and_utc()
+            .with_timezone(&chrono::Local)
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string(),
+        Err(_) => created_at.to_string(),
+    }
 }
 
 /// 一次配置写入前的快照，用于出问题后一键回滚。
@@ -308,6 +326,38 @@ pub fn effective_config(settings: &Settings) -> AppConfig {
     }
 }
 
+/// 配置缓存代号：每次写入设置后自增，使所有线程的缓存失效。
+static CONFIG_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+thread_local! {
+    /// 当前线程缓存的运行时配置及其对应的配置代号。
+    static CONFIG_CACHE: RefCell<(u64, Option<AppConfig>)> = const { RefCell::new((u64::MAX, None)) };
+}
+
+/// 标记配置缓存失效（设置写盘成功、或测试切换应用目录后调用）。
+pub(crate) fn invalidate_config_cache() {
+    CONFIG_GENERATION.fetch_add(1, Ordering::Relaxed);
+}
+
+/// 读取运行时有效配置（带进程内缓存）。
+///
+/// 日志写入、测速、界面渲染等高频路径都走这里，避免每帧/每行日志反复读盘解析；
+/// 只有设置真正落盘后缓存才会失效。
+pub fn cached_config() -> AppConfig {
+    let generation = CONFIG_GENERATION.load(Ordering::Relaxed);
+    CONFIG_CACHE.with(|cell| {
+        let mut cache = cell.borrow_mut();
+        if cache.0 == generation {
+            if let Some(config) = &cache.1 {
+                return config.clone();
+            }
+        }
+        let config = effective_config(&read_settings());
+        *cache = (generation, Some(config.clone()));
+        config
+    })
+}
+
 /// 读取应用设置，文件不存在或解析失败时回退默认值。
 pub fn read_settings() -> Settings {
     let Some(text) = settings_path()
@@ -321,47 +371,23 @@ pub fn read_settings() -> Settings {
     };
     // 把可能的默认值映射回 None，避免写回时产生冗余行。
     let defaults = AppConfig::default();
-    let opt_u64 = |key: &str, def: u64| -> Option<u64> {
-        root.get(key)
-            .and_then(toml::Value::as_integer)
-            .map(|v| v as u64)
-            .filter(|v| *v != def)
-    };
-    let opt_usize = |key: &str, def: usize| -> Option<usize> {
-        root.get(key)
-            .and_then(toml::Value::as_integer)
-            .map(|v| v as usize)
-            .filter(|v| *v != def)
-    };
-    let opt_str = |key: &str, def: &str| -> Option<String> {
+    let text = |key: &str| {
         root.get(key)
             .and_then(toml::Value::as_str)
             .map(str::to_string)
-            .filter(|s| s != def)
     };
+    let int = |key: &str| root.get(key).and_then(toml::Value::as_integer);
+    let opt_u64 = |key: &str, def: u64| int(key).map(|v| v as u64).filter(|v| *v != def);
+    let opt_usize = |key: &str, def: usize| int(key).map(|v| v as usize).filter(|v| *v != def);
+    let opt_str = |key: &str, def: &str| text(key).filter(|value| value != def);
 
     Settings {
-        language: root
-            .get("language")
-            .and_then(toml::Value::as_str)
-            .map(str::to_string),
-        region: root
-            .get("region")
-            .and_then(toml::Value::as_str)
-            .map(str::to_string),
-        province: root
-            .get("province")
-            .and_then(toml::Value::as_str)
-            .map(str::to_string),
-        province_name: root
-            .get("province_name")
-            .and_then(toml::Value::as_str)
-            .map(str::to_string),
-        project_root: root
-            .get("project_root")
-            .and_then(toml::Value::as_str)
-            .map(PathBuf::from),
-        project_scope: root.get("scope").and_then(toml::Value::as_str) == Some("project"),
+        language: text("language"),
+        region: text("region"),
+        province: text("province"),
+        province_name: text("province_name"),
+        project_root: text("project_root").map(PathBuf::from),
+        project_scope: text("scope").as_deref() == Some("project"),
         timeout_secs: opt_u64("timeout_secs", defaults.timeout_secs),
         download_max_kb: opt_u64("download_max_kb", defaults.download_max_kb),
         sample_crate: opt_str("sample_crate", &defaults.sample_crate),
@@ -410,18 +436,19 @@ pub fn write_settings(settings: &Settings) -> Result<()> {
         ));
     }
     // 仅写入与默认值不同的参数
-    if let Some(value) = settings
-        .timeout_secs
-        .filter(|v| *v != defaults.timeout_secs)
-    {
-        content.push_str(&format!("timeout_secs = {value}\n"));
+    macro_rules! push_number {
+        ($key:literal, $value:expr, $default:expr) => {
+            if let Some(value) = $value.filter(|v| *v != $default) {
+                content.push_str(&format!(concat!($key, " = {}\n"), value));
+            }
+        };
     }
-    if let Some(value) = settings
-        .download_max_kb
-        .filter(|v| *v != defaults.download_max_kb)
-    {
-        content.push_str(&format!("download_max_kb = {value}\n"));
-    }
+    push_number!("timeout_secs", settings.timeout_secs, defaults.timeout_secs);
+    push_number!(
+        "download_max_kb",
+        settings.download_max_kb,
+        defaults.download_max_kb
+    );
     if let Some(krate) = settings
         .sample_crate
         .as_deref()
@@ -429,48 +456,41 @@ pub fn write_settings(settings: &Settings) -> Result<()> {
     {
         content.push_str(&format!("sample_crate = {}\n", quote(krate)));
     }
-    if let Some(value) = settings
-        .max_redirects
-        .filter(|v| *v != defaults.max_redirects)
-    {
-        content.push_str(&format!("max_redirects = {value}\n"));
-    }
-    if let Some(value) = settings
-        .probe_interval_secs
-        .filter(|v| *v != defaults.probe_interval_secs)
-    {
-        content.push_str(&format!("probe_interval_secs = {value}\n"));
-    }
-    if let Some(value) = settings
-        .update_interval_secs
-        .filter(|v| *v != defaults.update_interval_secs)
-    {
-        content.push_str(&format!("update_interval_secs = {value}\n"));
-    }
-    if let Some(value) = settings
-        .snapshot_limit
-        .filter(|v| *v != defaults.snapshot_limit)
-    {
-        content.push_str(&format!("snapshot_limit = {value}\n"));
-    }
-    if let Some(value) = settings.max_log_mb.filter(|v| *v != defaults.max_log_mb) {
-        content.push_str(&format!("max_log_mb = {value}\n"));
-    }
-    if let Some(value) = settings
-        .max_rotated_logs
-        .filter(|v| *v != defaults.max_rotated_logs)
-    {
-        content.push_str(&format!("max_rotated_logs = {value}\n"));
-    }
-    if let Some(value) = settings
-        .max_log_entries
-        .filter(|v| *v != defaults.max_log_entries)
-    {
-        content.push_str(&format!("max_log_entries = {value}\n"));
-    }
+    push_number!(
+        "max_redirects",
+        settings.max_redirects,
+        defaults.max_redirects
+    );
+    push_number!(
+        "probe_interval_secs",
+        settings.probe_interval_secs,
+        defaults.probe_interval_secs
+    );
+    push_number!(
+        "update_interval_secs",
+        settings.update_interval_secs,
+        defaults.update_interval_secs
+    );
+    push_number!(
+        "snapshot_limit",
+        settings.snapshot_limit,
+        defaults.snapshot_limit
+    );
+    push_number!("max_log_mb", settings.max_log_mb, defaults.max_log_mb);
+    push_number!(
+        "max_rotated_logs",
+        settings.max_rotated_logs,
+        defaults.max_rotated_logs
+    );
+    push_number!(
+        "max_log_entries",
+        settings.max_log_entries,
+        defaults.max_log_entries
+    );
     std::fs::write(&path, content).with_context(|| {
         rust_i18n::t!("error.write_file", path = path.display().to_string()).to_string()
     })?;
+    invalidate_config_cache();
     Ok(())
 }
 
@@ -506,19 +526,10 @@ pub fn current_source_at(path: &Path) -> Result<Option<String>> {
     let text = std::fs::read_to_string(path).with_context(|| {
         rust_i18n::t!("error.read_file", path = path.display().to_string()).to_string()
     })?;
-    let root: toml::Table = text
-        .parse()
+    // 先校验语法以便把错误完整上报给界面，再复用统一的内容推导规则。
+    text.parse::<toml::Table>()
         .with_context(|| rust_i18n::t!("error.parse_cargo_config").to_string())?;
-
-    // `[source.crates-io] replace-with = "..."`
-    if let Some(toml::Value::Table(src)) = root.get("source") {
-        if let Some(toml::Value::Table(cio)) = src.get("crates-io") {
-            if let Some(toml::Value::String(s)) = cio.get("replace-with") {
-                return Ok(Some(s.clone()));
-            }
-        }
-    }
-    Ok(Some("official".to_string()))
+    Ok(source_in_config(&text))
 }
 
 /// 读取指定作用域当前生效的源。
@@ -541,41 +552,33 @@ pub fn read_customs() -> Result<HashMap<String, CustomSource>> {
     let mut customs = HashMap::new();
 
     // 1. 从 cargo config.toml 读取所有自定义源（id -> url）
-    if let Ok(path) = config_path() {
-        if path.exists() {
-            if let Ok(text) = std::fs::read_to_string(&path) {
-                if let Ok(root) = text.parse::<toml::Table>() {
-                    if let Some(toml::Value::Table(src)) = root.get("source") {
-                        for (k, v) in src {
-                            if k == "crates-io" {
-                                continue;
-                            }
-                            if let toml::Value::Table(t) = v {
-                                if let Some(toml::Value::String(url)) = t.get("registry") {
-                                    customs.insert(
-                                        k.clone(),
-                                        CustomSource::new(k.clone(), url.clone(), ""),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
+    let config = config_path()
+        .ok()
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|text| text.parse::<toml::Table>().ok());
+    if let Some(sources) = config
+        .as_ref()
+        .and_then(|root| root.get("source"))
+        .and_then(toml::Value::as_table)
+    {
+        for (id, value) in sources {
+            let Some(url) = value.get("registry").and_then(toml::Value::as_str) else {
+                continue;
+            };
+            if id != "crates-io" {
+                customs.insert(id.clone(), CustomSource::new(id.clone(), url, ""));
             }
         }
     }
 
     // 2. 用 srmgui 元数据文件覆盖 name / description
-    if let Ok(path) = customs_path() {
-        if path.exists() {
-            if let Ok(text) = std::fs::read_to_string(&path) {
-                if let Ok(meta) = parse_customs_metadata(&text) {
-                    for (id, src) in meta {
-                        customs.insert(id, src);
-                    }
-                }
-            }
-        }
+    if let Some(meta) = customs_path()
+        .ok()
+        .filter(|path| path.is_file())
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|text| parse_customs_metadata(&text).ok())
+    {
+        customs.extend(meta);
     }
 
     Ok(customs)
@@ -726,10 +729,7 @@ pub fn upsert_private_registry(
 ) -> Result<()> {
     let existing = read_optional(config_path)?;
     let merged = merge_registry_entry(&existing, name, index)?;
-    if existing != merged && !existing.trim().is_empty() {
-        let _ = save_snapshot(config_path, scope, "", &existing);
-    }
-    write_merged(config_path, &merged)?;
+    commit_merged(config_path, scope, "", &existing, &merged)?;
 
     if let Some(token) = token.map(str::trim).filter(|token| !token.is_empty()) {
         set_registry_token(name, token)?;
@@ -741,12 +741,7 @@ pub fn upsert_private_registry(
 pub fn remove_private_registry(path: &Path, scope: &str, name: &str) -> Result<()> {
     let existing = read_optional(path)?;
     let merged = remove_registry_entry(&existing, name)?;
-    if existing != merged {
-        if !existing.trim().is_empty() {
-            let _ = save_snapshot(path, scope, "", &existing);
-        }
-        write_merged(path, &merged)?;
-    }
+    commit_merged(path, scope, "", &existing, &merged)?;
 
     // 全局配置里仍定义同名 registry 时保留 token，避免影响其他作用域。
     let still_defined = config_defines_registry(path, name)
@@ -775,7 +770,7 @@ pub fn set_registry_token(name: &str, token: &str) -> Result<PathBuf> {
 pub fn remove_registry_token(name: &str) -> Result<()> {
     let path = credentials_path()?;
     let existing = read_optional(&path)?;
-    let merged = remove_token_entry(&existing, name)?;
+    let merged = remove_registry_entry(&existing, name)?;
     if existing != merged {
         write_merged(&path, &merged)?;
     }
@@ -961,21 +956,30 @@ pub fn write_project_config(root: &Path, content: &str, source: &str) -> Result<
     Ok(path)
 }
 
-/// 计算写入后的完整配置内容（与现有文件合并，不落盘），用于写入前预览。
-pub fn preview_config(path: &Path, content: &str) -> Result<String> {
-    merge_config(&read_optional(path)?, content)
+/// 用调用方已读取的现有内容计算合并结果（不落盘），用于写入前预览。
+pub fn preview_config_from(existing: &str, content: &str) -> Result<String> {
+    merge_config(existing, content)
 }
 
 /// 写入配置文件：内容有变化时先保存配置快照，再保留 `.bak` 并落盘。
 fn write_config_scoped(path: &Path, content: &str, scope: &str, source: &str) -> Result<()> {
     let existing = read_optional(path)?;
     let merged = merge_config(&existing, content)?;
+    commit_merged(path, scope, source, &existing, &merged)
+}
 
-    // 内容确实发生变化时保留一份快照，供出问题后一键回滚。
+/// 落盘合并后的内容：内容确实变化且原文件非空时先留一份快照。
+fn commit_merged(
+    path: &Path,
+    scope: &str,
+    source: &str,
+    existing: &str,
+    merged: &str,
+) -> Result<()> {
     if existing != merged && !existing.trim().is_empty() {
-        let _ = save_snapshot(path, scope, source, &existing);
+        let _ = save_snapshot(path, scope, source, existing);
     }
-    write_merged(path, &merged)
+    write_merged(path, merged)
 }
 
 /// 写入配置文件：自动创建父目录，并在覆盖前备份为 `.bak`。
@@ -1016,10 +1020,7 @@ pub fn read_config_content(path: &Path) -> Result<String> {
 /// 写入健康检查修复后的完整内容：先保留快照，再备份 `.bak` 后落盘。
 pub(crate) fn write_repaired(path: &Path, scope: &str, content: &str) -> Result<()> {
     let existing = read_optional(path)?;
-    if existing != content && !existing.trim().is_empty() {
-        let _ = save_snapshot(path, scope, "", &existing);
-    }
-    write_merged(path, content)
+    commit_merged(path, scope, "", &existing, content)
 }
 
 /// 读取文件内容，文件不存在时视为空内容。
@@ -1071,25 +1072,8 @@ pub fn restore_snapshot(snapshot: &Snapshot) -> Result<()> {
         .content
         .parse::<toml::Table>()
         .with_context(|| rust_i18n::t!("error.parse_cargo_config").to_string())?;
-
-    if let Some(parent) = snapshot.target.parent() {
-        std::fs::create_dir_all(parent).with_context(|| {
-            rust_i18n::t!("error.create_dir", path = parent.display().to_string()).to_string()
-        })?;
-    }
-    if snapshot.target.exists() {
-        let mut backup = snapshot.target.as_os_str().to_os_string();
-        backup.push(".bak");
-        let _ = std::fs::copy(&snapshot.target, PathBuf::from(backup));
-    }
-    std::fs::write(&snapshot.target, &snapshot.content).with_context(|| {
-        rust_i18n::t!(
-            "error.write_file",
-            path = snapshot.target.display().to_string()
-        )
-        .to_string()
-    })?;
-    Ok(())
+    // 复用统一的落盘逻辑：自动建目录并在覆盖前保留 `.bak`。
+    write_merged(&snapshot.target, &snapshot.content)
 }
 
 /// 在指定目录写出一份快照文件。
@@ -1169,7 +1153,7 @@ fn parse_snapshot(text: &str) -> Option<Snapshot> {
 
 /// 只保留最近 [`AppConfig::snapshot_limit`] 份快照（值来自用户设置，回退默认 10）。
 fn prune_snapshots(dir: &Path) {
-    let limit = effective_config(&read_settings()).snapshot_limit;
+    let limit = cached_config().snapshot_limit;
     let mut files = snapshot_files(dir);
     files.sort();
     let excess = files.len().saturating_sub(limit);
@@ -1286,21 +1270,50 @@ fn merge_token_entry(existing: &str, name: &str, token: &str) -> Result<String> 
     Ok(doc.to_string())
 }
 
-/// 从 credentials 内容中删除 `[registries.<name>]`。
-fn remove_token_entry(existing: &str, name: &str) -> Result<String> {
-    if existing.trim().is_empty() {
-        return Ok(String::new());
-    }
-    let mut doc = parse_document(existing)?;
-    if let Some(registries) = doc.get_mut("registries").and_then(Item::as_table_like_mut) {
-        registries.remove(name);
-    }
-    Ok(doc.to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn settings_cache_is_invalidated_after_write() {
+        let dir =
+            std::env::temp_dir().join(format!("srmgui-settings-cache-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        set_test_app_dir(Some(dir.clone()));
+
+        let mut settings = read_settings();
+        settings.probe_interval_secs = Some(77);
+        write_settings(&settings).unwrap();
+        assert_eq!(cached_config().probe_interval_secs, 77);
+
+        settings.probe_interval_secs = Some(99);
+        write_settings(&settings).unwrap();
+        assert_eq!(
+            cached_config().probe_interval_secs,
+            99,
+            "写入设置后运行时配置缓存必须失效"
+        );
+
+        set_test_app_dir(None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn snapshot_time_is_shown_in_local_time() {
+        let expected = chrono::NaiveDateTime::parse_from_str(
+            "2026-11-16 10:00:00.000",
+            "%Y-%m-%d %H:%M:%S%.3f",
+        )
+        .unwrap()
+        .and_utc()
+        .with_timezone(&chrono::Local)
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
+        assert_eq!(snapshot_local_time("2026-11-16 10:00:00.000"), expected);
+        // 无法解析的历史内容按原样展示，不能吞掉信息。
+        assert_eq!(snapshot_local_time("t"), "t");
+    }
 
     fn sample() -> HashMap<String, CustomSource> {
         HashMap::from([
@@ -1528,8 +1541,11 @@ mod tests {
         let original = "[source.crates-io]\nreplace-with = \"old\"\n";
         std::fs::write(&path, original).unwrap();
 
-        let preview =
-            preview_config(&path, "[source.crates-io]\nreplace-with = \"new\"\n").unwrap();
+        let preview = preview_config_from(
+            &read_config_content(&path).unwrap(),
+            "[source.crates-io]\nreplace-with = \"new\"\n",
+        )
+        .unwrap();
         assert!(preview.contains("replace-with = \"new\""));
         assert!(!preview.contains("replace-with = \"old\""));
         // 预览不能改动磁盘上的文件
@@ -1647,7 +1663,7 @@ mod tests {
         assert!(merged.contains("[registries.corp]"));
         assert!(merged.contains("token = \"secret-token\""));
 
-        let removed = remove_token_entry(&merged, "corp").unwrap();
+        let removed = remove_registry_entry(&merged, "corp").unwrap();
         assert!(!removed.contains("[registries.corp]"));
         assert!(removed.contains("[registry]"));
         assert!(removed.parse::<toml::Table>().is_ok());

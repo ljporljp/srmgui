@@ -1,14 +1,14 @@
 use std::io::Read;
 use std::io::Write;
 use std::net::TcpStream;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::time::Instant;
 
 use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned};
 
-use crate::config_io::{AppConfig, effective_config, read_settings};
+use crate::config_io::{AppConfig, cached_config};
 
 /// 更新安装包允许的最大下载字节数（256MB，不建议修改）。
 const MAX_INSTALLER_BYTES: usize = 256 * 1024 * 1024;
@@ -52,7 +52,7 @@ impl ProbeReport {
 ///
 /// 任一层失败时，后续层标记为 `Skipped`。
 pub fn probe(registry_url: &str) -> ProbeReport {
-    let cfg = effective_config(&read_settings());
+    let cfg = cached_config();
     let mut report = ProbeReport::skipped();
 
     let target = match parse(registry_url) {
@@ -214,7 +214,7 @@ fn parse_latest_version(body: &str) -> Option<String> {
 
 /// 获取任意 URL 的响应（状态码 + 正文），供更新检查等通用场景使用。
 pub fn fetch(url: &str, accept: &str, max_bytes: usize) -> std::io::Result<(String, Vec<u8>)> {
-    let cfg = effective_config(&read_settings());
+    let cfg = cached_config();
     let target = parse(url)?;
     let resp = http_get(&target, &target.path, accept, max_bytes, &cfg)?;
     Ok((resp.status, resp.body))
@@ -321,19 +321,25 @@ fn download_url(dl: &str, krate: &str, version: &str) -> String {
 }
 
 fn tls_config() -> Arc<ClientConfig> {
-    let provider = Arc::new(rustls::crypto::ring::default_provider());
-    let mut roots = RootCertStore::empty();
-    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-    // 追加系统证书库，兼容企业代理/自建根证书（GitHub API 等可能被其拦截）。
-    let native = rustls_native_certs::load_native_certs();
-    roots.add_parsable_certificates(native.certs);
-    Arc::new(
-        ClientConfig::builder_with_provider(provider)
-            .with_safe_default_protocol_versions()
-            .expect("ring supports the default protocol versions")
-            .with_root_certificates(roots)
-            .with_no_client_auth(),
-    )
+    // 证书库加载开销较大，整个进程只构建一次。
+    static CONFIG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
+    CONFIG
+        .get_or_init(|| {
+            let provider = Arc::new(rustls::crypto::ring::default_provider());
+            let mut roots = RootCertStore::empty();
+            roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            // 追加系统证书库，兼容企业代理/自建根证书（GitHub API 等可能被其拦截）。
+            let native = rustls_native_certs::load_native_certs();
+            roots.add_parsable_certificates(native.certs);
+            Arc::new(
+                ClientConfig::builder_with_provider(provider)
+                    .with_safe_default_protocol_versions()
+                    .expect("ring supports the default protocol versions")
+                    .with_root_certificates(roots)
+                    .with_no_client_auth(),
+            )
+        })
+        .clone()
 }
 
 struct Response {
@@ -598,16 +604,17 @@ fn parse(raw: &str) -> std::io::Result<Target> {
         None => (after_scheme, "/"),
     };
 
+    let default_port = if https { 443 } else { 80 };
     let (host, port) = if let Some((h, p)) = hostpart.rsplit_once(':') {
         match p.parse::<u16>() {
             Ok(port) => (
                 h.trim_start_matches('[').trim_end_matches(']').to_string(),
                 port,
             ),
-            Err(_) => (hostpart.to_string(), 443),
+            Err(_) => (hostpart.to_string(), default_port),
         }
     } else {
-        (hostpart.to_string(), 443)
+        (hostpart.to_string(), default_port)
     };
 
     let path = if path.is_empty() { "/" } else { path }.to_string();
@@ -637,6 +644,12 @@ mod tests {
         assert_eq!(t.host, "example.com");
         assert_eq!(t.port, 8080);
         assert_eq!(t.path, "/foo");
+    }
+
+    #[test]
+    fn plain_http_without_port_defaults_to_80() {
+        let t = parse("sparse+http://mirrors.example.cn/").unwrap();
+        assert_eq!(t.port, 80, "未显式指定端口时应按 http 协议使用 80");
     }
 
     #[test]

@@ -143,6 +143,8 @@ pub(crate) fn parse_manifest(text: &str) -> Result<Vec<ManifestSource>, String> 
 
     let mut sources = Vec::new();
     let mut seen = HashSet::new();
+    // 兜底清单只构建一次，避免每条源都重新分配整份内置源列表。
+    let builtins = registry::builtins();
     for item in items {
         let id = item.id.trim().to_string();
         let url = item.url.trim().to_string();
@@ -150,9 +152,7 @@ pub(crate) fn parse_manifest(text: &str) -> Result<Vec<ManifestSource>, String> 
             continue;
         }
         // 旧版清单没有地区字段：按编译期内置源补齐，保证推荐逻辑可用。
-        let builtin = registry::builtins()
-            .into_iter()
-            .find(|builtin| builtin.id == id);
+        let builtin = builtins.iter().find(|builtin| builtin.id == id);
         let region = match item.region.trim().to_ascii_uppercase() {
             region if !region.is_empty() => region,
             _ => builtin

@@ -148,41 +148,12 @@ fn registry_row(registry: config_io::PrivateRegistry, cx: &mut Context<RootView>
 
 /// 删除私有 registry：同步清理 `[registries]` 配置与认证 token。
 fn delete_registry(view: &mut RootView, name: &str, cx: &mut Context<RootView>) {
-    let (project_scope, project_root) = {
-        let state = &view.app.read(cx).state;
-        (state.project_scope, state.project_root.clone())
-    };
-    if project_scope && project_root.is_none() {
-        view.app.update(cx, |model, cx| {
-            model.state.status =
-                Status::Error(rust_i18n::t!("status.project_required").to_string().into());
-            cx.notify();
-        });
-        return;
-    }
-
-    let target = match config_io::config_path_scoped(if project_scope {
-        project_root.as_deref()
-    } else {
-        None
-    }) {
-        Ok(path) => path,
-        Err(error) => {
-            view.app.update(cx, |model, cx| {
-                model.state.status = Status::Error(
-                    rust_i18n::t!("status.private_failed", error = format!("{error:#}"))
-                        .to_string()
-                        .into(),
-                );
-                cx.notify();
-            });
+    let (target, scope) = match view.config_target(cx) {
+        Ok(target) => target,
+        Err(message) => {
+            view.set_status(Status::Error(message.into()), cx);
             return;
         }
-    };
-    let scope = if project_scope {
-        config_io::SCOPE_PROJECT
-    } else {
-        config_io::SCOPE_GLOBAL
     };
 
     match config_io::remove_private_registry(&target, scope, name) {
@@ -192,28 +163,28 @@ fn delete_registry(view: &mut RootView, name: &str, cx: &mut Context<RootView>) 
                 rust_i18n::t!("log.private_delete", name = name).to_string(),
             );
             view.reload_registries(cx);
-            view.app.update(cx, |model, cx| {
-                model.state.status = Status::Success(
+            view.set_status(
+                Status::Success(
                     rust_i18n::t!("status.private_deleted", name = name)
                         .to_string()
                         .into(),
-                );
-                cx.notify();
-            });
+                ),
+                cx,
+            );
         }
         Err(error) => {
             logger::error(
                 "registry",
                 rust_i18n::t!("log.private_failed", error = format!("{error:#}")).to_string(),
             );
-            view.app.update(cx, |model, cx| {
-                model.state.status = Status::Error(
+            view.set_status(
+                Status::Error(
                     rust_i18n::t!("status.private_failed", error = format!("{error:#}"))
                         .to_string()
                         .into(),
-                );
-                cx.notify();
-            });
+                ),
+                cx,
+            );
         }
     }
 }

@@ -122,7 +122,7 @@ fn source_row(
         } else {
             cx.theme().border
         })
-        .when(is_selected, |f| f.cursor_pointer());
+        .cursor_pointer();
 
     if deletable {
         row = row.child(
@@ -152,13 +152,9 @@ fn source_row(
                                 view.app.update(cx, |model, cx| {
                                     model.state.customs.remove(&delete_id);
                                     if model.state.selected.as_ref() == delete_id {
-                                        model.state.selected = model
-                                            .state
-                                            .builtins
-                                            .first()
-                                            .map(|source| source.id.clone())
-                                            .unwrap_or_else(|| "rsproxy".to_string())
-                                            .into();
+                                        // 选中的自定义源被删除后回到 crates.io 官方源，
+                                        // 与首次启动的默认高亮保持一致。
+                                        model.state.selected = "official".to_string().into();
                                     }
                                     cx.notify();
                                 });

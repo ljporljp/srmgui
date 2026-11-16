@@ -84,11 +84,18 @@ pub(crate) fn filter_entries(
     keyword: &str,
 ) -> Vec<LogEntry> {
     let needle = keyword.trim().to_lowercase();
+    if needle.is_empty() {
+        // 无关键字时只按级别过滤，避免为每条日志都格式化并转小写。
+        return entries
+            .iter()
+            .filter(|entry| filter.allows(entry.level))
+            .cloned()
+            .collect();
+    }
     entries
         .iter()
         .filter(|entry| {
-            filter.allows(entry.level)
-                && (needle.is_empty() || entry.format().to_lowercase().contains(&needle))
+            filter.allows(entry.level) && entry.format().to_lowercase().contains(&needle)
         })
         .cloned()
         .collect()

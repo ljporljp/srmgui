@@ -52,7 +52,9 @@ impl State {
         project_root: Option<PathBuf>,
         project_scope: bool,
     ) -> Self {
-        let selected = current.clone().unwrap_or_else(|| "rsproxy".to_string());
+        // 无既有配置（首次启动）时默认高亮 crates.io 官方源，
+        // 避免把某个镜像误当成已生效的当前源。
+        let selected = current.clone().unwrap_or_else(|| "official".to_string());
         Self {
             builtins: manifest::current_sources(),
             selected: selected.into(),

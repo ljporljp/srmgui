@@ -21,11 +21,10 @@ pub(crate) fn render_add_form(view: &RootView, cx: &mut Context<RootView>) -> An
         let description: String = view.new_desc_input.read(cx).value().trim().to_string();
         if id.is_empty() || url.is_empty() {
             logger::warn("custom", rust_i18n::t!("log.add_empty").to_string());
-            view.app.update(cx, |model, cx| {
-                model.state.status =
-                    Status::Error(rust_i18n::t!("add.error_empty").to_string().into());
-                cx.notify();
-            });
+            view.set_status(
+                Status::Error(rust_i18n::t!("add.error_empty").to_string().into()),
+                cx,
+            );
             return;
         }
         if manifest::current_sources().iter().any(|r| r.id == id) {
@@ -33,14 +32,14 @@ pub(crate) fn render_add_form(view: &RootView, cx: &mut Context<RootView>) -> An
                 "custom",
                 rust_i18n::t!("log.add_builtin", id = id.as_str()).to_string(),
             );
-            view.app.update(cx, |model, cx| {
-                model.state.status = Status::Error(
+            view.set_status(
+                Status::Error(
                     rust_i18n::t!("add.error_builtin", id = id)
                         .to_string()
                         .into(),
-                );
-                cx.notify();
-            });
+                ),
+                cx,
+            );
             return;
         }
         if view.app.read(cx).state.customs.contains_key(&id) {
@@ -48,14 +47,14 @@ pub(crate) fn render_add_form(view: &RootView, cx: &mut Context<RootView>) -> An
                 "custom",
                 rust_i18n::t!("log.add_exists", id = id.as_str()).to_string(),
             );
-            view.app.update(cx, |model, cx| {
-                model.state.status = Status::Error(
+            view.set_status(
+                Status::Error(
                     rust_i18n::t!("add.error_exists", id = id)
                         .to_string()
                         .into(),
-                );
-                cx.notify();
-            });
+                ),
+                cx,
+            );
             return;
         }
         let display_name = if name.is_empty() { id.clone() } else { name };
@@ -173,10 +172,7 @@ pub(crate) fn render_private_form(view: &RootView, cx: &mut Context<RootView>) -
             .to_string();
 
         let set_error = |view: &mut RootView, message: String, cx: &mut Context<RootView>| {
-            view.app.update(cx, |model, cx| {
-                model.state.status = Status::Error(message.into());
-                cx.notify();
-            });
+            view.set_status(Status::Error(message.into()), cx);
         };
 
         if name.is_empty() || index.is_empty() {
@@ -212,39 +208,12 @@ pub(crate) fn render_private_form(view: &RootView, cx: &mut Context<RootView>) -
             return;
         }
 
-        let (project_scope, project_root) = {
-            let state = &view.app.read(cx).state;
-            (state.project_scope, state.project_root.clone())
-        };
-        if project_scope && project_root.is_none() {
-            set_error(
-                view,
-                rust_i18n::t!("status.project_required").to_string(),
-                cx,
-            );
-            return;
-        }
-
-        let target = match config_io::config_path_scoped(if project_scope {
-            project_root.as_deref()
-        } else {
-            None
-        }) {
-            Ok(path) => path,
-            Err(error) => {
-                set_error(
-                    view,
-                    rust_i18n::t!("status.private_failed", error = format!("{error:#}"))
-                        .to_string(),
-                    cx,
-                );
+        let (target, scope) = match view.config_target(cx) {
+            Ok(target) => target,
+            Err(message) => {
+                view.set_status(Status::Error(message.into()), cx);
                 return;
             }
-        };
-        let scope = if project_scope {
-            config_io::SCOPE_PROJECT
-        } else {
-            config_io::SCOPE_GLOBAL
         };
         let normalized = normalize_registry_index(&index);
         logger::info(
@@ -266,14 +235,14 @@ pub(crate) fn render_private_form(view: &RootView, cx: &mut Context<RootView>) -
         ) {
             Ok(()) => {
                 view.reload_registries(cx);
-                view.app.update(cx, |model, cx| {
-                    model.state.status = Status::Success(
+                view.set_status(
+                    Status::Success(
                         rust_i18n::t!("status.private_added", name = name.as_str())
                             .to_string()
                             .into(),
-                    );
-                    cx.notify();
-                });
+                    ),
+                    cx,
+                );
                 view.new_registry_name_input
                     .update(cx, |state, cx| state.set_value("", window, cx));
                 view.new_registry_index_input

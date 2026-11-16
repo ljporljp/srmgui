@@ -8,7 +8,7 @@ pub(crate) fn normalize_registry_url(url: &str) -> String {
     if url.starts_with("sparse+") || url.starts_with("http") {
         url.to_string()
     } else {
-        format!("sparse+https://{url}/")
+        format!("sparse+https://{}/", url.trim_end_matches('/'))
     }
 }
 

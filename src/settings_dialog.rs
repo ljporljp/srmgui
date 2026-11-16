@@ -392,41 +392,27 @@ pub(crate) fn open_settings_dialog(
                 .into_any_element()
         };
 
-        // 统一的设置行：左侧标题与说明自适应宽度，右侧输入框与单位宽度固定，
-        // 因此所有行的输入框右端严格对齐。
-        let row = |lbl: String,
-                   tip: String,
-                   unit: &'static str,
-                   id: &'static str,
-                   input: Entity<InputState>|
-         -> AnyElement {
-            h_flex()
-                .w_full()
-                .items_center()
-                .gap_4()
-                .py_1()
-                .child(
-                    v_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .gap_0()
-                        .child(Label::new(lbl).text_sm())
-                        .child(Label::new(tip).text_xs().text_color(muted)),
-                )
-                .child(
-                    h_flex()
-                        .flex_shrink_0()
-                        .items_center()
-                        .gap_2()
-                        .child(div().w(px(140.)).child(Input::new(&input).id(id)))
-                        .child(
-                            div()
-                                .w(px(28.))
-                                .child(Label::new(unit).text_xs().text_color(muted)),
-                        ),
-                )
-                .into_any_element()
-        };
+        // 统一的设置行：左侧标题与说明自适应宽度，右侧输入框宽度固定，
+        // 因此所有行的输入框右端严格对齐。单位已包含在各语言的标题文案中，
+        // 不再额外渲染单位文字，避免未国际化的中文单位与外语界面混排。
+        let row =
+            |lbl: String, tip: String, id: &'static str, input: Entity<InputState>| -> AnyElement {
+                h_flex()
+                    .w_full()
+                    .items_center()
+                    .gap_4()
+                    .py_1()
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap_0()
+                            .child(Label::new(lbl).text_sm())
+                            .child(Label::new(tip).text_xs().text_color(muted)),
+                    )
+                    .child(div().w(px(140.)).child(Input::new(&input).id(id)))
+                    .into_any_element()
+            };
 
         let divider = || div().h(px(1.0)).w_full().bg(cx.theme().border);
 
@@ -446,28 +432,24 @@ pub(crate) fn open_settings_dialog(
             .child(row(
                 rust_i18n::t!("settings.timeout").to_string(),
                 rust_i18n::t!("settings.timeout_tip").to_string(),
-                "秒",
                 "settings-timeout",
                 timeout.clone(),
             ))
             .child(row(
                 rust_i18n::t!("settings.redirects").to_string(),
                 rust_i18n::t!("settings.redirects_tip").to_string(),
-                "次",
                 "settings-redirects",
                 redirects.clone(),
             ))
             .child(row(
                 rust_i18n::t!("settings.sample_crate").to_string(),
                 rust_i18n::t!("settings.sample_crate_tip").to_string(),
-                "",
                 "settings-sample-crate",
                 sample_crate.clone(),
             ))
             .child(row(
                 rust_i18n::t!("settings.download_limit").to_string(),
                 rust_i18n::t!("settings.download_limit_tip").to_string(),
-                "KB",
                 "settings-download-kb",
                 download_kb.clone(),
             ))
@@ -476,14 +458,12 @@ pub(crate) fn open_settings_dialog(
             .child(row(
                 rust_i18n::t!("settings.probe_interval").to_string(),
                 rust_i18n::t!("settings.probe_interval_tip").to_string(),
-                "秒",
                 "settings-probe",
                 probe_int.clone(),
             ))
             .child(row(
                 rust_i18n::t!("settings.update_interval").to_string(),
                 rust_i18n::t!("settings.update_interval_tip").to_string(),
-                "秒",
                 "settings-update",
                 update_int.clone(),
             ))
@@ -492,7 +472,6 @@ pub(crate) fn open_settings_dialog(
             .child(row(
                 rust_i18n::t!("settings.snapshot_limit").to_string(),
                 rust_i18n::t!("settings.snapshot_limit_tip").to_string(),
-                "份",
                 "settings-snapshot",
                 snap_limit.clone(),
             ))
@@ -501,21 +480,18 @@ pub(crate) fn open_settings_dialog(
             .child(row(
                 rust_i18n::t!("settings.log_size").to_string(),
                 rust_i18n::t!("settings.log_size_tip").to_string(),
-                "MB",
                 "settings-log-mb",
                 log_mb.clone(),
             ))
             .child(row(
                 rust_i18n::t!("settings.log_rotated").to_string(),
                 rust_i18n::t!("settings.log_rotated_tip").to_string(),
-                "个",
                 "settings-log-rotated",
                 log_rot.clone(),
             ))
             .child(row(
                 rust_i18n::t!("settings.log_entries").to_string(),
                 rust_i18n::t!("settings.log_entries_tip").to_string(),
-                "条",
                 "settings-log-entries",
                 log_ent.clone(),
             ));

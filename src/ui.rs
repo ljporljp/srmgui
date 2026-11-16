@@ -96,15 +96,33 @@ pub(crate) fn scrolling_text(
 }
 
 /// 应用图标：编译期内嵌，不依赖运行时资源文件。
+///
+/// 图标每帧都会被渲染，缓存为单例可避免重复解码与纹理重复上传。
 pub(crate) fn logo_icon(size: f32) -> AnyElement {
-    let image = Image::from_bytes(
-        ImageFormat::Png,
-        include_bytes!("../assets/logo.png").to_vec(),
-    );
-    img(std::sync::Arc::new(image))
+    static LOGO: std::sync::OnceLock<std::sync::Arc<Image>> = std::sync::OnceLock::new();
+    let image = LOGO.get_or_init(|| {
+        std::sync::Arc::new(Image::from_bytes(
+            ImageFormat::Png,
+            include_bytes!("../assets/logo.png").to_vec(),
+        ))
+    });
+    img(image.clone())
         .w(px(size))
         .h(px(size))
         .flex_shrink_0()
+        .into_any_element()
+}
+
+/// 底部面板统一的滑入动画包装。
+pub(crate) fn bottom_slide(child: AnyElement) -> AnyElement {
+    div()
+        .id("bottom-panel-slide")
+        .with_animation(
+            "bottom-panel-slide-in",
+            Animation::new(Duration::from_millis(220)),
+            |this, delta| this.opacity(delta).mt(px(16.0 * (1.0 - delta))),
+        )
+        .child(child)
         .into_any_element()
 }
 

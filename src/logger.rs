@@ -1,6 +1,7 @@
 //! 应用日志模块。
 //!
-//! - 日志格式遵循业内通用约定：`[YYYY-MM-DD HH:MM:SS.mmm] [LEVEL] [module] message`
+//! - 日志格式遵循业内通用约定：`[YYYY-MM-DD HH:MM:SS.mmm ±HH:MM] [LEVEL] [module] message`
+//!   时间使用本地时间并附带时区偏移，与界面显示保持一致；
 //! - 日志文件归档到用户主目录下以应用名命名的目录：`<HOME>/srmgui/logs/srmgui.log`
 //! - 归档策略采用业内标准的按大小滚动（size-based rotation）：
 //!   * 单个日志文件最大 10 MB（可通过设置覆盖），超出后滚动；
@@ -9,12 +10,12 @@
 //! - 内存中保留最近 1000 条日志（可通过设置覆盖），供 UI 面板展示。
 
 use std::fs::{self, OpenOptions};
-use std::io::{BufWriter, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::config_io::{effective_config, read_settings};
+use crate::config_io::cached_config;
 
 /// 日志级别，从低到高排列。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -59,9 +60,9 @@ impl LogEntry {
     }
 }
 
-/// 从设置读取日志参数，回退默认值。
+/// 从设置读取日志参数，回退默认值（走缓存，避免每行日志都读盘）。
 fn cfg() -> crate::config_io::AppConfig {
-    effective_config(&read_settings())
+    cached_config()
 }
 
 /// 应用日志目录：`<HOME>/srmgui/logs`。
@@ -79,7 +80,7 @@ fn log_file_path() -> PathBuf {
 
 /// 日志写入器内部状态。
 struct LoggerInner {
-    writer: Option<BufWriter<fs::File>>,
+    writer: Option<fs::File>,
     path: PathBuf,
     bytes_written: u64,
     entries: Vec<LogEntry>,
@@ -91,7 +92,8 @@ impl LoggerInner {
             let _ = fs::create_dir_all(parent);
         }
         // 启动时若现存日志已超限，先滚动一次。
-        rotate_files(&path);
+        let config = cfg();
+        rotate_files(&path, config.max_log_mb, config.max_rotated_logs);
         let file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -99,7 +101,7 @@ impl LoggerInner {
             .expect("failed to open log file");
         let bytes_written = file.metadata().map(|m| m.len()).unwrap_or(0);
         Self {
-            writer: Some(BufWriter::new(file)),
+            writer: Some(file),
             path,
             bytes_written,
             entries: Vec::new(),
@@ -108,7 +110,7 @@ impl LoggerInner {
 
     fn write_entry(&mut self, level: LogLevel, module: &str, message: &str) {
         let entry = LogEntry {
-            timestamp: format_timestamp(),
+            timestamp: local_timestamp(),
             level,
             module: module.to_string(),
             message: message.to_string(),
@@ -116,12 +118,11 @@ impl LoggerInner {
         let line = entry.format();
         let bytes = line.len() as u64 + 1; // +1 换行符
 
-        let log_size_limit = cfg().max_log_mb * 1024 * 1024;
-        let max_entries = cfg().max_log_entries;
+        let config = cfg();
 
         // 若写入后会超限，先滚动再写。
-        if self.bytes_written + bytes > log_size_limit {
-            self.rotate();
+        if self.bytes_written + bytes > config.max_log_mb * 1024 * 1024 {
+            self.rotate(config.max_log_mb, config.max_rotated_logs);
         }
 
         if let Some(writer) = self.writer.as_mut() {
@@ -132,26 +133,26 @@ impl LoggerInner {
 
         // 内存缓冲：保留最近 N 条。
         self.entries.push(entry);
-        if self.entries.len() > max_entries {
-            let overflow = self.entries.len() - max_entries;
+        if self.entries.len() > config.max_log_entries {
+            let overflow = self.entries.len() - config.max_log_entries;
             self.entries.drain(0..overflow);
         }
     }
 
     /// 执行滚动：关闭当前文件、轮转归档文件、重新打开。
-    fn rotate(&mut self) {
+    fn rotate(&mut self, max_log_mb: u64, max_rotated: usize) {
         // 先 flush 并关闭当前文件，确保 Windows 下可重命名。
         if let Some(mut writer) = self.writer.take() {
             let _ = writer.flush();
             drop(writer);
         }
-        rotate_files(&self.path);
+        rotate_files(&self.path, max_log_mb, max_rotated);
         let file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
             .expect("failed to reopen log file after rotation");
-        self.writer = Some(BufWriter::new(file));
+        self.writer = Some(file);
         self.bytes_written = 0;
     }
 }
@@ -224,9 +225,8 @@ pub fn error(module: &str, message: impl AsRef<str>) {
 /// 当 `path` 指向的当前日志文件大小超过配置的上限时执行滚动：
 /// `srmgui.log` -> `srmgui.log.1`，旧的 `.1` -> `.2`，以此类推，
 /// 超过配置保留数量的最旧文件被删除。
-fn rotate_files(path: &Path) {
-    let log_size_limit = cfg().max_log_mb * 1024 * 1024;
-    let max_rotated = cfg().max_rotated_logs;
+fn rotate_files(path: &Path, max_log_mb: u64, max_rotated: usize) {
+    let log_size_limit = max_log_mb * 1024 * 1024;
     let size = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     if size < log_size_limit {
         return;
@@ -256,7 +256,7 @@ fn rotate_files(path: &Path) {
     let _ = fs::rename(path, &archived);
 }
 
-/// 生成 `YYYY-MM-DD HH:MM:SS.mmm` 格式的 UTC 时间戳。
+/// 生成 `YYYY-MM-DD HH:MM:SS.mmm` 格式的 UTC 时间戳（用于快照/导出文件名）。
 pub(crate) fn format_timestamp() -> String {
     let now = SystemTime::now();
     let dur = now.duration_since(UNIX_EPOCH).unwrap_or_default();
@@ -265,6 +265,16 @@ pub(crate) fn format_timestamp() -> String {
 
     let (year, month, day, hour, min, sec) = unix_to_ymdhms(secs);
     format!("{year:04}-{month:02}-{day:02} {hour:02}:{min:02}:{sec:02}.{millis:03}")
+}
+
+/// 日志用的本地时间戳，格式：`YYYY-MM-DD HH:MM:SS.mmm ±HH:MM`。
+///
+/// 日志面向用户阅读，必须与界面显示的时间一致；末尾带上时区偏移，
+/// 便于跨时区排查问题，也避免与 `format_timestamp` 的 UTC 文件名混淆。
+pub(crate) fn local_timestamp() -> String {
+    chrono::Local::now()
+        .format("%Y-%m-%d %H:%M:%S%.3f %:z")
+        .to_string()
 }
 
 /// 将 UNIX 时间戳（秒）转换为 UTC 年月日时分秒。
@@ -331,6 +341,24 @@ mod tests {
         assert!(ts.chars().nth(13) == Some(':'));
         assert!(ts.chars().nth(16) == Some(':'));
         assert!(ts.chars().nth(19) == Some('.'));
+    }
+
+    #[test]
+    fn local_timestamp_carries_timezone_offset() {
+        let ts = local_timestamp();
+        // YYYY-MM-DD HH:MM:SS.mmm ±HH:MM 共 30 个字符
+        assert_eq!(ts.len(), 30, "unexpected timestamp: {ts}");
+        assert_eq!(ts.chars().nth(10), Some(' '));
+        assert_eq!(ts.chars().nth(19), Some('.'));
+        assert_eq!(ts.chars().nth(23), Some(' '));
+        let offset = &ts[24..];
+        assert!(
+            offset.starts_with('+') || offset.starts_with('-'),
+            "时间戳必须带时区偏移: {ts}"
+        );
+        assert_eq!(offset.chars().nth(3), Some(':'));
+        assert!(offset[1..3].chars().all(|c| c.is_ascii_digit()));
+        assert!(offset[4..6].chars().all(|c| c.is_ascii_digit()));
     }
 
     #[test]

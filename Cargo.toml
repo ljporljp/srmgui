@@ -13,6 +13,7 @@ categories = ["development-tools", "command-line-utilities"]
 [dependencies]
 gpui-kit = "0.9"
 anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 toml = "0.8"
 toml_edit = "0.22"
 rust-i18n = "4"

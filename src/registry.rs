@@ -130,36 +130,129 @@ pub fn build_config(
     let mut out = String::new();
     out.push_str("[source.crates-io]\n");
     if selected != "official" {
-        out.push_str(&format!("replace-with = \"{selected}\"\n"));
+        out.push_str(&format!("replace-with = {}\n", toml_string(selected)));
     }
     out.push('\n');
 
-    let builtin_ids: Vec<&str> = sources.iter().map(|r| r.id.as_str()).collect();
+    let builtin_ids: std::collections::HashSet<&str> =
+        sources.iter().map(|r| r.id.as_str()).collect();
 
     for r in sources {
         // `official` is crates.io itself; never emit a [source.official] block.
         if r.id == "official" {
             continue;
         }
-        out.push_str(&format!("[source.{}]\n", r.id));
+        out.push_str(&format!("[source.{}]\n", toml_key(&r.id)));
         out.push_str(&format!("registry = \"{}\"\n\n", r.url));
     }
 
-    for (id, src) in customs {
+    // 自定义源按标识排序输出，保证同样的输入总是生成同样的配置（避免文件抖动）。
+    let mut custom_ids: Vec<&String> = customs.keys().collect();
+    custom_ids.sort();
+    for id in custom_ids {
         // Skip customs that shadow a built-in id to avoid duplicate sections.
-        if builtin_ids.contains(&id.as_str()) {
+        if builtin_ids.contains(id.as_str()) {
             continue;
         }
-        let url = if src.url.starts_with("sparse+") || src.url.starts_with("http") {
-            src.url.clone()
-        } else {
-            format!("sparse+https://{}/", src.url)
-        };
-        out.push_str(&format!("[source.{id}]\n"));
+        let url = crate::util::normalize_registry_url(&customs[id].url);
+        out.push_str(&format!("[source.{}]\n", toml_key(id)));
         out.push_str(&format!("registry = \"{url}\"\n\n"));
     }
 
     out.push_str("[net]\n");
     out.push_str("git-fetch-with-cli = true\n");
     out
+}
+
+/// 生成 TOML 字符串字面量：值必须始终带引号（如 `replace-with = "aliyun"`），
+/// 并对反斜杠、双引号与控制字符转义。
+fn toml_string(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    for c in value.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// 生成安全的 TOML 键：普通标识直接输出，含特殊字符时加引号转义，
+/// 避免用户填写的标识破坏整份配置文件。
+fn toml_key(key: &str) -> String {
+    let plain = !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if plain {
+        key.to_string()
+    } else {
+        format!("\"{}\"", key.replace('\\', "\\\\").replace('"', "\\\""))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::manifest::ManifestSource;
+
+    fn builtin(id: &str) -> ManifestSource {
+        ManifestSource::new(id, id, "", format!("sparse+https://{id}.example.cn/"))
+    }
+
+    #[test]
+    fn custom_sources_are_emitted_in_stable_order() {
+        let mut customs = HashMap::new();
+        customs.insert(
+            "zeta".to_string(),
+            CustomSource::new("zeta", "zeta.example.cn", ""),
+        );
+        customs.insert(
+            "alpha".to_string(),
+            CustomSource::new("alpha", "alpha.example.cn", ""),
+        );
+
+        let text = build_config("alpha", &[builtin("official")], &customs);
+        let alpha = text.find("[source.alpha]").expect("alpha block");
+        let zeta = text.find("[source.zeta]").expect("zeta block");
+        assert!(alpha < zeta, "自定义源必须按标识稳定排序输出");
+        assert!(text.contains("registry = \"sparse+https://alpha.example.cn/\""));
+    }
+
+    #[test]
+    fn replace_with_is_always_a_quoted_string() {
+        let text = build_config("aliyun", &[builtin("aliyun")], &HashMap::new());
+        assert!(text.contains("replace-with = \"aliyun\""));
+        let parsed = text
+            .parse::<toml::Table>()
+            .expect("生成的配置必须是合法 TOML");
+        assert_eq!(
+            parsed["source"]["crates-io"]["replace-with"].as_str(),
+            Some("aliyun")
+        );
+    }
+
+    #[test]
+    fn unsafe_custom_ids_are_quoted_to_keep_config_valid() {
+        let mut customs = HashMap::new();
+        customs.insert(
+            "evil\"]".to_string(),
+            CustomSource::new("evil", "evil.example.cn", ""),
+        );
+
+        let text = build_config("evil\"]", &[builtin("official")], &customs);
+        let parsed = text
+            .parse::<toml::Table>()
+            .expect("生成的配置必须是合法 TOML");
+        assert_eq!(
+            parsed["source"]["evil\"]"]["registry"].as_str(),
+            Some("sparse+https://evil.example.cn/")
+        );
+    }
 }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
@@ -16,8 +16,7 @@ use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::component::{IconName, TitleBar};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    Anchor, Animation, AnimationExt as _, AnyElement, ClipboardItem, Entity, SharedString, Task,
-    Window, div, px, rgb,
+    Anchor, AnyElement, App, ClipboardItem, Entity, SharedString, Task, Window, div, px, rgb,
 };
 
 use crate::add_form::{render_add_form, render_private_form};
@@ -42,7 +41,7 @@ use crate::region;
 use crate::registry;
 use crate::settings_dialog;
 use crate::source_list::{SourceItem, SourceList};
-use crate::ui::{STEP_WIDTH, level_tip, logo_icon, open_about_dialog, v_separator};
+use crate::ui::{STEP_WIDTH, bottom_slide, level_tip, logo_icon, open_about_dialog, v_separator};
 use crate::update::{self, Available, UpdateState};
 use crate::util::{normalize_registry_url, with_sources_extension};
 
@@ -235,9 +234,7 @@ impl RootView {
     ///
     /// 任务句柄保存在 `probe_task`，配置变更时丢弃旧句柄即可取消旧周期。
     fn start_probe_timer(&mut self, cx: &mut Context<Self>) {
-        let interval = Duration::from_secs(
-            config_io::effective_config(&config_io::read_settings()).probe_interval_secs,
-        );
+        let interval = Duration::from_secs(config_io::cached_config().probe_interval_secs);
         // 先取消旧任务（丢弃即取消），避免新旧周期短暂并存。
         self.probe_task.take();
         self.probe_task = Some(cx.spawn(async move |view, cx| {
@@ -253,9 +250,7 @@ impl RootView {
     ///
     /// `check_now` 为 false 时只按新周期等待，避免每次保存设置都请求一次接口。
     fn start_update_timer(&mut self, cx: &mut Context<Self>, check_now: bool) {
-        let interval = Duration::from_secs(
-            config_io::effective_config(&config_io::read_settings()).update_interval_secs,
-        );
+        let interval = Duration::from_secs(config_io::cached_config().update_interval_secs);
         self.update_task.take();
         self.update_task = Some(cx.spawn(async move |view, cx| {
             if check_now {
@@ -286,6 +281,7 @@ impl RootView {
             (&self.new_registry_name_input, "private.placeholder_name"),
             (&self.new_registry_index_input, "private.placeholder_index"),
             (&self.new_registry_token_input, "private.placeholder_token"),
+            (&self.log_search_input, "log.search_placeholder"),
         ];
         for (input, key) in inputs {
             let text = rust_i18n::t!(key).to_string();
@@ -315,6 +311,37 @@ impl RootView {
         settings.project_root = state.project_root.clone();
         settings.project_scope = state.project_scope;
         let _ = config_io::write_settings(&settings);
+    }
+
+    /// 更新状态栏提示（统一入口，避免各处重复操作 Model 实体）。
+    pub(crate) fn set_status(&mut self, status: Status, cx: &mut Context<Self>) {
+        self.app.update(cx, |model, cx| {
+            model.state.status = status;
+            cx.notify();
+        });
+    }
+
+    /// 当前作用域下要写入的配置文件与作用域标识。
+    pub(crate) fn config_target(
+        &self,
+        cx: &App,
+    ) -> std::result::Result<(std::path::PathBuf, &'static str), String> {
+        let state = &self.app.read(cx).state;
+        if state.project_scope && state.project_root.is_none() {
+            return Err(rust_i18n::t!("status.project_required").to_string());
+        }
+        let root = if state.project_scope {
+            state.project_root.as_deref()
+        } else {
+            None
+        };
+        let path = config_io::config_path_scoped(root).map_err(|error| format!("{error:#}"))?;
+        let scope = if state.project_scope {
+            config_io::SCOPE_PROJECT
+        } else {
+            config_io::SCOPE_GLOBAL
+        };
+        Ok((path, scope))
     }
 
     /// 切换配置作用域：全局 ↔ 项目，并重新读取该作用域当前生效的源。
@@ -386,10 +413,7 @@ impl RootView {
                     let message =
                         rust_i18n::t!("scope.picker_failed", error = error.to_string()).to_string();
                     let _ = view.update(cx, |view, cx| {
-                        view.app.update(cx, |model, cx| {
-                            model.state.status = Status::Error(message.clone().into());
-                            cx.notify();
-                        });
+                        view.set_status(Status::Error(message.clone().into()), cx);
                     });
                     None
                 }
@@ -407,10 +431,7 @@ impl RootView {
         let Some(root) = config_io::detect_project_root(&dir) else {
             let message = rust_i18n::t!("scope.error_not_found", path = dir.display().to_string())
                 .to_string();
-            self.app.update(cx, |model, cx| {
-                model.state.status = Status::Error(message.into());
-                cx.notify();
-            });
+            self.set_status(Status::Error(message.into()), cx);
             return;
         };
 
@@ -438,41 +459,21 @@ impl RootView {
         let selected: String = self.app.read(cx).state.selected.clone().into();
         let customs = self.app.read(cx).state.customs.clone();
         let builtins = self.app.read(cx).state.builtins.clone();
-        let (project_scope, project_root) = {
-            let state = &self.app.read(cx).state;
-            (state.project_scope, state.project_root.clone())
-        };
+        let project_scope = self.app.read(cx).state.project_scope;
 
-        // 项目作用域下必须先选定项目目录。
-        if project_scope && project_root.is_none() {
-            let message = rust_i18n::t!("status.project_required").to_string();
-            self.app.update(cx, |model, cx| {
-                model.state.status = Status::Error(message.into());
-                cx.notify();
-            });
-            return;
-        }
-
-        let target_path = if project_scope {
-            project_root.as_deref().map(config_io::project_config_path)
-        } else {
-            // 与 write_config 的目标保持一致（旧版 `config` 优先于 `config.toml`）。
-            config_io::config_path().ok()
-        };
-        let Some(target_path) = target_path else {
-            let message =
-                rust_i18n::t!("preview.failed", error = rust_i18n::t!("error.home")).to_string();
-            self.app.update(cx, |model, cx| {
-                model.state.status = Status::Error(message.into());
-                cx.notify();
-            });
-            return;
+        // 项目作用域下必须先选定项目目录；同时解析出目标配置文件。
+        let (target_path, _) = match self.config_target(cx) {
+            Ok(target) => target,
+            Err(message) => {
+                self.set_status(Status::Error(message.into()), cx);
+                return;
+            }
         };
 
         // 预先生成合并后的内容：只读取现有文件，不落盘。
         let content = registry::build_config(&selected, &builtins, &customs);
-        let old = std::fs::read_to_string(&target_path).unwrap_or_default();
-        let new = match config_io::preview_config(&target_path, &content) {
+        let old = config_io::read_config_content(&target_path).unwrap_or_default();
+        let new = match config_io::preview_config_from(&old, &content) {
             Ok(new) => new,
             Err(error) => {
                 logger::error(
@@ -482,10 +483,7 @@ impl RootView {
                 );
                 let message =
                     rust_i18n::t!("preview.failed", error = format!("{error:#}")).to_string();
-                self.app.update(cx, |model, cx| {
-                    model.state.status = Status::Error(message.into());
-                    cx.notify();
-                });
+                self.set_status(Status::Error(message.into()), cx);
                 return;
             }
         };
@@ -585,7 +583,8 @@ impl RootView {
         snapshot: config_io::Snapshot,
         cx: &mut Context<Self>,
     ) {
-        let time = snapshot.created_at.clone();
+        // 快照落盘时间为 UTC，日志与状态栏统一展示本地时间。
+        let time = config_io::snapshot_local_time(&snapshot.created_at);
         let target = snapshot.target.display().to_string();
 
         match config_io::restore_snapshot(&snapshot) {
@@ -605,10 +604,7 @@ impl RootView {
                     path = target.as_str()
                 )
                 .to_string();
-                self.app.update(cx, |model, cx| {
-                    model.state.status = Status::Success(message.into());
-                    cx.notify();
-                });
+                self.set_status(Status::Success(message.into()), cx);
                 self.reload_current(cx);
                 self.reload_registries(cx);
             }
@@ -623,49 +619,17 @@ impl RootView {
                     error = format!("{error:#}")
                 )
                 .to_string();
-                self.app.update(cx, |model, cx| {
-                    model.state.status = Status::Error(message.into());
-                    cx.notify();
-                });
+                self.set_status(Status::Error(message.into()), cx);
             }
         }
     }
 
     /// 配置健康检查：扫描当前作用域的配置文件，列出残留替换块、孤立源段与语法错误。
     fn check_health(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let (project_scope, project_root) = {
-            let state = &self.app.read(cx).state;
-            (state.project_scope, state.project_root.clone())
-        };
-        if project_scope && project_root.is_none() {
-            self.app.update(cx, |model, cx| {
-                model.state.status =
-                    Status::Error(rust_i18n::t!("status.project_required").to_string().into());
-                cx.notify();
-            });
-            return;
-        }
-
-        let scope = if project_scope {
-            config_io::SCOPE_PROJECT
-        } else {
-            config_io::SCOPE_GLOBAL
-        };
-        let target = match config_io::config_path_scoped(if project_scope {
-            project_root.as_deref()
-        } else {
-            None
-        }) {
-            Ok(path) => path,
-            Err(error) => {
-                self.health_status(
-                    Status::Error(
-                        rust_i18n::t!("health.failed", error = format!("{error:#}"))
-                            .to_string()
-                            .into(),
-                    ),
-                    cx,
-                );
+        let (target, scope) = match self.config_target(cx) {
+            Ok(target) => target,
+            Err(message) => {
+                self.set_status(Status::Error(message.into()), cx);
                 return;
             }
         };
@@ -676,7 +640,7 @@ impl RootView {
                     "health",
                     rust_i18n::t!("health.log_failed", error = format!("{error:#}")).to_string(),
                 );
-                self.health_status(
+                self.set_status(
                     Status::Error(
                         rust_i18n::t!("health.failed", error = format!("{error:#}"))
                             .to_string()
@@ -710,13 +674,13 @@ impl RootView {
                     "health",
                     rust_i18n::t!("health.log_unfixable", path = path.as_str()).to_string(),
                 );
-                self.health_status(
+                self.set_status(
                     Status::Error(rust_i18n::t!("health.unfixable").to_string().into()),
                     cx,
                 );
             }
             Ok(summary) if summary.fixed == 0 => {
-                self.health_status(
+                self.set_status(
                     Status::Info(rust_i18n::t!("health.ok").to_string().into()),
                     cx,
                 );
@@ -740,7 +704,7 @@ impl RootView {
                     );
                     rust_i18n::t!("health.fixed", count = summary.fixed.to_string()).to_string()
                 };
-                self.health_status(Status::Success(message.into()), cx);
+                self.set_status(Status::Success(message.into()), cx);
                 self.reload_current(cx);
                 self.reload_registries(cx);
                 if let Ok(customs) = config_io::read_customs() {
@@ -755,7 +719,7 @@ impl RootView {
                     "health",
                     rust_i18n::t!("health.log_failed", error = format!("{error:#}")).to_string(),
                 );
-                self.health_status(
+                self.set_status(
                     Status::Error(
                         rust_i18n::t!("health.failed", error = format!("{error:#}"))
                             .to_string()
@@ -765,14 +729,6 @@ impl RootView {
                 );
             }
         }
-    }
-
-    /// 更新状态栏并触发重绘（健康检查的公共收尾）。
-    fn health_status(&mut self, status: Status, cx: &mut Context<Self>) {
-        self.app.update(cx, |model, cx| {
-            model.state.status = status;
-            cx.notify();
-        });
     }
 
     /// 打开缓存管理对话框：优先复用内存或应用缓存中的统计结果，缓存有更新时才重新统计。
@@ -886,10 +842,7 @@ impl RootView {
                 )
             }
         };
-        self.app.update(cx, |model, cx| {
-            model.state.status = status;
-            cx.notify();
-        });
+        self.set_status(status, cx);
         match rescanned {
             Ok(report) => self.set_cache_state(cache::CacheState::Ready(report), cx),
             Err(error) => self.set_cache_state(cache::CacheState::Failed(format!("{error:#}")), cx),
@@ -952,10 +905,7 @@ impl RootView {
             logger::info("cache", message.clone());
             Status::Success(message.into())
         };
-        self.app.update(cx, |model, cx| {
-            model.state.status = status;
-            cx.notify();
-        });
+        self.set_status(status, cx);
         match rescanned {
             Ok(report) => self.set_cache_state(cache::CacheState::Ready(report), cx),
             Err(error) => self.set_cache_state(cache::CacheState::Failed(format!("{error:#}")), cx),
@@ -979,14 +929,14 @@ impl RootView {
             let state = &self.app.read(cx).state;
             (state.builtins.clone(), state.customs.clone())
         };
-        let builtin_ids: Vec<&str> = builtins.iter().map(|r| r.id.as_str()).collect();
+        let builtin_ids: HashSet<&str> = builtins.iter().map(|r| r.id.as_str()).collect();
         let targets: Vec<(String, String)> = builtins
             .iter()
             .map(|r| (r.id.clone(), r.url.clone()))
             .chain(
                 customs
                     .iter()
-                    .filter(|(id, _)| !builtin_ids.contains(&id.as_str()))
+                    .filter(|(id, _)| !builtin_ids.contains(id.as_str()))
                     .map(|(id, src)| (id.clone(), src.url.clone())),
             )
             .collect();
@@ -1118,11 +1068,10 @@ impl RootView {
             "update",
             rust_i18n::t!("update.log_system_open", url = url.as_str()).to_string(),
         );
-        self.app.update(cx, |model, cx| {
-            model.state.status =
-                Status::Info(rust_i18n::t!("update.system_opened").to_string().into());
-            cx.notify();
-        });
+        self.set_status(
+            Status::Info(rust_i18n::t!("update.system_opened").to_string().into()),
+            cx,
+        );
         cx.open_url(url.as_str());
     }
 
@@ -1172,11 +1121,10 @@ impl RootView {
                     rust_i18n::t!("update.log_install", path = path.display().to_string())
                         .to_string(),
                 );
-                self.app.update(cx, |model, cx| {
-                    model.state.status =
-                        Status::Info(rust_i18n::t!("update.install_start").to_string().into());
-                    cx.notify();
-                });
+                self.set_status(
+                    Status::Info(rust_i18n::t!("update.install_start").to_string().into()),
+                    cx,
+                );
                 match update::launch(&path) {
                     // 安装程序已启动，退出本实例，避免安装包写入文件时被占用。
                     Ok(()) => cx.quit(),
@@ -1186,16 +1134,7 @@ impl RootView {
                             rust_i18n::t!("update.log_install_failed", error = error.as_str())
                                 .to_string(),
                         );
-                        self.app.update(cx, |model, cx| {
-                            model.state.update = match &model.state.update {
-                                UpdateState::Downloading(available) => {
-                                    UpdateState::Available(available.clone())
-                                }
-                                other => other.clone(),
-                            };
-                            model.state.status = Status::Error(error.clone().into());
-                            cx.notify();
-                        });
+                        self.update_failed(Status::Error(error.clone().into()), cx);
                     }
                 }
             }
@@ -1204,22 +1143,28 @@ impl RootView {
                     "update",
                     rust_i18n::t!("update.log_download_failed", error = error.as_str()).to_string(),
                 );
-                self.app.update(cx, |model, cx| {
-                    model.state.update = match &model.state.update {
-                        UpdateState::Downloading(available) => {
-                            UpdateState::Available(available.clone())
-                        }
-                        other => other.clone(),
-                    };
-                    model.state.status = Status::Error(
+                self.update_failed(
+                    Status::Error(
                         rust_i18n::t!("update.download_failed", error = error.as_str())
                             .to_string()
                             .into(),
-                    );
-                    cx.notify();
-                });
+                    ),
+                    cx,
+                );
             }
         }
+    }
+
+    /// 更新流程失败：把状态从 Downloading 回退为 Available，并展示错误信息。
+    fn update_failed(&mut self, status: Status, cx: &mut Context<Self>) {
+        self.app.update(cx, |model, cx| {
+            model.state.update = match &model.state.update {
+                UpdateState::Downloading(available) => UpdateState::Available(available.clone()),
+                other => other.clone(),
+            };
+            model.state.status = status;
+            cx.notify();
+        });
     }
 
     /// 选择 srmgui 源文件并导入。
@@ -1239,10 +1184,7 @@ impl RootView {
                         rust_i18n::t!("status.import_picker_failed", error = error.to_string())
                             .to_string();
                     let _ = view.update(cx, |view, cx| {
-                        view.app.update(cx, |model, cx| {
-                            model.state.status = Status::Error(message.clone().into());
-                            cx.notify();
-                        });
+                        view.set_status(Status::Error(message.clone().into()), cx);
                     });
                     None
                 }
@@ -1284,10 +1226,7 @@ impl RootView {
                     "import",
                     rust_i18n::t!("log.import_failed", error = message.as_str()).to_string(),
                 );
-                self.app.update(cx, |model, cx| {
-                    model.state.status = Status::Error(message.into());
-                    cx.notify();
-                });
+                self.set_status(Status::Error(message.into()), cx);
                 return;
             }
         };
@@ -1388,14 +1327,14 @@ impl RootView {
                     rust_i18n::t!("manifest.log_failed", error = error.as_str()).to_string(),
                 );
                 if notify {
-                    self.app.update(cx, |model, cx| {
-                        model.state.status = Status::Error(
+                    self.set_status(
+                        Status::Error(
                             rust_i18n::t!("manifest.refresh_failed", error = error)
                                 .to_string()
                                 .into(),
-                        );
-                        cx.notify();
-                    });
+                        ),
+                        cx,
+                    );
                 }
                 return;
             }
@@ -1482,10 +1421,10 @@ impl RootView {
             });
 
         let Some(source) = source else {
-            self.app.update(cx, |model, cx| {
-                model.state.status = Status::Error(rust_i18n::t!("share.none").to_string().into());
-                cx.notify();
-            });
+            self.set_status(
+                Status::Error(rust_i18n::t!("share.none").to_string().into()),
+                cx,
+            );
             return;
         };
 
@@ -1496,14 +1435,14 @@ impl RootView {
             rust_i18n::t!("share.log_copy", id = source.id.as_str()).to_string(),
         );
         let name = source.name.clone();
-        self.app.update(cx, |model, cx| {
-            model.state.status = Status::Success(
+        self.set_status(
+            Status::Success(
                 rust_i18n::t!("share.copied", name = name.as_str())
                     .to_string()
                     .into(),
-            );
-            cx.notify();
-        });
+            ),
+            cx,
+        );
     }
 
     /// 导入分享链接中的源：已存在则直接选中，新增项作为自定义源并立即测速。
@@ -1544,10 +1483,7 @@ impl RootView {
                 ),
                 None => Status::Error(rust_i18n::t!("share.import_empty").to_string().into()),
             };
-            self.app.update(cx, |model, cx| {
-                model.state.status = status;
-                cx.notify();
-            });
+            self.set_status(status, cx);
             return;
         }
 
@@ -1586,21 +1522,20 @@ impl RootView {
     fn export_customs(&mut self, cx: &mut Context<Self>) {
         let customs: HashMap<String, CustomSource> = {
             let state = &self.app.read(cx).state;
-            let builtin_ids: Vec<&str> = state.builtins.iter().map(|r| r.id.as_str()).collect();
+            let builtin_ids: HashSet<&str> = state.builtins.iter().map(|r| r.id.as_str()).collect();
             state
                 .customs
                 .iter()
-                .filter(|(id, _)| !builtin_ids.contains(&id.as_str()))
+                .filter(|(id, _)| !builtin_ids.contains(id.as_str()))
                 .map(|(id, src)| (id.clone(), src.clone()))
                 .collect()
         };
 
         if customs.is_empty() {
-            self.app.update(cx, |model, cx| {
-                model.state.status =
-                    Status::Error(rust_i18n::t!("status.export_empty").to_string().into());
-                cx.notify();
-            });
+            self.set_status(
+                Status::Error(rust_i18n::t!("status.export_empty").to_string().into()),
+                cx,
+            );
             return;
         }
 
@@ -1619,10 +1554,7 @@ impl RootView {
                         rust_i18n::t!("status.export_picker_failed", error = error.to_string())
                             .to_string();
                     let _ = view.update(cx, |view, cx| {
-                        view.app.update(cx, |model, cx| {
-                            model.state.status = Status::Error(message.clone().into());
-                            cx.notify();
-                        });
+                        view.set_status(Status::Error(message.clone().into()), cx);
                     });
                     return;
                 }
@@ -1651,8 +1583,8 @@ impl RootView {
                 ),
             }
             let _ = view.update(cx, |view, cx| {
-                view.app.update(cx, |model, cx| {
-                    model.state.status = match result {
+                view.set_status(
+                    match result {
                         Ok(()) => Status::Success(
                             rust_i18n::t!(
                                 "status.exported",
@@ -1671,9 +1603,9 @@ impl RootView {
                             .to_string()
                             .into(),
                         ),
-                    };
-                    cx.notify();
-                });
+                    },
+                    cx,
+                );
             });
         })
         .detach();
@@ -1748,10 +1680,7 @@ impl RootView {
                         rust_i18n::t!("log.diag_picker_failed", error = error.to_string())
                             .to_string();
                     let _ = view.update(cx, |view, cx| {
-                        view.app.update(cx, |model, cx| {
-                            model.state.status = Status::Error(message.clone().into());
-                            cx.notify();
-                        });
+                        view.set_status(Status::Error(message.clone().into()), cx);
                     });
                     return;
                 }
@@ -1784,8 +1713,8 @@ impl RootView {
                 ),
             }
             let _ = view.update(cx, |view, cx| {
-                view.app.update(cx, |model, cx| {
-                    model.state.status = match result {
+                view.set_status(
+                    match result {
                         Ok(_) => Status::Success(
                             rust_i18n::t!("log.diag_exported", path = target_text.as_str())
                                 .to_string()
@@ -1796,9 +1725,9 @@ impl RootView {
                                 .to_string()
                                 .into(),
                         ),
-                    };
-                    cx.notify();
-                });
+                    },
+                    cx,
+                );
             });
         })
         .detach();
@@ -2032,10 +1961,15 @@ impl RootView {
         let customs = state.customs.clone();
         let selected = state.selected.clone();
         let current = state.current.clone();
-        let builtin_ids: Vec<String> = state.builtins.iter().map(|r| r.id.clone()).collect();
+        let builtin_ids: HashSet<&str> = state.builtins.iter().map(|r| r.id.as_str()).collect();
+        // 按标识排序后再渲染，避免 HashMap 迭代顺序导致列表顺序每次重绘都变化。
+        let mut customs: Vec<(String, CustomSource)> = customs
+            .into_iter()
+            .filter(|(id, _)| !builtin_ids.contains(id.as_str()))
+            .collect();
+        customs.sort_by(|a, b| a.0.cmp(&b.0));
         let items = customs
             .into_iter()
-            .filter(|(id, _)| !builtin_ids.contains(id))
             .map(|(id, src)| {
                 let is_selected = selected.as_ref() == id;
                 let is_current = current.as_ref().map(|c| c.as_ref()) == Some(id.as_str());
@@ -2204,9 +2138,7 @@ impl Render for RootView {
         };
         let snapshot_tip = rust_i18n::t!(
             "snapshot.tip",
-            count = config_io::effective_config(&config_io::read_settings())
-                .snapshot_limit
-                .to_string()
+            count = config_io::cached_config().snapshot_limit.to_string()
         )
         .to_string();
         let health_tip = rust_i18n::t!("health.tip").to_string();
@@ -2684,39 +2616,17 @@ impl Render for RootView {
                     )
                     .children(match self.bottom_panel {
                         BottomPanel::None => vec![],
-                        BottomPanel::AddForm => vec![
-                            div()
-                                .id("bottom-panel-slide")
-                                .with_animation(
-                                    "bottom-panel-slide-in",
-                                    Animation::new(Duration::from_millis(220)),
-                                    |this, delta| this.opacity(delta).mt(px(16.0 * (1.0 - delta))),
-                                )
-                                .child(render_add_form(self, cx))
-                                .into_any_element(),
-                        ],
-                        BottomPanel::RegistryForm => vec![
-                            div()
-                                .id("bottom-panel-slide")
-                                .with_animation(
-                                    "bottom-panel-slide-in",
-                                    Animation::new(Duration::from_millis(220)),
-                                    |this, delta| this.opacity(delta).mt(px(16.0 * (1.0 - delta))),
-                                )
-                                .child(render_private_form(self, cx))
-                                .into_any_element(),
-                        ],
-                        BottomPanel::LogPanel => vec![
-                            div()
-                                .id("bottom-panel-slide")
-                                .with_animation(
-                                    "bottom-panel-slide-in",
-                                    Animation::new(Duration::from_millis(220)),
-                                    |this, delta| this.opacity(delta).mt(px(16.0 * (1.0 - delta))),
-                                )
-                                .child(render_log_panel(self, viewport_height, cx))
-                                .into_any_element(),
-                        ],
+                        BottomPanel::AddForm => {
+                            vec![bottom_slide(render_add_form(self, cx).into_any_element())]
+                        }
+                        BottomPanel::RegistryForm => {
+                            vec![bottom_slide(
+                                render_private_form(self, cx).into_any_element(),
+                            )]
+                        }
+                        BottomPanel::LogPanel => vec![bottom_slide(
+                            render_log_panel(self, viewport_height, cx).into_any_element(),
+                        )],
                     })
                     .child(self.render_status_bar(cx)),
             )

@@ -150,9 +150,7 @@ pub(crate) fn open_snapshots_dialog(window: &mut Window, cx: &mut App, view: Ent
                     Label::new(
                         rust_i18n::t!(
                             "snapshot.empty",
-                            count = config_io::effective_config(&config_io::read_settings())
-                                .snapshot_limit
-                                .to_string()
+                            count = config_io::cached_config().snapshot_limit.to_string()
                         )
                         .to_string(),
                     )
@@ -499,7 +497,7 @@ fn compare_picker_row(
     };
     let meta = rust_i18n::t!(
         "snapshot.meta",
-        time = snapshot.created_at.as_str(),
+        time = config_io::snapshot_local_time(&snapshot.created_at),
         scope = scope,
         source = snapshot.source.as_str()
     )
@@ -541,14 +539,14 @@ fn compare_picker_row(
                 .on_click(move |_, window, cx| {
                     let base = base_for_click.clone();
                     let picked = snapshot_for_click.clone();
+                    let left_label = config_io::snapshot_local_time(&base.created_at);
+                    let right_label = config_io::snapshot_local_time(&picked.created_at);
                     let title = rust_i18n::t!(
                         "snapshot.diff_title",
-                        left = base.created_at.as_str(),
-                        right = picked.created_at.as_str()
+                        left = left_label.as_str(),
+                        right = right_label.as_str()
                     )
                     .to_string();
-                    let left_label = base.created_at.clone();
-                    let right_label = picked.created_at.clone();
                     window.close_dialog(cx);
                     open_diff_dialog(
                         window,
@@ -750,7 +748,7 @@ fn snapshot_row(
     };
     let meta = rust_i18n::t!(
         "snapshot.meta",
-        time = snapshot.created_at.as_str(),
+        time = config_io::snapshot_local_time(&snapshot.created_at),
         scope = scope,
         source = snapshot.source.as_str()
     )
@@ -793,13 +791,13 @@ fn snapshot_row(
                 .on_click(move |_, window, cx| {
                     let snapshot = snapshot_for_diff_current.clone();
                     let current_label = rust_i18n::t!("snapshot.current_config").to_string();
+                    let left_label = config_io::snapshot_local_time(&snapshot.created_at);
                     let title = rust_i18n::t!(
                         "snapshot.diff_title",
-                        left = snapshot.created_at.as_str(),
+                        left = left_label.as_str(),
                         right = current_label.as_str()
                     )
                     .to_string();
-                    let left_label = snapshot.created_at.clone();
                     let right_label = current_label;
                     // 读不到当前文件时按空内容处理，让 diff 展示整份快照。
                     let current =
