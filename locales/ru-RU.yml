@@ -297,3 +297,38 @@ health:
   log_restore: "Не удалось разобрать конфигурацию; восстановлена из резервной копии: %{path}"
   log_failed: "Ошибка проверки конфигурации: %{error}"
   log_unfixable: "Не удалось разобрать конфигурацию, а подходящих копий нет: %{path}"
+
+settings:
+  title: Настройки приложения
+  button: Настройки
+  button_tip: "Настройка сетевого таймаута, интервала зондирования, логирования и др."
+  network: Сеть
+  timeout: Таймаут (секунды)
+  timeout_tip: Максимальное время ожидания запроса
+  redirects: Макс. редиректов
+  redirects_tip: Разрешённое количество HTTP-редиректов
+  sample_crate: Пример crate
+  sample_crate_tip: Имя crate для зондирования загрузки
+  download_limit: Лимит загрузки (КБ)
+  download_limit_tip: Максимум данных за зондирование
+  intervals: Интервалы
+  probe_interval: Интервал зондирования (секунды)
+  probe_interval_tip: Автоматическое перезондирование
+  update_interval: Проверка обновлений (секунды)
+  update_interval_tip: Автоматическая проверка новых версий
+  snapshot: Снимки
+  snapshot_limit: Количество снимков
+  snapshot_limit_tip: Недавние снимки конфигурации для хранения
+  logging: Логирование
+  log_size: Макс. размер (МБ)
+  log_size_tip: Макс. размер лог-файла перед ротацией
+  log_rotated: Ротированные файлы
+  log_rotated_tip: Количество хранимых ротированных лог-файлов
+  log_entries: Записи в памяти
+  log_entries_tip: Недавние записи логов в UI
+  reset: Сбросить
+  ok: OK
+  cancel: Отмена
+  saved: Настройки сохранены
+  out_of_range: "«%{field}» должен быть в диапазоне от %{min} до %{max}"
+  save_failed: "Не удалось сохранить настройки: %{error}"

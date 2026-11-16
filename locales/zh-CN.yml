@@ -297,3 +297,38 @@ health:
   log_restore: "配置文件无法解析，已从备份恢复：%{path}"
   log_failed: "配置健康检查失败：%{error}"
   log_unfixable: "配置无法解析且没有可用备份：%{path}"
+
+settings:
+  title: 应用设置
+  button: 设置
+  button_tip: "自定义网络超时、测速间隔、日志参数等"
+  network: 网络
+  timeout: 超时（秒）
+  timeout_tip: 单次请求的最大等待时间
+  redirects: 最大重定向
+  redirects_tip: 允许跟随的 HTTP 重定向次数
+  sample_crate: 示例 crate
+  sample_crate_tip: 测速时下载的示例 crate 名称
+  download_limit: 下载上限（KB）
+  download_limit_tip: 单次测速下载的数据量上限
+  intervals: 周期
+  probe_interval: 测速周期（秒）
+  probe_interval_tip: 自动重新测速的间隔
+  update_interval: 更新检查周期（秒）
+  update_interval_tip: 自动检查新版本的间隔
+  snapshot: 快照
+  snapshot_limit: 保留数量（份）
+  snapshot_limit_tip: 配置写入保留的最近快照数
+  logging: 日志
+  log_size: 单文件上限（MB）
+  log_size_tip: 单个日志文件的最大大小，超限后滚动
+  log_rotated: 保留滚动数
+  log_rotated_tip: 超出上限后保留的历史滚动文件数
+  log_entries: 内存日志条数
+  log_entries_tip: UI 面板中保留的最近日志条数
+  reset: 恢复默认
+  ok: 确定
+  cancel: 取消
+  saved: 设置已保存
+  out_of_range: "「%{field}」需在 %{min} ~ %{max} 之间"
+  save_failed: "设置保存失败：%{error}"

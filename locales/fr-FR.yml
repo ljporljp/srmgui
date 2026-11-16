@@ -297,3 +297,38 @@ health:
   log_restore: "La configuration n'a pas pu être analysée ; restaurée depuis une sauvegarde : %{path}"
   log_failed: "Échec de la vérification de la configuration : %{error}"
   log_unfixable: "La configuration n'a pas pu être analysée et aucune sauvegarde utilisable n'existe : %{path}"
+
+settings:
+  title: Paramètres de l'application
+  button: Paramètres
+  button_tip: "Personnaliser le délai réseau, l'intervalle de sonde, la journalisation, etc."
+  network: Réseau
+  timeout: Délai (secondes)
+  timeout_tip: Temps d'attente maximal par requête
+  redirects: Redirections max.
+  redirects_tip: Nombre de redirections HTTP autorisées
+  sample_crate: Crate d'exemple
+  sample_crate_tip: Nom du crate pour les sondes de téléchargement
+  download_limit: Limite de téléchargement (Ko)
+  download_limit_tip: Volume max par sonde de téléchargement
+  intervals: Intervalles
+  probe_interval: Intervalle de sonde (secondes)
+  probe_interval_tip: Intervalle de re-sondage automatique
+  update_interval: Intervalle de vérification (secondes)
+  update_interval_tip: Vérification automatique des nouvelles versions
+  snapshot: Instantanés
+  snapshot_limit: Nombre de conservés
+  snapshot_limit_tip: Instantanés de configuration à conserver
+  logging: Journalisation
+  log_size: Taille max (Mo)
+  log_size_tip: Taille max d'un fichier journal avant rotation
+  log_rotated: Fichiers rotés
+  log_rotated_tip: Nombre de fichiers journaux rotés à conserver
+  log_entries: Entrées en mémoire
+  log_entries_tip: Entrées récentes affichées dans l'UI
+  reset: Réinitialiser
+  ok: OK
+  cancel: Annuler
+  saved: Paramètres enregistrés
+  out_of_range: "\"%{field}\" doit être compris entre %{min} et %{max}"
+  save_failed: "Échec de l'enregistrement des paramètres : %{error}"

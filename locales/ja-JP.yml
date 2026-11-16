@@ -297,3 +297,38 @@ health:
   log_restore: "設定を解析できないため、バックアップから復元しました：%{path}"
   log_failed: "設定ヘルスチェックに失敗しました：%{error}"
   log_unfixable: "設定を解析できず、使用可能なバックアップもありません：%{path}"
+
+settings:
+  title: アプリ設定
+  button: 設定
+  button_tip: "ネットワークタイムアウト、測定間隔、ログ設定などをカスタマイズ"
+  network: ネットワーク
+  timeout: タイムアウト（秒）
+  timeout_tip: 単一リクエストの最大待機時間
+  redirects: 最大リダイレクト
+  redirects_tip: 許可されるHTTPリダイレクト回数
+  sample_crate: サンプルcrate
+  sample_crate_tip: 測定時にダウンロードするcrate名
+  download_limit: ダウンロード上限（KB）
+  download_limit_tip: 測定ごとのダウンロード量上限
+  intervals: 間隔
+  probe_interval: 測定間隔（秒）
+  probe_interval_tip: 自動再測定の間隔
+  update_interval: 更新確認間隔（秒）
+  update_interval_tip: 新バージョン自動確認の間隔
+  snapshot: スナップショット
+  snapshot_limit: 保持数（件）
+  snapshot_limit_tip: 保持する最近の設定スナップショット数
+  logging: ログ
+  log_size: 単一ファイル上限（MB）
+  log_size_tip: ローテーション前の最大ログファイルサイズ
+  log_rotated: ローテーションファイル数
+  log_rotated_tip: 保持する過去のローテーションファイル数
+  log_entries: メモリ上のログ件数
+  log_entries_tip: UIに表示する最近のログ件数
+  reset: デフォルトに戻す
+  ok: 確定
+  cancel: キャンセル
+  saved: 設定を保存しました
+  out_of_range: "「%{field}」は %{min} ～ %{max} の範囲で指定してください"
+  save_failed: "設定の保存に失敗しました: %{error}"

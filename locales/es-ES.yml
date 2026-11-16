@@ -297,3 +297,38 @@ health:
   log_restore: "No se pudo analizar la configuración; restaurada desde una copia: %{path}"
   log_failed: "Error en la comprobación de la configuración: %{error}"
   log_unfixable: "No se pudo analizar la configuración y no hay copias disponibles: %{path}"
+
+settings:
+  title: Ajustes de la aplicación
+  button: Ajustes
+  button_tip: "Personalizar tiempo de red, intervalo de sonda, registro, etc."
+  network: Red
+  timeout: Tiempo límite (segundos)
+  timeout_tip: Tiempo máximo de espera por solicitud
+  redirects: Redirecciones máx.
+  redirects_tip: Número de redirecciones HTTP permitidas
+  sample_crate: Crate de ejemplo
+  sample_crate_tip: Nombre del crate usado para las sondas
+  download_limit: Límite de descarga (KB)
+  download_limit_tip: Máximo de datos por sonda
+  intervals: Intervalos
+  probe_interval: Intervalo de sonda (segundos)
+  probe_interval_tip: Intervalo de re-sondeo automático
+  update_interval: Intervalo de actualización (segundos)
+  update_interval_tip: Verificación automática de nuevas versiones
+  snapshot: Instantáneas
+  snapshot_limit: Cantidad a conservar
+  snapshot_limit_tip: Instantáneas de configuración a conservar
+  logging: Registro
+  log_size: Tamaño máx. (MB)
+  log_size_tip: Tamaño máximo de archivo de registro antes de rotación
+  log_rotated: Archivos rotados
+  log_rotated_tip: Archivos de registro rotados a conservar
+  log_entries: Entradas en memoria
+  log_entries_tip: Entradas recientes mostradas en la UI
+  reset: Restablecer
+  ok: Aceptar
+  cancel: Cancelar
+  saved: Ajustes guardados
+  out_of_range: "\"%{field}\" debe estar entre %{min} y %{max}"
+  save_failed: "No se pudieron guardar los ajustes: %{error}"

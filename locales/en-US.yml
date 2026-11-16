@@ -297,3 +297,38 @@ health:
   log_restore: "Config could not be parsed; restored from a backup: %{path}"
   log_failed: "Config health check failed: %{error}"
   log_unfixable: "Config could not be parsed and no usable backup exists: %{path}"
+
+settings:
+  title: Application Settings
+  button: Settings
+  button_tip: "Customize network timeout, probe interval, logging, and more"
+  network: Network
+  timeout: Timeout (seconds)
+  timeout_tip: Maximum wait time for a single request
+  redirects: Max Redirects
+  redirects_tip: Number of HTTP redirects allowed to follow
+  sample_crate: Sample Crate
+  sample_crate_tip: Crate name used for probe downloads
+  download_limit: Download Limit (KB)
+  download_limit_tip: Max data to download per probe
+  intervals: Intervals
+  probe_interval: Probe Interval (seconds)
+  probe_interval_tip: Auto re-probe interval
+  update_interval: Update Check Interval (seconds)
+  update_interval_tip: Auto check for new version interval
+  snapshot: Snapshots
+  snapshot_limit: Retention Count
+  snapshot_limit_tip: Recent config snapshots to keep
+  logging: Logging
+  log_size: Max Size (MB)
+  log_size_tip: Max log file size before rotation
+  log_rotated: Rotated Files
+  log_rotated_tip: Rotated log files to keep
+  log_entries: Memory Entries
+  log_entries_tip: Recent log entries shown in UI
+  reset: Reset Defaults
+  ok: OK
+  cancel: Cancel
+  saved: Settings saved
+  out_of_range: "\"%{field}\" must be between %{min} and %{max}"
+  save_failed: "Failed to save settings: %{error}"

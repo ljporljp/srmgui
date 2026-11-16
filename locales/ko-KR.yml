@@ -297,3 +297,38 @@ health:
   log_restore: "설정을 해석할 수 없어 백업에서 복원했습니다: %{path}"
   log_failed: "설정 상태 점검에 실패했습니다: %{error}"
   log_unfixable: "설정을 해석할 수 없고 사용 가능한 백업도 없습니다: %{path}"
+
+settings:
+  title: 애플리케이션 설정
+  button: 설정
+  button_tip: "네트워크 타임아웃, 측정 간격, 로그 등 사용자 정의"
+  network: 네트워크
+  timeout: 타임아웃 (초)
+  timeout_tip: 단일 요청 최대 대기 시간
+  redirects: 최대 리다이렉트
+  redirects_tip: 허용되는 HTTP 리다이렉트 횟수
+  sample_crate: 샘플 crate
+  sample_crate_tip: 측정 시 다운로드할 crate 이름
+  download_limit: 다운로드 제한 (KB)
+  download_limit_tip: 측정당 최대 다운로드 데이터량
+  intervals: 간격
+  probe_interval: 측정 간격 (초)
+  probe_interval_tip: 자동 재측정 간격
+  update_interval: 업데이트 확인 간격 (초)
+  update_interval_tip: 새 버전 자동 확인 간격
+  snapshot: 스냅샷
+  snapshot_limit: 보관 수 (개)
+  snapshot_limit_tip: 보관할 최근 설정 스냅샷 수
+  logging: 로그
+  log_size: 파일당 최대 크기 (MB)
+  log_size_tip: 로테이션 전 최대 로그 파일 크기
+  log_rotated: 보관할 로테이션 파일 수
+  log_rotated_tip: 보관할 과거 로테이션 파일 수
+  log_entries: 메모리 로그 항목 수
+  log_entries_tip: UI에 표시할 최근 로그 항목 수
+  reset: 기본값 복원
+  ok: 확인
+  cancel: 취소
+  saved: 설정이 저장되었습니다
+  out_of_range: "\"%{field}\" 값은 %{min} ~ %{max} 사이여야 합니다"
+  save_failed: "설정 저장에 실패했습니다: %{error}"

@@ -297,3 +297,38 @@ health:
   log_restore: "Konfiguration konnte nicht geparst werden; aus Backup wiederhergestellt: %{path}"
   log_failed: "Konfigurations-Zustandsprüfung fehlgeschlagen: %{error}"
   log_unfixable: "Konfiguration konnte nicht geparst werden und es gibt keine nutzbare Sicherung: %{path}"
+
+settings:
+  title: Anwendungseinstellungen
+  button: Einstellungen
+  button_tip: "Netzwerk-Zeitüberschreitung, Messintervall, Protokollierung usw. anpassen"
+  network: Netzwerk
+  timeout: Zeitüberschreitung (Sekunden)
+  timeout_tip: Maximale Wartezeit für eine Anfrage
+  redirects: Maximale Weiterleitungen
+  redirects_tip: Anzahl erlaubter HTTP-Weiterleitungen
+  sample_crate: Beispiel-Crate
+  sample_crate_tip: Für Messungen verwendeter Crate-Name
+  download_limit: Download-Limit (KB)
+  download_limit_tip: Maximale Datenmenge pro Messung
+  intervals: Intervalle
+  probe_interval: Messintervall (Sekunden)
+  probe_interval_tip: Automatisches Wiederholen der Messung
+  update_interval: Update-Check-Intervall (Sekunden)
+  update_interval_tip: Automatischer Check auf neue Version
+  snapshot: Snapshots
+  snapshot_limit: Aufbewahrungsanzahl
+  snapshot_limit_tip: Anzahl der letzten Konfigurations-Snapshots
+  logging: Protokollierung
+  log_size: Max. Größe (MB)
+  log_size_tip: Maximale Größe einer Log-Datei vor Rotation
+  log_rotated: Rotierte Dateien
+  log_rotated_tip: Anzahl aufbewahrter rotierter Log-Dateien
+  log_entries: Speicher-Einträge
+  log_entries_tip: Anzahl der letzten Log-Einträge im UI
+  reset: Standardwerte zurücksetzen
+  ok: OK
+  cancel: Abbrechen
+  saved: Einstellungen gespeichert
+  out_of_range: "\"%{field}\" muss zwischen %{min} und %{max} liegen"
+  save_failed: "Einstellungen konnten nicht gespeichert werden: %{error}"
