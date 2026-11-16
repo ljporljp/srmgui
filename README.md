@@ -39,6 +39,7 @@
 - **自动检查更新**：启动后台检查 GitHub Releases 并按设置的周期（默认 6 小时）复查，发现新版本时右上角提示；点击可选择用系统下载工具或应用内下载。
 - **安全写入**：写入前自动备份原配置为 `config.toml.bak`。
 - **应用设置**：工具栏「设置」可集中调整网络超时、重定向次数、测速下载上限与示例 crate、测速 / 更新检查周期、快照保留数量以及日志参数；输入越界会给出提示，支持一键恢复默认，保存后立即按新参数生效。
+- **命令行子命令**：同一个可执行文件提供 `status` / `list` / `use` / `probe` / `custom` / `registry` / `snapshot` / `scope` / `doctor` 等命令，与图形界面共享同一份配置与快照，方便脚本与 CI 调用。
 
 ## 内置源
 
@@ -155,6 +156,37 @@ description = "这是一个演示源"
 - 输入框只接受合法字符，数值越界或无法解析时在顶部给出提示，且不会写入；
 - 「恢复默认」把各输入框恢复为默认值，「取消」不产生任何改动；
 - 设置保存在 `<应用目录>/srmgui-settings.toml`，仅记录与默认值不同的字段。
+
+## 命令行（CLI）
+
+同一个可执行文件既是 GUI，也提供命令行子命令，与界面共用同一份配置、快照与设置，适合脚本与 CI：
+
+```bash
+srmgui status                                   # 作用域、配置文件、当前源
+srmgui list                                     # 内置源 + 自定义源，* 为当前生效
+srmgui use rsproxy                              # 按默认作用域切换源
+srmgui use aliyun --scope project --project .   # 切换项目级 .cargo/config.toml
+srmgui probe                                    # 测速当前源；也可 probe rsproxy aliyun 或 --all
+srmgui custom list                              # 自定义源列表
+srmgui custom add corp --url mirror.example.com --name "公司镜像"
+srmgui custom remove corp
+srmgui custom export ./sources                  # 自动补全 .srmgui 扩展名
+srmgui custom import ./sources.srmgui
+srmgui registry add corp --index crates.example.com --token <token>
+srmgui registry list
+srmgui registry remove corp
+srmgui snapshot list                            # 配置快照
+srmgui snapshot restore 1                       # 恢复第 1 条，或 latest
+srmgui scope                                    # 查看默认作用域
+srmgui scope project --project .                # 设置默认作用域（与 GUI 共享）
+srmgui doctor --fix                             # 健康检查并修复
+srmgui --help
+```
+
+- 不带任何参数（或 `srmgui gui`）时打开图形界面；
+- `--json` 输出机器可读结果，便于脚本解析（`status` / `list` / `probe` / `custom list` / `snapshot list` / `doctor` 等）；
+- `--scope global|project` 临时覆盖作用域，`--project <dir>` 指定项目目录（可为项目内任意路径，自动向上查找 `Cargo.toml`），两者都不会改动 GUI 的默认设置，只有 `srmgui scope` 会持久化；
+- 退出码：`0` 成功，`1` 执行失败（含 `probe` 存在失败层、`doctor` 检出问题），`2` 参数错误，`probe` 与 `doctor` 可直接用于 CI 门禁。
 
 ## 写入的配置
 
