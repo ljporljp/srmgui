@@ -12,6 +12,7 @@ use gpui_kit::{AnyElement, App, Entity, Hsla, Window, px};
 
 use crate::config_io;
 use crate::diff::{DiffLine, LineKind, diff_lines};
+use crate::health;
 use crate::root_view::RootView;
 use crate::update;
 
@@ -496,6 +497,160 @@ fn compare_picker_row(
                         picked.content,
                     );
                 }),
+        )
+        .into_any_element()
+}
+
+/// 配置健康检查：列出检测到的问题，并支持一键修复。
+pub(crate) fn open_health_dialog(
+    window: &mut Window,
+    cx: &mut App,
+    view: Entity<RootView>,
+    report: health::HealthReport,
+) {
+    window.open_dialog(cx, move |dialog, _window, cx| {
+        let muted = cx.theme().muted_foreground;
+        let target = report.path.display().to_string();
+        let healthy = report.is_healthy();
+        let exists = report.exists;
+        let summary = if !exists {
+            rust_i18n::t!("health.not_exists").to_string()
+        } else if healthy {
+            rust_i18n::t!("health.ok").to_string()
+        } else {
+            rust_i18n::t!("health.found", count = report.issues.len().to_string()).to_string()
+        };
+        let summary_color = if healthy {
+            cx.theme().success
+        } else {
+            cx.theme().warning
+        };
+        let issues = report.issues.clone();
+        let report_for_fix = report.clone();
+        let view_for_fix = view.clone();
+
+        dialog
+            .title(rust_i18n::t!("health.title").to_string())
+            .w(px(640.))
+            .child(
+                v_flex()
+                    .w_full()
+                    .gap_2()
+                    .child(
+                        Label::new(
+                            rust_i18n::t!("health.target", path = target.as_str()).to_string(),
+                        )
+                        .text_sm()
+                        .text_color(muted)
+                        .whitespace_nowrap()
+                        .text_ellipsis(),
+                    )
+                    .child(
+                        Label::new(summary)
+                            .text_sm()
+                            .font_semibold()
+                            .text_color(summary_color),
+                    )
+                    .when(!healthy, |column| {
+                        column.child(
+                            v_flex()
+                                .id("health-issues")
+                                .w_full()
+                                .max_h(px(320.))
+                                .gap_2()
+                                .overflow_y_scrollbar()
+                                .children(issues.iter().enumerate().map(|(index, issue)| {
+                                    health_issue_row(index, issue, cx)
+                                })),
+                        )
+                    })
+                    .child(
+                        Label::new(rust_i18n::t!("health.hint").to_string())
+                            .text_sm()
+                            .text_color(muted),
+                    ),
+            )
+            .footer(
+                h_flex()
+                    .w_full()
+                    .justify_end()
+                    .gap_2()
+                    .child(
+                        Button::new("health-close")
+                            .label(rust_i18n::t!("health.close").to_string())
+                            .secondary()
+                            .on_click(|_, window, cx| window.close_dialog(cx)),
+                    )
+                    .child(
+                        Button::new("health-fix")
+                            .label(rust_i18n::t!("health.fix").to_string())
+                            .tooltip(rust_i18n::t!("health.fix_tip").to_string())
+                            .primary()
+                            .disabled(healthy || !exists)
+                            .on_click(move |_, window, cx| {
+                                let report = report_for_fix.clone();
+                                view_for_fix.update(cx, |view, cx| view.fix_health(report, cx));
+                                window.close_dialog(cx);
+                            }),
+                    ),
+            )
+    });
+}
+
+/// 健康检查结果中的一行问题。
+fn health_issue_row(index: usize, issue: &health::Issue, cx: &App) -> AnyElement {
+    let raw = issue.detail.clone();
+    let (title, color) = match issue.kind {
+        health::IssueKind::DuplicateTable => (
+            rust_i18n::t!("health.kind.duplicate").to_string(),
+            cx.theme().warning,
+        ),
+        health::IssueKind::DanglingReplace => (
+            rust_i18n::t!("health.kind.dangling").to_string(),
+            cx.theme().danger,
+        ),
+        health::IssueKind::OrphanSource => (
+            rust_i18n::t!("health.kind.orphan").to_string(),
+            cx.theme().warning,
+        ),
+        health::IssueKind::Syntax => (
+            rust_i18n::t!("health.kind.syntax").to_string(),
+            cx.theme().danger,
+        ),
+    };
+    let detail = match issue.kind {
+        health::IssueKind::DuplicateTable => {
+            rust_i18n::t!("health.issue.duplicate", table = raw.as_str()).to_string()
+        }
+        health::IssueKind::DanglingReplace => {
+            rust_i18n::t!("health.issue.dangling", name = raw.as_str()).to_string()
+        }
+        health::IssueKind::OrphanSource => {
+            rust_i18n::t!("health.issue.orphan", name = raw.as_str()).to_string()
+        }
+        health::IssueKind::Syntax => {
+            rust_i18n::t!("health.issue.syntax", error = raw.as_str()).to_string()
+        }
+    };
+
+    v_flex()
+        .id(format!("health-issue-{index}"))
+        .w_full()
+        .gap_1()
+        .p_2()
+        .rounded_md()
+        .border_1()
+        .border_color(cx.theme().border)
+        .child(
+            Label::new(format!("{}. {}", index + 1, title))
+                .text_sm()
+                .font_semibold()
+                .text_color(color),
+        )
+        .child(
+            Label::new(detail)
+                .text_sm()
+                .text_color(cx.theme().muted_foreground),
         )
         .into_any_element()
 }

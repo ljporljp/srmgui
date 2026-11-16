@@ -265,3 +265,35 @@ diff:
   summary: "%{added}줄 추가, %{removed}줄 삭제"
   no_change: 두 내용이 동일합니다
   close: 닫기
+
+health:
+  button: 상태 점검
+  tip: "설정에 남은 대체 블록, 고립된 [source.x] 섹션, 구문 오류를 검사합니다"
+  title: 설정 상태 점검
+  target: "점검 대상: %{path}"
+  ok: 설정이 정상이며 문제가 발견되지 않았습니다
+  not_exists: 설정 파일이 아직 없어 검사할 내용이 없습니다
+  found: "%{count}개의 문제가 발견되었습니다"
+  hint: 수정 전에 스냅샷과 .bak 백업을 자동으로 남기므로 언제든 되돌릴 수 있습니다
+  fix: 한 번에 수정
+  fix_tip: 발견된 모든 문제를 수정합니다(복원이 필요하면 현재 파일을 먼저 백업합니다)
+  close: 닫기
+  fixed: "설정 문제 %{count}개를 수정했습니다"
+  restored: "설정을 해석할 수 없어 최근 유효한 스냅샷 / 백업에서 복원했습니다: %{path}"
+  unfixable: 설정을 해석할 수 없고 사용 가능한 스냅샷이나 .bak 백업도 없습니다
+  failed: "설정 상태 점검에 실패했습니다: %{error}"
+  kind:
+    duplicate: 중복 섹션
+    dangling: 잔여 대체 블록
+    orphan: 고립된 소스
+    syntax: 구문 오류
+  issue:
+    duplicate: "\"[%{table}]\"이(가) 중복됩니다. 수정 시 마지막 섹션을 유지합니다"
+    dangling: "대체 대상 \"%{name}\"의 [source.%{name}]이(가) 없습니다. 수정 시 replace-with를 제거합니다"
+    orphan: "[source.%{name}]은(는) replace-with에서 참조되지 않고 srmgui 관리 소스도 아닙니다. 수정 시 삭제합니다"
+    syntax: "%{error}"
+  log_check: "설정 상태 점검: %{path}(%{count}개 문제)"
+  log_fix: "설정 문제 %{count}개를 수정했습니다: %{path}"
+  log_restore: "설정을 해석할 수 없어 백업에서 복원했습니다: %{path}"
+  log_failed: "설정 상태 점검에 실패했습니다: %{error}"
+  log_unfixable: "설정을 해석할 수 없고 사용 가능한 백업도 없습니다: %{path}"

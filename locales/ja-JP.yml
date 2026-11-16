@@ -265,3 +265,35 @@ diff:
   summary: "%{added} 行追加、%{removed} 行削除"
   no_change: 2 つの内容は同じです
   close: 閉じる
+
+health:
+  button: ヘルスチェック
+  tip: "設定に残った置換ブロック、孤立した [source.x] セクション、構文エラーをスキャンします"
+  title: 設定ヘルスチェック
+  target: "チェック対象：%{path}"
+  ok: 設定は正常です。問題は見つかりませんでした
+  not_exists: 設定ファイルがまだ存在しないため、確認する内容はありません
+  found: "%{count} 件の問題が見つかりました"
+  hint: 修復前にスナップショットと .bak バックアップを自動保存するため、いつでも元に戻せます
+  fix: 一括修復
+  fix_tip: 検出したすべての問題を修復します（復元が必要な場合は現在のファイルを先にバックアップします）
+  close: 閉じる
+  fixed: "%{count} 件の設定問題を修復しました"
+  restored: "設定を解析できないため、直近の有効なスナップショット / バックアップから復元しました：%{path}"
+  unfixable: 設定を解析できず、使用可能なスナップショットや .bak バックアップもありません
+  failed: "設定ヘルスチェックに失敗しました：%{error}"
+  kind:
+    duplicate: 重複セクション
+    dangling: 残存置換ブロック
+    orphan: 孤立ソース
+    syntax: 構文エラー
+  issue:
+    duplicate: "「[%{table}]」が重複しています。修復時は最後のセクションを残します"
+    dangling: "置換先「%{name}」の [source.%{name}] が存在しません。修復時に replace-with を削除します"
+    orphan: "[source.%{name}] は replace-with から参照されず、srmgui 管理のソースでもありません。修復時に削除します"
+    syntax: "%{error}"
+  log_check: "設定ヘルスチェック：%{path}（%{count} 件の問題）"
+  log_fix: "設定問題を %{count} 件修復しました：%{path}"
+  log_restore: "設定を解析できないため、バックアップから復元しました：%{path}"
+  log_failed: "設定ヘルスチェックに失敗しました：%{error}"
+  log_unfixable: "設定を解析できず、使用可能なバックアップもありません：%{path}"

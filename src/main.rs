@@ -7,6 +7,7 @@ mod app;
 mod config_dialog;
 mod config_io;
 mod diff;
+mod health;
 mod log_panel;
 mod logger;
 mod model;

@@ -265,3 +265,35 @@ diff:
   summary: "%{added} Zeile(n) hinzugefügt, %{removed} Zeile(n) entfernt"
   no_change: Die beiden Inhalte sind identisch
   close: Schließen
+
+health:
+  button: Zustandsprüfung
+  tip: "Prüft die Konfiguration auf zurückgebliebene Ersatzblöcke, verwaiste [source.x]-Abschnitte und Syntaxfehler"
+  title: Konfigurations-Zustandsprüfung
+  target: "Prüfziel: %{path}"
+  ok: Die Konfiguration ist gesund, keine Probleme gefunden
+  not_exists: Die Konfigurationsdatei existiert noch nicht, es gibt nichts zu prüfen
+  found: "%{count} Problem(e) gefunden"
+  hint: Vor der Reparatur werden automatisch Snapshot und .bak-Sicherung angelegt, sodass jederzeit zurückgerollt werden kann
+  fix: Alle reparieren
+  fix_tip: Alle erkannten Probleme beheben (bei Bedarf wird die aktuelle Datei zuerst gesichert)
+  close: Schließen
+  fixed: "%{count} Konfigurationsproblem(e) behoben"
+  restored: "Die Konfiguration konnte nicht geparst werden und wurde aus dem letzten gültigen Snapshot / Backup wiederhergestellt: %{path}"
+  unfixable: Die Konfiguration konnte nicht geparst werden und es gibt keinen nutzbaren Snapshot oder .bak-Sicherung
+  failed: "Konfigurations-Zustandsprüfung fehlgeschlagen: %{error}"
+  kind:
+    duplicate: Doppelter Abschnitt
+    dangling: Verwaister Ersatzblock
+    orphan: Verwaiste Quelle
+    syntax: Syntaxfehler
+  issue:
+    duplicate: "\"[%{table}]\" kommt mehrfach vor; beim Reparieren bleibt der letzte Abschnitt erhalten"
+    dangling: "Das Ersatzziel \"%{name}\" hat kein [source.%{name}]; beim Reparieren wird replace-with entfernt"
+    orphan: "[source.%{name}] wird von replace-with nicht referenziert und nicht von srmgui verwaltet; beim Reparieren wird es gelöscht"
+    syntax: "%{error}"
+  log_check: "Konfigurations-Zustandsprüfung: %{path} (%{count} Problem(e))"
+  log_fix: "%{count} Konfigurationsproblem(e) behoben: %{path}"
+  log_restore: "Konfiguration konnte nicht geparst werden; aus Backup wiederhergestellt: %{path}"
+  log_failed: "Konfigurations-Zustandsprüfung fehlgeschlagen: %{error}"
+  log_unfixable: "Konfiguration konnte nicht geparst werden und es gibt keine nutzbare Sicherung: %{path}"

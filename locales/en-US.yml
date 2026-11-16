@@ -265,3 +265,35 @@ diff:
   summary: "%{added} line(s) added, %{removed} line(s) removed"
   no_change: The two contents are identical
   close: Close
+
+health:
+  button: Health check
+  tip: "Scan the config for leftover replacement blocks, orphan [source.x] sections and syntax errors"
+  title: Config health check
+  target: "Target: %{path}"
+  ok: Config is healthy, no issues found
+  not_exists: The config file does not exist yet, nothing to check
+  found: "%{count} issue(s) found"
+  hint: Snapshots and a .bak backup are kept automatically before fixing, so you can always roll back
+  fix: Fix all
+  fix_tip: Fix every detected issue (the current file is backed up first when restoring is needed)
+  close: Close
+  fixed: "Fixed %{count} config issue(s)"
+  restored: "The config could not be parsed and was restored from the latest valid snapshot / backup: %{path}"
+  unfixable: The config could not be parsed and no usable snapshot or .bak backup exists
+  failed: "Config health check failed: %{error}"
+  kind:
+    duplicate: Duplicate section
+    dangling: Dangling replacement
+    orphan: Orphan source
+    syntax: Syntax error
+  issue:
+    duplicate: "\"[%{table}]\" appears more than once; the last section is kept when fixing"
+    dangling: "The replacement target \"%{name}\" has no [source.%{name}]; replace-with is removed when fixing"
+    orphan: "[source.%{name}] is not referenced by replace-with and is not managed by srmgui; it is removed when fixing"
+    syntax: "%{error}"
+  log_check: "Config health check: %{path} (%{count} issue(s))"
+  log_fix: "Fixed %{count} config issue(s): %{path}"
+  log_restore: "Config could not be parsed; restored from a backup: %{path}"
+  log_failed: "Config health check failed: %{error}"
+  log_unfixable: "Config could not be parsed and no usable backup exists: %{path}"

@@ -265,3 +265,35 @@ diff:
   summary: "%{added} línea(s) añadida(s), %{removed} línea(s) eliminada(s)"
   no_change: Los dos contenidos son idénticos
   close: Cerrar
+
+health:
+  button: Comprobación
+  tip: "Analiza la configuración en busca de bloques de reemplazo residuales, secciones [source.x] huérfanas y errores de sintaxis"
+  title: Comprobación de la configuración
+  target: "Destino: %{path}"
+  ok: La configuración está correcta, no se han encontrado problemas
+  not_exists: El archivo de configuración aún no existe, no hay nada que comprobar
+  found: "Se han encontrado %{count} problema(s)"
+  hint: Antes de reparar se guardan automáticamente una instantánea y una copia .bak, por lo que siempre se puede revertir
+  fix: Reparar todo
+  fix_tip: Corregir todos los problemas detectados (si hace falta restaurar, se guarda antes el archivo actual)
+  close: Cerrar
+  fixed: "Se han corregido %{count} problema(s) de configuración"
+  restored: "No se pudo analizar la configuración y se restauró desde la última instantánea / copia válida: %{path}"
+  unfixable: No se pudo analizar la configuración y no hay ninguna instantánea o copia .bak disponible
+  failed: "Error en la comprobación de la configuración: %{error}"
+  kind:
+    duplicate: Sección duplicada
+    dangling: Bloque de reemplazo residual
+    orphan: Fuente huérfana
+    syntax: Error de sintaxis
+  issue:
+    duplicate: "\"[%{table}]\" aparece varias veces; al reparar se conserva la última sección"
+    dangling: "El destino de reemplazo \"%{name}\" no tiene [source.%{name}]; al reparar se elimina replace-with"
+    orphan: "[source.%{name}] no está referenciado por replace-with ni lo gestiona srmgui; al reparar se elimina"
+    syntax: "%{error}"
+  log_check: "Comprobación de la configuración: %{path} (%{count} problema(s))"
+  log_fix: "Se han corregido %{count} problema(s) de configuración: %{path}"
+  log_restore: "No se pudo analizar la configuración; restaurada desde una copia: %{path}"
+  log_failed: "Error en la comprobación de la configuración: %{error}"
+  log_unfixable: "No se pudo analizar la configuración y no hay copias disponibles: %{path}"

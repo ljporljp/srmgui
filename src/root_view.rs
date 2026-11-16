@@ -24,6 +24,7 @@ use crate::app::CargoMirrorApp;
 use crate::config_dialog;
 use crate::config_io;
 use crate::config_io::CustomSource;
+use crate::health;
 use crate::log_panel::render_log_panel;
 use crate::logger;
 use crate::model::{
@@ -498,6 +499,150 @@ impl RootView {
                 });
             }
         }
+    }
+
+    /// 配置健康检查：扫描当前作用域的配置文件，列出残留替换块、孤立源段与语法错误。
+    fn check_health(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let (project_scope, project_root) = {
+            let state = &self.app.read(cx).state;
+            (state.project_scope, state.project_root.clone())
+        };
+        if project_scope && project_root.is_none() {
+            self.app.update(cx, |model, cx| {
+                model.state.status =
+                    Status::Error(rust_i18n::t!("status.project_required").to_string().into());
+                cx.notify();
+            });
+            return;
+        }
+
+        let scope = if project_scope {
+            config_io::SCOPE_PROJECT
+        } else {
+            config_io::SCOPE_GLOBAL
+        };
+        let target = match config_io::config_path_scoped(if project_scope {
+            project_root.as_deref()
+        } else {
+            None
+        }) {
+            Ok(path) => path,
+            Err(error) => {
+                self.health_status(
+                    Status::Error(
+                        rust_i18n::t!("health.failed", error = format!("{error:#}"))
+                            .to_string()
+                            .into(),
+                    ),
+                    cx,
+                );
+                return;
+            }
+        };
+        let report = match health::scan(&target, scope) {
+            Ok(report) => report,
+            Err(error) => {
+                logger::error(
+                    "health",
+                    rust_i18n::t!("health.log_failed", error = format!("{error:#}")).to_string(),
+                );
+                self.health_status(
+                    Status::Error(
+                        rust_i18n::t!("health.failed", error = format!("{error:#}"))
+                            .to_string()
+                            .into(),
+                    ),
+                    cx,
+                );
+                return;
+            }
+        };
+
+        logger::info(
+            "health",
+            rust_i18n::t!(
+                "health.log_check",
+                path = target.display().to_string(),
+                count = report.issues.len().to_string()
+            )
+            .to_string(),
+        );
+        let entity = cx.entity();
+        config_dialog::open_health_dialog(window, cx, entity, report);
+    }
+
+    /// 一键修复健康检查发现的问题，并刷新当前源与私有 registry 显示。
+    pub(crate) fn fix_health(&mut self, report: health::HealthReport, cx: &mut Context<Self>) {
+        let path = report.path.display().to_string();
+        match health::fix(&report.path, report.scope) {
+            Ok(summary) if summary.unfixable => {
+                logger::warn(
+                    "health",
+                    rust_i18n::t!("health.log_unfixable", path = path.as_str()).to_string(),
+                );
+                self.health_status(
+                    Status::Error(rust_i18n::t!("health.unfixable").to_string().into()),
+                    cx,
+                );
+            }
+            Ok(summary) if summary.fixed == 0 => {
+                self.health_status(
+                    Status::Info(rust_i18n::t!("health.ok").to_string().into()),
+                    cx,
+                );
+            }
+            Ok(summary) => {
+                let message = if summary.restored {
+                    logger::warn(
+                        "health",
+                        rust_i18n::t!("health.log_restore", path = path.as_str()).to_string(),
+                    );
+                    rust_i18n::t!("health.restored", path = path.as_str()).to_string()
+                } else {
+                    logger::info(
+                        "health",
+                        rust_i18n::t!(
+                            "health.log_fix",
+                            count = summary.fixed.to_string(),
+                            path = path.as_str()
+                        )
+                        .to_string(),
+                    );
+                    rust_i18n::t!("health.fixed", count = summary.fixed.to_string()).to_string()
+                };
+                self.health_status(Status::Success(message.into()), cx);
+                self.reload_current(cx);
+                self.reload_registries(cx);
+                if let Ok(customs) = config_io::read_customs() {
+                    self.app.update(cx, |model, cx| {
+                        model.state.customs = customs;
+                        cx.notify();
+                    });
+                }
+            }
+            Err(error) => {
+                logger::error(
+                    "health",
+                    rust_i18n::t!("health.log_failed", error = format!("{error:#}")).to_string(),
+                );
+                self.health_status(
+                    Status::Error(
+                        rust_i18n::t!("health.failed", error = format!("{error:#}"))
+                            .to_string()
+                            .into(),
+                    ),
+                    cx,
+                );
+            }
+        }
+    }
+
+    /// 更新状态栏并触发重绘（健康检查的公共收尾）。
+    fn health_status(&mut self, status: Status, cx: &mut Context<Self>) {
+        self.app.update(cx, |model, cx| {
+            model.state.status = status;
+            cx.notify();
+        });
     }
 
     /// 对所有内置源与自定义源发起一轮分层测速。
@@ -1261,6 +1406,7 @@ impl Render for RootView {
             count = config_io::SNAPSHOT_LIMIT.to_string()
         )
         .to_string();
+        let health_tip = rust_i18n::t!("health.tip").to_string();
 
         // 目标配置（全局 / 项目）选中态样式：柔和的蓝色，深浅主题下醒目但不刺眼
         let scope_selected_style = {
@@ -1315,6 +1461,18 @@ impl Render for RootView {
                                     .on_click(cx.listener(|_view, _ev, window, cx| {
                                         let entity = cx.entity();
                                         config_dialog::open_snapshots_dialog(window, cx, entity);
+                                    })),
+                            )
+                            .child(
+                                // 配置健康检查：扫描残留替换块、孤立源段与语法错误
+                                Button::new("open-health")
+                                    .icon(IconName::TriangleAlert)
+                                    .label(rust_i18n::t!("health.button").to_string())
+                                    .small()
+                                    .secondary()
+                                    .tooltip(health_tip)
+                                    .on_click(cx.listener(|view, _ev, window, cx| {
+                                        view.check_health(window, cx);
                                     })),
                             )
                             .child(

@@ -265,3 +265,35 @@ diff:
   summary: 新增 %{added} 行，删除 %{removed} 行
   no_change: 两份内容没有差异
   close: 关闭
+
+health:
+  button: 健康检查
+  tip: "扫描配置中的残留替换块、孤立 [source.x] 段与语法错误"
+  title: 配置健康检查
+  target: "检查目标：%{path}"
+  ok: 配置健康，未发现问题
+  not_exists: 配置文件还不存在，暂无可检查的内容
+  found: "发现 %{count} 个问题"
+  hint: 修复前会自动保留快照和 .bak 备份，可随时回滚
+  fix: 一键修复
+  fix_tip: 修复检测到的全部问题（需要从备份恢复时会先保留当前文件）
+  close: 关闭
+  fixed: "已修复 %{count} 个配置问题"
+  restored: "配置无法解析，已从上次有效快照 / 备份恢复：%{path}"
+  unfixable: 配置无法解析，且没有可用的快照或 .bak 备份
+  failed: "配置健康检查失败：%{error}"
+  kind:
+    duplicate: 重复表头
+    dangling: 残留替换块
+    orphan: 孤立源段
+    syntax: 语法错误
+  issue:
+    duplicate: "「[%{table}]」重复出现，修复时保留最后一段"
+    dangling: "替换目标「%{name}」对应的 [source.%{name}] 不存在，修复时移除 replace-with"
+    orphan: "[source.%{name}] 未被 replace-with 引用，也不属于 srmgui 管理的源，修复时删除"
+    syntax: "%{error}"
+  log_check: "配置健康检查：%{path}（%{count} 个问题）"
+  log_fix: "已修复配置问题 %{count} 个：%{path}"
+  log_restore: "配置文件无法解析，已从备份恢复：%{path}"
+  log_failed: "配置健康检查失败：%{error}"
+  log_unfixable: "配置无法解析且没有可用备份：%{path}"

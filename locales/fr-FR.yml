@@ -265,3 +265,35 @@ diff:
   summary: "%{added} ligne(s) ajoutée(s), %{removed} ligne(s) supprimée(s)"
   no_change: Les deux contenus sont identiques
   close: Fermer
+
+health:
+  button: Vérification
+  tip: "Analyse la configuration pour détecter les blocs de remplacement résiduels, les sections [source.x] orphelines et les erreurs de syntaxe"
+  title: Vérification de la configuration
+  target: "Cible : %{path}"
+  ok: La configuration est saine, aucun problème détecté
+  not_exists: Le fichier de configuration n'existe pas encore, rien à vérifier
+  found: "%{count} problème(s) détecté(s)"
+  hint: Un instantané et une sauvegarde .bak sont créés automatiquement avant la réparation, vous pouvez revenir en arrière à tout moment
+  fix: Tout réparer
+  fix_tip: Corriger tous les problèmes détectés (le fichier actuel est sauvegardé au préalable si une restauration est nécessaire)
+  close: Fermer
+  fixed: "%{count} problème(s) de configuration corrigé(s)"
+  restored: "La configuration n'a pas pu être analysée et a été restaurée depuis le dernier instantané / sauvegarde valide : %{path}"
+  unfixable: La configuration n'a pas pu être analysée et aucun instantané ni sauvegarde .bak utilisable n'existe
+  failed: "Échec de la vérification de la configuration : %{error}"
+  kind:
+    duplicate: Section en double
+    dangling: Bloc de remplacement résiduel
+    orphan: Source orpheline
+    syntax: Erreur de syntaxe
+  issue:
+    duplicate: "\"[%{table}]\" apparaît plusieurs fois ; la dernière section est conservée lors de la réparation"
+    dangling: "La cible de remplacement \"%{name}\" n'a pas de [source.%{name}] ; replace-with est supprimé lors de la réparation"
+    orphan: "[source.%{name}] n'est référencé par replace-with ni géré par srmgui ; il est supprimé lors de la réparation"
+    syntax: "%{error}"
+  log_check: "Vérification de la configuration : %{path} (%{count} problème(s))"
+  log_fix: "%{count} problème(s) de configuration corrigé(s) : %{path}"
+  log_restore: "La configuration n'a pas pu être analysée ; restaurée depuis une sauvegarde : %{path}"
+  log_failed: "Échec de la vérification de la configuration : %{error}"
+  log_unfixable: "La configuration n'a pas pu être analysée et aucune sauvegarde utilisable n'existe : %{path}"

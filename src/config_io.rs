@@ -86,8 +86,28 @@ pub fn cargo_home() -> Result<PathBuf> {
     Ok(home_dir()?.join(".cargo"))
 }
 
+/// 测试专用的应用目录覆盖。
+///
+/// 集成测试会读写快照与自定义源元数据，必须重定向到临时目录，
+/// 不能污染真实的 `<HOME>/srmgui`。按线程保存，避免并行测试互相干扰。
+#[cfg(test)]
+thread_local! {
+    static TEST_APP_DIR: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// 仅测试使用：把应用目录重定向到临时目录，传入 `None` 恢复默认。
+#[cfg(test)]
+pub(crate) fn set_test_app_dir(dir: Option<PathBuf>) {
+    TEST_APP_DIR.with(|cell| *cell.borrow_mut() = dir);
+}
+
 /// 应用配置目录：`<HOME>/srmgui`，与日志目录 `<HOME>/srmgui/logs` 同级。
 pub fn app_dir() -> Result<PathBuf> {
+    #[cfg(test)]
+    if let Some(dir) = TEST_APP_DIR.with(|cell| cell.borrow().clone()) {
+        return Ok(dir);
+    }
     Ok(home_dir()?.join("srmgui"))
 }
 
@@ -345,6 +365,20 @@ pub fn read_customs() -> Result<HashMap<String, CustomSource>> {
     }
 
     Ok(customs)
+}
+
+/// 读取 srmgui 元数据文件中登记的自定义源标识。
+///
+/// 与 [`read_customs`] 不同，这里只读取 srmgui 自己管理的元数据，
+/// 不合并 cargo 配置里出现的其他源，供健康检查区分「孤立的源段」。
+pub(crate) fn custom_metadata_ids() -> HashSet<String> {
+    customs_path()
+        .ok()
+        .filter(|path| path.is_file())
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|text| parse_customs_metadata(&text).ok())
+        .map(|customs| customs.into_keys().collect())
+        .unwrap_or_default()
 }
 
 /// 解析 srmgui 元数据文件（内部存储格式）。
@@ -763,6 +797,15 @@ fn write_merged(path: &Path, merged: &str) -> Result<()> {
 /// 读取配置文件内容，文件不存在时返回空字符串（供快照对比当前配置使用）。
 pub fn read_config_content(path: &Path) -> Result<String> {
     read_optional(path)
+}
+
+/// 写入健康检查修复后的完整内容：先保留快照，再备份 `.bak` 后落盘。
+pub(crate) fn write_repaired(path: &Path, scope: &str, content: &str) -> Result<()> {
+    let existing = read_optional(path)?;
+    if existing != content && !existing.trim().is_empty() {
+        let _ = save_snapshot(path, scope, "", &existing);
+    }
+    write_merged(path, content)
 }
 
 /// 读取文件内容，文件不存在时视为空内容。
