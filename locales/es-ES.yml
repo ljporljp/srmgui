@@ -20,6 +20,7 @@ theme:
 tab:
   builtin: Integrados
   custom: Personalizados
+  private: Registros privados
 
 button:
   about_tip: Acerca de
@@ -65,6 +66,24 @@ add:
   error_exists: «%{id}» ya existe
   success: Espejo personalizado añadido
 
+private:
+  empty: Aún no hay registros privados. Añade uno.
+  label_name: Nombre
+  label_index: URL del índice
+  label_token: Token de autenticación (opcional)
+  placeholder_name: p. ej. company
+  placeholder_index: sparse+https://registry.example.com/index/
+  placeholder_token: Opcional, se guarda en ~/.cargo/credentials.toml
+  ok: Aceptar
+  token_label: Token de autenticación
+  token_yes: Configurado
+  token_no: Sin configurar
+  tip: "Nombre: %{name}\nURL del índice: %{index}\nToken de autenticación: %{token}"
+  error_empty: El nombre y la URL del índice son obligatorios
+  error_reserved: «crates-io» es un nombre reservado
+  error_name: El nombre solo puede contener letras, dígitos, guiones y guiones bajos
+  error_exists: «%{name}» ya existe. Elimínalo antes de volver a añadirlo.
+
 status:
   hint: Selecciona un espejo y pulsa «Aplicar» para escribir la configuración global o del proyecto
   applied: "Cambiado a %{source}. Configuración escrita en %{path} (copia de seguridad: config.toml.bak)."
@@ -82,6 +101,9 @@ status:
   export_failed: "Error al escribir %{path}: %{error}"
   snapshot_restored: "Revertido a la instantánea de %{time} (%{path})"
   snapshot_restore_failed: "Error al revertir la instantánea: %{error}"
+  private_added: "Registro privado %{name} añadido"
+  private_deleted: "Registro privado %{name} eliminado"
+  private_failed: "No se pudo configurar el registro privado: %{error}"
 
 dialog:
   import_title: Selecciona un archivo de espejos de srmgui
@@ -111,6 +133,10 @@ log:
   add_builtin: "Error al añadir: «%{id}» es un espejo integrado"
   add_exists: "Error al añadir: «%{id}» ya existe"
   add: "Espejo personalizado añadido: %{id} (%{url})"
+  private_add: "Registro privado añadido: %{name} (%{index})"
+  private_delete: "Registro privado eliminado: %{name}"
+  private_failed: "No se pudo configurar el registro privado: %{error}"
+  private_empty: "No se pudo añadir el registro privado: el nombre o la URL del índice están vacíos"
 
 probe:
   tcp: Conexión TCP

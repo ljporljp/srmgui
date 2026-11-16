@@ -20,6 +20,7 @@ theme:
 tab:
   builtin: Встроенные
   custom: Пользовательские
+  private: Приватные Registry
 
 button:
   about_tip: О программе
@@ -65,6 +66,24 @@ add:
   error_exists: «%{id}» уже существует
   success: Пользовательское зеркало добавлено
 
+private:
+  empty: Приватных Registry пока нет. Добавьте один.
+  label_name: Имя
+  label_index: Index URL
+  label_token: Токен аутентификации (необязательно)
+  placeholder_name: напр. company
+  placeholder_index: sparse+https://registry.example.com/index/
+  placeholder_token: Необязательно, сохраняется в ~/.cargo/credentials.toml
+  ok: ОК
+  token_label: Токен аутентификации
+  token_yes: Настроен
+  token_no: Не настроен
+  tip: "Имя: %{name}\nIndex URL: %{index}\nТокен аутентификации: %{token}"
+  error_empty: Имя и Index URL обязательны
+  error_reserved: «crates-io» — зарезервированное имя
+  error_name: Имя может содержать только буквы, цифры, дефисы и подчёркивания
+  error_exists: «%{name}» уже существует. Удалите его перед повторным добавлением.
+
 status:
   hint: Выберите зеркало и нажмите «Применить», чтобы записать глобальную конфигурацию или конфигурацию проекта
   applied: "Переключено на %{source}. Конфигурация записана в %{path} (резервная копия: config.toml.bak)."
@@ -82,6 +101,9 @@ status:
   export_failed: "Не удалось записать %{path}: %{error}"
   snapshot_restored: "Выполнен откат к снимку от %{time} (%{path})"
   snapshot_restore_failed: "Не удалось откатиться к снимку: %{error}"
+  private_added: "Приватный Registry %{name} добавлен"
+  private_deleted: "Приватный Registry %{name} удалён"
+  private_failed: "Не удалось настроить приватный Registry: %{error}"
 
 dialog:
   import_title: Выберите файл зеркал srmgui
@@ -111,6 +133,10 @@ log:
   add_builtin: "Не удалось добавить: «%{id}» — встроенное зеркало"
   add_exists: "Не удалось добавить: «%{id}» уже существует"
   add: "Добавлено пользовательское зеркало: %{id} (%{url})"
+  private_add: "Добавлен приватный Registry: %{name} (%{index})"
+  private_delete: "Удалён приватный Registry: %{name}"
+  private_failed: "Не удалось настроить приватный Registry: %{error}"
+  private_empty: "Не удалось добавить приватный Registry: имя или Index URL пусты"
 
 probe:
   tcp: TCP-соединение

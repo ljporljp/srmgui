@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, bail};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use toml_edit::{DocumentMut, Item, Table, TableLike};
@@ -34,11 +34,36 @@ pub struct CustomSource {
 }
 
 impl CustomSource {
-    pub fn new(name: impl Into<String>, url: impl Into<String>, description: impl Into<String>) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        url: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
         Self {
             name: name.into(),
             url: url.into(),
             description: description.into(),
+        }
+    }
+}
+
+/// 一个私有 registry（cargo 配置中的 `[registries.<name>]`）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrivateRegistry {
+    /// registry 名称（`registry = "..."` 中引用的标识）。
+    pub name: String,
+    /// 索引地址（sparse+ 或 git 索引 URL）。
+    pub index: String,
+    /// 是否已在 credentials 中配置认证 token。
+    pub has_token: bool,
+}
+
+impl PrivateRegistry {
+    pub fn new(name: impl Into<String>, index: impl Into<String>, has_token: bool) -> Self {
+        Self {
+            name: name.into(),
+            index: index.into(),
+            has_token,
         }
     }
 }
@@ -83,6 +108,25 @@ fn config_file_in(dir: &Path) -> PathBuf {
 /// 全局 cargo 配置文件路径（`$CARGO_HOME` 下）。
 pub fn config_path() -> Result<PathBuf> {
     Ok(config_file_in(&cargo_home()?))
+}
+
+/// 当前作用域对应的 cargo 配置文件：项目作用域用项目配置，否则用全局配置。
+pub fn config_path_scoped(project_root: Option<&Path>) -> Result<PathBuf> {
+    match project_root {
+        Some(root) => Ok(project_config_path(root)),
+        None => config_path(),
+    }
+}
+
+/// cargo 认证凭据文件路径（优先旧版无扩展名的 `credentials`）。
+pub fn credentials_path() -> Result<PathBuf> {
+    let dir = cargo_home()?;
+    let legacy = dir.join("credentials");
+    if legacy.is_file() {
+        Ok(legacy)
+    } else {
+        Ok(dir.join("credentials.toml"))
+    }
 }
 
 /// 自定义源元数据文件路径（存放 name / description 等 cargo config 无法承载的信息）。
@@ -333,9 +377,7 @@ fn parse_customs_metadata(text: &str) -> Result<HashMap<String, CustomSource>> {
             .and_then(toml::Value::as_str)
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .with_context(|| {
-                rust_i18n::t!("error.metadata_missing_url", id = id).to_string()
-            })?;
+            .with_context(|| rust_i18n::t!("error.metadata_missing_url", id = id).to_string())?;
         let name = entry
             .get("name")
             .and_then(toml::Value::as_str)
@@ -377,6 +419,159 @@ pub fn write_customs(customs: &HashMap<String, CustomSource>) -> Result<()> {
         rust_i18n::t!("error.write_file", path = path.display().to_string()).to_string()
     })?;
     Ok(())
+}
+
+/// 读取指定 cargo 配置文件中的私有 registry 列表（按名称排序）。
+///
+/// `[registries.<name>]` 只承载索引地址；认证 token 通常位于
+/// `$CARGO_HOME/credentials.toml` 的 `[registries.<name>]` 中。为兼容旧配置，
+/// 也识别直接写在 cargo 配置里的 `token` 字段。
+pub fn read_private_registries(config_path: &Path) -> Result<Vec<PrivateRegistry>> {
+    let text = read_optional(config_path)?;
+    if text.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let root: toml::Table = text
+        .parse()
+        .with_context(|| rust_i18n::t!("error.parse_cargo_config").to_string())?;
+    let Some(toml::Value::Table(registries)) = root.get("registries") else {
+        return Ok(Vec::new());
+    };
+
+    let tokens = credential_tokens();
+    let mut out = Vec::new();
+    for (name, value) in registries {
+        let toml::Value::Table(entry) = value else {
+            continue;
+        };
+        let Some(index) = entry.get("index").and_then(toml::Value::as_str) else {
+            continue;
+        };
+        let has_token =
+            entry.get("token").and_then(toml::Value::as_str).is_some() || tokens.contains(name);
+        out.push(PrivateRegistry::new(
+            name.clone(),
+            index.to_string(),
+            has_token,
+        ));
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(out)
+}
+
+/// 读取当前作用域下的私有 registry 列表。
+pub fn read_private_registries_scoped(project_root: Option<&Path>) -> Vec<PrivateRegistry> {
+    config_path_scoped(project_root)
+        .ok()
+        .and_then(|path| read_private_registries(&path).ok())
+        .unwrap_or_default()
+}
+
+/// 新增或更新私有 registry：写入 `[registries.<name>] index`，
+/// 可选地把 token 写入 cargo credentials 文件。
+pub fn upsert_private_registry(
+    config_path: &Path,
+    scope: &str,
+    name: &str,
+    index: &str,
+    token: Option<&str>,
+) -> Result<()> {
+    let existing = read_optional(config_path)?;
+    let merged = merge_registry_entry(&existing, name, index)?;
+    if existing != merged && !existing.trim().is_empty() {
+        let _ = save_snapshot(config_path, scope, "", &existing);
+    }
+    write_merged(config_path, &merged)?;
+
+    if let Some(token) = token.map(str::trim).filter(|token| !token.is_empty()) {
+        set_registry_token(name, token)?;
+    }
+    Ok(())
+}
+
+/// 删除指定 registry，并在没有其他配置继续使用它时清理认证 token。
+pub fn remove_private_registry(path: &Path, scope: &str, name: &str) -> Result<()> {
+    let existing = read_optional(path)?;
+    let merged = remove_registry_entry(&existing, name)?;
+    if existing != merged {
+        if !existing.trim().is_empty() {
+            let _ = save_snapshot(path, scope, "", &existing);
+        }
+        write_merged(path, &merged)?;
+    }
+
+    // 全局配置里仍定义同名 registry 时保留 token，避免影响其他作用域。
+    let still_defined = config_defines_registry(path, name)
+        || config_path()
+            .ok()
+            .filter(|global| global != path)
+            .is_some_and(|global| config_defines_registry(&global, name));
+    if !still_defined {
+        let _ = remove_registry_token(name);
+    }
+    Ok(())
+}
+
+/// 把 token 写入 `$CARGO_HOME/credentials.toml` 的 `[registries.<name>]`。
+pub fn set_registry_token(name: &str, token: &str) -> Result<PathBuf> {
+    let path = credentials_path()?;
+    let existing = read_optional(&path)?;
+    let merged = merge_token_entry(&existing, name, token)?;
+    if existing != merged {
+        write_merged(&path, &merged)?;
+    }
+    Ok(path)
+}
+
+/// 从 credentials 文件中删除指定 registry 的 token。
+pub fn remove_registry_token(name: &str) -> Result<()> {
+    let path = credentials_path()?;
+    let existing = read_optional(&path)?;
+    let merged = remove_token_entry(&existing, name)?;
+    if existing != merged {
+        write_merged(&path, &merged)?;
+    }
+    Ok(())
+}
+
+/// 读取 credentials 中已配置 token 的 registry 名称集合。
+fn credential_tokens() -> HashSet<String> {
+    let Some(path) = credentials_path().ok() else {
+        return HashSet::new();
+    };
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return HashSet::new();
+    };
+    let Ok(root) = text.parse::<toml::Table>() else {
+        return HashSet::new();
+    };
+    let Some(toml::Value::Table(registries)) = root.get("registries") else {
+        return HashSet::new();
+    };
+    registries
+        .iter()
+        .filter(|(_, value)| {
+            value
+                .as_table()
+                .and_then(|entry| entry.get("token"))
+                .and_then(toml::Value::as_str)
+                .is_some()
+        })
+        .map(|(name, _)| name.clone())
+        .collect()
+}
+
+/// 指定配置文件中是否仍定义该 registry。
+fn config_defines_registry(path: &Path, name: &str) -> bool {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(root) = text.parse::<toml::Table>() else {
+        return false;
+    };
+    root.get("registries")
+        .and_then(toml::Value::as_table)
+        .is_some_and(|registries| registries.contains_key(name))
 }
 
 /// 把自定义源导出为 srmgui 定义的文本格式（TOML 子集，按标识名排序）。
@@ -631,7 +826,11 @@ pub fn restore_snapshot(snapshot: &Snapshot) -> Result<()> {
         let _ = std::fs::copy(&snapshot.target, PathBuf::from(backup));
     }
     std::fs::write(&snapshot.target, &snapshot.content).with_context(|| {
-        rust_i18n::t!("error.write_file", path = snapshot.target.display().to_string()).to_string()
+        rust_i18n::t!(
+            "error.write_file",
+            path = snapshot.target.display().to_string()
+        )
+        .to_string()
     })?;
     Ok(())
 }
@@ -745,7 +944,6 @@ fn now_millis() -> u128 {
         .unwrap_or(0)
 }
 
-
 /// 把 srmgui 管理的配置合并进现有文档，其他内容保持不变。
 fn merge_managed(config: &mut DocumentMut, managed: &DocumentMut) {
     merge_table(config.as_table_mut(), managed.as_table());
@@ -790,6 +988,56 @@ fn ensure_table<'a>(target: &'a mut dyn TableLike, key: &str) -> &'a mut dyn Tab
         .get_mut(key)
         .and_then(Item::as_table_like_mut)
         .expect("just inserted table")
+}
+
+/// 解析现有配置并返回可编辑文档；空内容视为空文档。
+fn parse_document(existing: &str) -> Result<DocumentMut> {
+    if existing.trim().is_empty() {
+        return Ok(DocumentMut::new());
+    }
+    existing
+        .parse::<DocumentMut>()
+        .with_context(|| rust_i18n::t!("error.parse_cargo_config").to_string())
+}
+
+/// 在现有内容中写入 `[registries.<name>] index`，其余内容保持不变。
+fn merge_registry_entry(existing: &str, name: &str, index: &str) -> Result<String> {
+    let mut doc = parse_document(existing)?;
+    let registries = ensure_table(doc.as_table_mut(), "registries");
+    ensure_table(registries, name).insert("index", toml_edit::value(index));
+    Ok(doc.to_string())
+}
+
+/// 从现有内容中删除 `[registries.<name>]`，其余内容保持不变。
+fn remove_registry_entry(existing: &str, name: &str) -> Result<String> {
+    if existing.trim().is_empty() {
+        return Ok(String::new());
+    }
+    let mut doc = parse_document(existing)?;
+    if let Some(registries) = doc.get_mut("registries").and_then(Item::as_table_like_mut) {
+        registries.remove(name);
+    }
+    Ok(doc.to_string())
+}
+
+/// 在 credentials 内容中写入 `[registries.<name>] token`。
+fn merge_token_entry(existing: &str, name: &str, token: &str) -> Result<String> {
+    let mut doc = parse_document(existing)?;
+    let registries = ensure_table(doc.as_table_mut(), "registries");
+    ensure_table(registries, name).insert("token", toml_edit::value(token));
+    Ok(doc.to_string())
+}
+
+/// 从 credentials 内容中删除 `[registries.<name>]`。
+fn remove_token_entry(existing: &str, name: &str) -> Result<String> {
+    if existing.trim().is_empty() {
+        return Ok(String::new());
+    }
+    let mut doc = parse_document(existing)?;
+    if let Some(registries) = doc.get_mut("registries").and_then(Item::as_table_like_mut) {
+        registries.remove(name);
+    }
+    Ok(doc.to_string())
 }
 
 #[cfg(test)]
@@ -863,8 +1111,7 @@ mod tests {
 
     #[test]
     fn rejects_entries_without_id() {
-        let text =
-            "format = \"srmgui.sources\"\nversion = 2\n\n[[source]]\nname = \"Foo\"\nurl = \"sparse+https://x/\"\n";
+        let text = "format = \"srmgui.sources\"\nversion = 2\n\n[[source]]\nname = \"Foo\"\nurl = \"sparse+https://x/\"\n";
         assert!(import_customs(text).is_err());
     }
 
@@ -921,7 +1168,10 @@ mod tests {
         assert_eq!(current_source_at(&path).unwrap(), Some("corp".to_string()));
 
         std::fs::write(&path, "[net]\ngit-fetch-with-cli = true\n").unwrap();
-        assert_eq!(current_source_at(&path).unwrap(), Some("official".to_string()));
+        assert_eq!(
+            current_source_at(&path).unwrap(),
+            Some("official".to_string())
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -982,7 +1232,11 @@ mod tests {
         )
         .unwrap();
 
-        write_config_file(&path, "[source.crates-io]\n\n[net]\ngit-fetch-with-cli = true\n").unwrap();
+        write_config_file(
+            &path,
+            "[source.crates-io]\n\n[net]\ngit-fetch-with-cli = true\n",
+        )
+        .unwrap();
 
         let out = std::fs::read_to_string(&path).unwrap();
         assert!(!out.contains("replace-with"));
@@ -1016,7 +1270,8 @@ mod tests {
         let original = "[source.crates-io]\nreplace-with = \"old\"\n";
         std::fs::write(&path, original).unwrap();
 
-        let preview = preview_config(&path, "[source.crates-io]\nreplace-with = \"new\"\n").unwrap();
+        let preview =
+            preview_config(&path, "[source.crates-io]\nreplace-with = \"new\"\n").unwrap();
         assert!(preview.contains("replace-with = \"new\""));
         assert!(!preview.contains("replace-with = \"old\""));
         // 预览不能改动磁盘上的文件
@@ -1042,10 +1297,11 @@ mod tests {
         let snapshots = read_snapshots_in(&dir);
         assert_eq!(snapshots.len(), SNAPSHOT_LIMIT);
         // 最新写入的快照排在最前
-        assert!(snapshots[0].content.contains(&format!(
-            "value = {}",
-            SNAPSHOT_LIMIT + 2
-        )));
+        assert!(
+            snapshots[0]
+                .content
+                .contains(&format!("value = {}", SNAPSHOT_LIMIT + 2))
+        );
         assert_eq!(snapshots[0].target, target);
         assert_eq!(snapshots[0].scope, SCOPE_GLOBAL);
         assert_eq!(snapshots[0].source, "rsproxy");
@@ -1097,5 +1353,79 @@ mod tests {
             content: "not = [valid\n".to_string(),
         };
         assert!(restore_snapshot(&snapshot).is_err());
+    }
+
+    #[test]
+    fn registry_entry_merge_preserves_other_sections() {
+        let existing = "[source.crates-io]\nreplace-with = \"rsproxy\"\n\n\
+                        [registries.old]\nindex = \"sparse+https://old.example/index/\"\n";
+        let merged =
+            merge_registry_entry(existing, "corp", "sparse+https://corp.example/index/").unwrap();
+
+        assert!(merged.contains("replace-with = \"rsproxy\""));
+        assert!(merged.contains("[registries.old]"));
+        assert!(merged.contains("[registries.corp]"));
+        assert!(merged.contains("index = \"sparse+https://corp.example/index/\""));
+        assert!(merged.parse::<toml::Table>().is_ok());
+    }
+
+    #[test]
+    fn registry_entry_remove_keeps_other_entries() {
+        let existing = "[registries.corp]\nindex = \"sparse+https://corp.example/index/\"\n\n\
+                        [registries.other]\nindex = \"sparse+https://other.example/index/\"\n";
+        let merged = remove_registry_entry(existing, "corp").unwrap();
+
+        assert!(!merged.contains("[registries.corp]"));
+        assert!(merged.contains("[registries.other]"));
+        assert!(merged.parse::<toml::Table>().is_ok());
+    }
+
+    #[test]
+    fn token_entry_merge_and_remove_roundtrip() {
+        let existing = "[registry]\ntoken = \"crates-io-token\"\n";
+        let merged = merge_token_entry(existing, "corp", "secret-token").unwrap();
+        assert!(merged.contains("[registry]"));
+        assert!(merged.contains("[registries.corp]"));
+        assert!(merged.contains("token = \"secret-token\""));
+
+        let removed = remove_token_entry(&merged, "corp").unwrap();
+        assert!(!removed.contains("[registries.corp]"));
+        assert!(removed.contains("[registry]"));
+        assert!(removed.parse::<toml::Table>().is_ok());
+    }
+
+    #[test]
+    fn registry_remove_on_missing_file_is_noop() {
+        let dir = std::env::temp_dir().join(format!("srmgui-registry-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+
+        let merged = remove_registry_entry(&read_optional(&path).unwrap(), "corp").unwrap();
+        assert!(merged.is_empty());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn reads_private_registries_from_config() {
+        let dir = std::env::temp_dir().join(format!("srmgui-private-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        std::fs::write(
+            &path,
+            "[registries.srmgui-test-zeta]\nindex = \"sparse+https://zeta.example/index/\"\n\n\
+             [registries.srmgui-test-alpha]\nindex = \"sparse+https://alpha.example/index/\"\ntoken = \"secret\"\n",
+        )
+        .unwrap();
+
+        let registries = read_private_registries(&path).unwrap();
+        assert_eq!(registries.len(), 2);
+        assert_eq!(registries[0].name, "srmgui-test-alpha");
+        assert_eq!(registries[0].index, "sparse+https://alpha.example/index/");
+        assert!(registries[0].has_token);
+        assert_eq!(registries[1].name, "srmgui-test-zeta");
+        assert!(!registries[1].has_token);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

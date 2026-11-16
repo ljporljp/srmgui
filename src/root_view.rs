@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use gpui_kit::PathPromptOptions;
+use gpui_kit::base::Selectable;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants};
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::label::Label;
@@ -13,33 +14,31 @@ use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::component::{IconName, TitleBar};
-use gpui_kit::base::Selectable;
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, Animation, AnimationExt as _, AnyElement, Entity, SharedString, Window, div, px, rgb,
 };
 
-use crate::add_form::render_add_form;
+use crate::add_form::{render_add_form, render_private_form};
 use crate::app::CargoMirrorApp;
 use crate::config_dialog;
 use crate::config_io;
 use crate::config_io::CustomSource;
-use crate::logger;
 use crate::log_panel::render_log_panel;
+use crate::logger;
 use crate::model::{
     Language, Level, LevelTone, PROBE_INTERVAL, Probe, Status, ThemeChoice, apply_theme,
     level_display, probe_summary,
 };
 use crate::net;
+use crate::private_list::render_private_list;
 use crate::registry;
 use crate::source_list::{SourceItem, SourceList};
-use crate::ui::{
-    STEP_WIDTH, level_tip, logo_icon, open_about_dialog, v_separator,
-};
+use crate::ui::{STEP_WIDTH, level_tip, logo_icon, open_about_dialog, v_separator};
 use crate::update::{self, Available, UpdateState};
 use crate::util::{normalize_registry_url, with_sources_extension};
 
-/// 底部共享面板的当前内容：添加表单 / 日志面板 / 无。
+/// 底部共享面板的当前内容：添加表单 / 私有 registry 表单 / 日志面板 / 无。
 ///
 /// 添加按钮与日志按钮共享同一块底部布局，遵循「先来后到」互斥规则：
 /// 点击任一按钮，若对应面板已展开则收起，否则展开该面板并收起另一个。
@@ -47,6 +46,7 @@ use crate::util::{normalize_registry_url, with_sources_extension};
 pub(crate) enum BottomPanel {
     None,
     AddForm,
+    RegistryForm,
     LogPanel,
 }
 
@@ -58,6 +58,9 @@ pub(crate) struct RootView {
     pub(crate) new_name_input: Entity<InputState>,
     pub(crate) new_url_input: Entity<InputState>,
     pub(crate) new_desc_input: Entity<InputState>,
+    pub(crate) new_registry_name_input: Entity<InputState>,
+    pub(crate) new_registry_index_input: Entity<InputState>,
+    pub(crate) new_registry_token_input: Entity<InputState>,
 }
 
 impl RootView {
@@ -74,11 +77,28 @@ impl RootView {
                 .placeholder(rust_i18n::t!("add.placeholder_name").to_string())
         });
         let new_url_input = cx.new(|cx| {
-            InputState::new(window, cx).placeholder(rust_i18n::t!("add.placeholder_url").to_string())
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("add.placeholder_url").to_string())
         });
         let new_desc_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("add.placeholder_description").to_string())
+        });
+        let new_registry_name_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("private.placeholder_name").to_string())
+        });
+        let new_registry_index_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("private.placeholder_index").to_string())
+        });
+        let new_registry_token_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("private.placeholder_token").to_string())
+        });
+        // 认证 token 默认以密码形式显示，避免在界面中明文暴露。
+        new_registry_token_input.update(cx, |state, cx| {
+            state.set_masked(true, window, cx);
         });
         let view = Self {
             app,
@@ -87,6 +107,9 @@ impl RootView {
             new_name_input,
             new_url_input,
             new_desc_input,
+            new_registry_name_input,
+            new_registry_index_input,
+            new_registry_token_input,
         };
 
         logger::info("app", rust_i18n::t!("log.app_start").to_string());
@@ -131,6 +154,9 @@ impl RootView {
             (&self.new_name_input, "add.placeholder_name"),
             (&self.new_url_input, "add.placeholder_url"),
             (&self.new_desc_input, "add.placeholder_description"),
+            (&self.new_registry_name_input, "private.placeholder_name"),
+            (&self.new_registry_index_input, "private.placeholder_index"),
+            (&self.new_registry_token_input, "private.placeholder_token"),
         ];
         for (input, key) in inputs {
             let text = rust_i18n::t!(key).to_string();
@@ -173,6 +199,7 @@ impl RootView {
             self.pick_project(cx);
         }
         self.reload_current(cx);
+        self.reload_registries(cx);
         self.persist_settings(cx);
         cx.notify();
     }
@@ -196,28 +223,38 @@ impl RootView {
         });
     }
 
+    /// 重新读取当前作用域下的私有 registry 列表。
+    pub(crate) fn reload_registries(&mut self, cx: &mut Context<Self>) {
+        let (project_scope, project_root) = {
+            let state = &self.app.read(cx).state;
+            (state.project_scope, state.project_root.clone())
+        };
+        let registries = config_io::read_private_registries_scoped(if project_scope {
+            project_root.as_deref()
+        } else {
+            None
+        });
+        self.app.update(cx, |model, cx| {
+            model.state.registries = registries;
+            cx.notify();
+        });
+    }
+
     /// 选择项目目录：向上自动识别 `Cargo.toml`，并切换到项目级配置。
     fn pick_project(&mut self, cx: &mut Context<Self>) {
         let receiver = cx.prompt_for_paths(PathPromptOptions {
             files: false,
             directories: true,
             multiple: false,
-            prompt: Some(
-                rust_i18n::t!("dialog.project_title")
-                    .to_string()
-                    .into(),
-            ),
+            prompt: Some(rust_i18n::t!("dialog.project_title").to_string().into()),
         });
         cx.spawn(async move |view, cx| {
             let picked = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
                 Ok(Ok(None)) => None,
                 Ok(Err(error)) => {
-                    let message = rust_i18n::t!(
-                        "scope.picker_failed",
-                        error = error.to_string()
-                    )
-                    .to_string();
+                    let message =
+                        rust_i18n::t!("scope.picker_failed", error = error.to_string()).to_string();
                     let _ = view.update(cx, |view, cx| {
                         view.app.update(cx, |model, cx| {
                             model.state.status = Status::Error(message.clone().into());
@@ -238,11 +275,8 @@ impl RootView {
     /// 应用目录选择结果：定位项目根目录并持久化作用域设置。
     fn set_project_dir(&mut self, dir: PathBuf, cx: &mut Context<Self>) {
         let Some(root) = config_io::detect_project_root(&dir) else {
-            let message = rust_i18n::t!(
-                "scope.error_not_found",
-                path = dir.display().to_string()
-            )
-            .to_string();
+            let message = rust_i18n::t!("scope.error_not_found", path = dir.display().to_string())
+                .to_string();
             self.app.update(cx, |model, cx| {
                 model.state.status = Status::Error(message.into());
                 cx.notify();
@@ -256,8 +290,8 @@ impl RootView {
             rust_i18n::t!("log.project_selected", path = root_display.as_str()).to_string(),
         );
 
-        let message = rust_i18n::t!("status.project_selected", path = root_display.as_str())
-            .to_string();
+        let message =
+            rust_i18n::t!("status.project_selected", path = root_display.as_str()).to_string();
         self.app.update(cx, |model, cx| {
             model.state.project_root = Some(root);
             model.state.project_scope = true;
@@ -265,6 +299,7 @@ impl RootView {
             cx.notify();
         });
         self.reload_current(cx);
+        self.reload_registries(cx);
         self.persist_settings(cx);
     }
 
@@ -294,8 +329,8 @@ impl RootView {
             config_io::config_path().ok()
         };
         let Some(target_path) = target_path else {
-            let message = rust_i18n::t!("preview.failed", error = rust_i18n::t!("error.home"))
-                .to_string();
+            let message =
+                rust_i18n::t!("preview.failed", error = rust_i18n::t!("error.home")).to_string();
             self.app.update(cx, |model, cx| {
                 model.state.status = Status::Error(message.into());
                 cx.notify();
@@ -444,6 +479,7 @@ impl RootView {
                     cx.notify();
                 });
                 self.reload_current(cx);
+                self.reload_registries(cx);
             }
             Err(error) => {
                 logger::error(
@@ -507,9 +543,12 @@ impl RootView {
             let probe = Probe::from_report(report);
 
             let summary = probe_summary(&probe);
-            let message =
-                rust_i18n::t!("log.probe_done", id = id.as_str(), summary = summary.as_str())
-                    .to_string();
+            let message = rust_i18n::t!(
+                "log.probe_done",
+                id = id.as_str(),
+                summary = summary.as_str()
+            )
+            .to_string();
             match &probe.download {
                 Level::Failed(_) | Level::Skipped => logger::warn("probe", message),
                 _ => logger::info("probe", message),
@@ -547,11 +586,7 @@ impl RootView {
     }
 
     /// 处理检查结果：有新版本时展示提示，失败时仅记录日志。
-    fn finish_check(
-        &mut self,
-        result: Result<Option<Available>, String>,
-        cx: &mut Context<Self>,
-    ) {
+    fn finish_check(&mut self, result: Result<Option<Available>, String>, cx: &mut Context<Self>) {
         let current = env!("CARGO_PKG_VERSION");
         match result {
             Ok(Some(available)) => {
@@ -611,11 +646,8 @@ impl RootView {
             rust_i18n::t!("update.log_system_open", url = url.as_str()).to_string(),
         );
         self.app.update(cx, |model, cx| {
-            model.state.status = Status::Info(
-                rust_i18n::t!("update.system_opened")
-                    .to_string()
-                    .into(),
-            );
+            model.state.status =
+                Status::Info(rust_i18n::t!("update.system_opened").to_string().into());
             cx.notify();
         });
         cx.open_url(url.as_str());
@@ -659,11 +691,7 @@ impl RootView {
     }
 
     /// 下载完成后启动安装程序，并退出当前实例以便覆盖安装文件。
-    fn finish_download(
-        &mut self,
-        result: Result<PathBuf, String>,
-        cx: &mut Context<Self>,
-    ) {
+    fn finish_download(&mut self, result: Result<PathBuf, String>, cx: &mut Context<Self>) {
         match result {
             Ok(path) => {
                 logger::info(
@@ -701,8 +729,7 @@ impl RootView {
             Err(error) => {
                 logger::warn(
                     "update",
-                    rust_i18n::t!("update.log_download_failed", error = error.as_str())
-                        .to_string(),
+                    rust_i18n::t!("update.log_download_failed", error = error.as_str()).to_string(),
                 );
                 self.app.update(cx, |model, cx| {
                     model.state.update = match &model.state.update {
@@ -772,8 +799,9 @@ impl RootView {
                 .to_string()
             })
             .and_then(|text| {
-                config_io::import_customs(&text)
-                    .map_err(|error| rust_i18n::t!("status.import_failed", error = format!("{error:#}")).to_string())
+                config_io::import_customs(&text).map_err(|error| {
+                    rust_i18n::t!("status.import_failed", error = format!("{error:#}")).to_string()
+                })
             });
 
         let imported = match imported {
@@ -1066,9 +1094,21 @@ impl RootView {
             .map(|(id, src)| {
                 let is_selected = selected.as_ref() == id;
                 let is_current = current.as_ref().map(|c| c.as_ref()) == Some(id.as_str());
-                let display_name = if src.name.is_empty() { id.clone() } else { src.name.clone() };
-                let url_display = src.url.strip_prefix("sparse+").unwrap_or(&src.url).to_string();
-                let desc_display = if src.description.is_empty() { url_display.clone() } else { src.description.clone() };
+                let display_name = if src.name.is_empty() {
+                    id.clone()
+                } else {
+                    src.name.clone()
+                };
+                let url_display = src
+                    .url
+                    .strip_prefix("sparse+")
+                    .unwrap_or(&src.url)
+                    .to_string();
+                let desc_display = if src.description.is_empty() {
+                    url_display.clone()
+                } else {
+                    src.description.clone()
+                };
                 let desc_tip = if src.description.is_empty() {
                     rust_i18n::t!("source.none").to_string()
                 } else {
@@ -1238,15 +1278,11 @@ impl Render for RootView {
             .child(
                 // 自绘标题栏，跟随主题配色
                 TitleBar::new().child(
-                    h_flex()
-                        .items_center()
-                        .gap_2()
-                        .child(logo_icon(18.))
-                        .child(
-                            Label::new(rust_i18n::t!("app.title").to_string())
-                                .text_sm()
-                                .font_semibold(),
-                        ),
+                    h_flex().items_center().gap_2().child(logo_icon(18.)).child(
+                        Label::new(rust_i18n::t!("app.title").to_string())
+                            .text_sm()
+                            .font_semibold(),
+                    ),
                 ),
             )
             .child(
@@ -1295,37 +1331,30 @@ impl Render for RootView {
                                             .tooltip(
                                                 rust_i18n::t!("button.language_tip").to_string(),
                                             )
-                                            .dropdown_menu_with_anchor(
-                                                Anchor::TopRight,
-                                                {
-                                                    let view = cx.entity().downgrade();
-                                                    move |menu, _, _| {
-                                                        let mut menu = menu;
-                                                        for item in Language::ALL {
-                                                            let view = view.clone();
-                                                            menu = menu.item(
-                                                                PopupMenuItem::new(
-                                                                    item.native_name(),
-                                                                )
+                                            .dropdown_menu_with_anchor(Anchor::TopRight, {
+                                                let view = cx.entity().downgrade();
+                                                move |menu, _, _| {
+                                                    let mut menu = menu;
+                                                    for item in Language::ALL {
+                                                        let view = view.clone();
+                                                        menu = menu.item(
+                                                            PopupMenuItem::new(item.native_name())
                                                                 .checked(item == language)
-                                                                .on_click(
-                                                                    move |_, window, cx| {
-                                                                        let _ = view.update(
-                                                                            cx,
-                                                                            |view, cx| {
-                                                                                view.switch_language(
-                                                                                    item, window, cx,
-                                                                                )
-                                                                            },
-                                                                        );
-                                                                    },
-                                                                ),
-                                                            );
-                                                        }
-                                                        menu
+                                                                .on_click(move |_, window, cx| {
+                                                                    let _ = view.update(
+                                                                        cx,
+                                                                        |view, cx| {
+                                                                            view.switch_language(
+                                                                                item, window, cx,
+                                                                            )
+                                                                        },
+                                                                    );
+                                                                }),
+                                                        );
                                                     }
-                                                },
-                                            ),
+                                                    menu
+                                                }
+                                            }),
                                     )
                                     .child(
                                         TabBar::new("theme-tabs")
@@ -1339,200 +1368,276 @@ impl Render for RootView {
                                                 });
                                                 apply_theme(choice, cx);
                                             })
-                                            .child(Tab::new().label(
-                                                rust_i18n::t!("theme.system").to_string(),
-                                            ))
-                                            .child(Tab::new().label(
-                                                rust_i18n::t!("theme.light").to_string(),
-                                            ))
-                                            .child(Tab::new().label(
-                                                rust_i18n::t!("theme.dark").to_string(),
-                                            )),
+                                            .child(
+                                                Tab::new().label(
+                                                    rust_i18n::t!("theme.system").to_string(),
+                                                ),
+                                            )
+                                            .child(
+                                                Tab::new().label(
+                                                    rust_i18n::t!("theme.light").to_string(),
+                                                ),
+                                            )
+                                            .child(
+                                                Tab::new()
+                                                    .label(rust_i18n::t!("theme.dark").to_string()),
+                                            ),
                                     )
                                     .children(update_button),
                             ),
                     )
-                // Main: independent preset and custom source tabs
-                .child(
-                    v_flex()
-                        .flex_1()
-                        .min_h_0()
-                        .gap_3()
-                        .child(
-                            // 配置作用域：全局 ~/.cargo/config.toml 或项目 .cargo/config.toml
-                            h_flex()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    Label::new(rust_i18n::t!("scope.label").to_string())
-                                        .text_sm()
-                                        .text_color(cx.theme().muted_foreground),
-                                )
-                                .child(
-                                    // 选中态用柔和的蓝色高亮，深浅主题下都醒目但不刺眼
-                                    ButtonGroup::new("scope-group")
-                                        .small()
-                                        .child(
-                                            Button::new("scope-global")
-                                                .label(rust_i18n::t!("scope.global").to_string())
-                                                .selected(!project_scope)
-                                                .when(!project_scope, |button| {
-                                                    scope_selected_style(button)
-                                                }),
-                                        )
-                                        .child(
-                                            Button::new("scope-project")
-                                                .label(rust_i18n::t!("scope.project").to_string())
-                                                .selected(project_scope)
-                                                .when(project_scope, |button| {
-                                                    // 末尾按钮默认无左边框，选中时补上，避免高亮边框开口
-                                                    scope_selected_style(button).border_l_1()
-                                                }),
-                                        )
-                                        .on_click(cx.listener(
-                                            |view, clicks: &Vec<usize>, _window, cx| {
-                                                if let Some(index) = clicks.first() {
-                                                    view.switch_scope(*index == 1, cx);
-                                                }
-                                            },
-                                        )),
-                                )
-                                .when(project_scope, |row| {
-                                    let tip = path_tip.clone();
-                                    row.child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .overflow_hidden()
-                                            .id("project-path")
-                                            .tooltip(move |_, cx| {
-                                                cx.new(|_| Tooltip::new(tip.clone())).into()
-                                            })
-                                            .child(
-                                                Label::new(path_text.clone())
-                                                    .w_full()
-                                                    .text_sm()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .whitespace_nowrap()
-                                                    .text_ellipsis(),
-                                            ),
+                    // Main: independent preset and custom source tabs
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_h_0()
+                            .gap_3()
+                            .child(
+                                // 配置作用域：全局 ~/.cargo/config.toml 或项目 .cargo/config.toml
+                                h_flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(
+                                        Label::new(rust_i18n::t!("scope.label").to_string())
+                                            .text_sm()
+                                            .text_color(cx.theme().muted_foreground),
                                     )
                                     .child(
-                                        Button::new("pick-project")
-                                            .label(pick_label.clone())
+                                        // 选中态用柔和的蓝色高亮，深浅主题下都醒目但不刺眼
+                                        ButtonGroup::new("scope-group")
                                             .small()
-                                            .secondary()
+                                            .child(
+                                                Button::new("scope-global")
+                                                    .label(
+                                                        rust_i18n::t!("scope.global").to_string(),
+                                                    )
+                                                    .selected(!project_scope)
+                                                    .when(!project_scope, |button| {
+                                                        scope_selected_style(button)
+                                                    }),
+                                            )
+                                            .child(
+                                                Button::new("scope-project")
+                                                    .label(
+                                                        rust_i18n::t!("scope.project").to_string(),
+                                                    )
+                                                    .selected(project_scope)
+                                                    .when(project_scope, |button| {
+                                                        // 末尾按钮默认无左边框，选中时补上，避免高亮边框开口
+                                                        scope_selected_style(button).border_l_1()
+                                                    }),
+                                            )
                                             .on_click(cx.listener(
-                                                |view, _ev, _window, cx| view.pick_project(cx),
+                                                |view, clicks: &Vec<usize>, _window, cx| {
+                                                    if let Some(index) = clicks.first() {
+                                                        view.switch_scope(*index == 1, cx);
+                                                    }
+                                                },
                                             )),
                                     )
-                                })
-                        )
-                        .child(
-                            TabBar::new("registry-tabs")
-                                .w_full()
-                                .segmented()
-                                .selected_index(active_tab)
-                                .on_click(cx.listener(|view, index: &usize, _window, cx| {
-                                    view.app.update(cx, |model, cx| {
-                                        model.state.active_tab = *index;
-                                        cx.notify();
-                                    });
-                                    // 切换到内置源时收起添加页面
-                                    if *index == 0 && view.bottom_panel == BottomPanel::AddForm {
-                                        view.bottom_panel = BottomPanel::None;
-                                    }
-                                    cx.notify();
-                                }))
-                                .child(Tab::new().flex_1().label(
-                                    rust_i18n::t!("tab.builtin").to_string(),
-                                ))
-                                .child(Tab::new().flex_1().label(
-                                    rust_i18n::t!("tab.custom").to_string(),
-                                )),
-                        )
-                        .child(if active_tab == 0 {
-                            self.render_preset_list(cx)
-                        } else {
-                            v_flex()
-                                .flex_1()
-                                .min_h_0()
-                                .gap_3()
-                                .child(
-                                    h_flex()
-                                        .items_center()
-                                        .justify_end()
-                                        .gap_2()
-                                        .child({
-                                            let is_add_active = self.bottom_panel == BottomPanel::AddForm;
-                                            let add_btn = Button::new("toggle-add-form")
-                                                .label(if is_add_active {
-                                                    rust_i18n::t!("button.add_collapse").to_string()
-                                                } else {
-                                                    rust_i18n::t!("button.add").to_string()
-                                                });
-                                            if is_add_active {
-                                                add_btn.primary()
-                                            } else {
-                                                add_btn.secondary()
-                                            }
-                                            .on_click(cx.listener(|view, _ev, _window, cx| {
-                                                view.bottom_panel = match view.bottom_panel {
-                                                    BottomPanel::AddForm => BottomPanel::None,
-                                                    _ => BottomPanel::AddForm,
-                                                };
-                                                cx.notify();
-                                            }))
-                                        })
-                                        .child(
-                                            Button::new("import-customs")
-                                                .label(rust_i18n::t!("button.import").to_string())
-                                                .secondary()
-                                                .on_click(cx.listener(|view, _ev, _window, cx| {
-                                                    view.import_customs(cx);
-                                                })),
+                                    .when(project_scope, |row| {
+                                        let tip = path_tip.clone();
+                                        row.child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .overflow_hidden()
+                                                .id("project-path")
+                                                .tooltip(move |_, cx| {
+                                                    cx.new(|_| Tooltip::new(tip.clone())).into()
+                                                })
+                                                .child(
+                                                    Label::new(path_text.clone())
+                                                        .w_full()
+                                                        .text_sm()
+                                                        .text_color(cx.theme().muted_foreground)
+                                                        .whitespace_nowrap()
+                                                        .text_ellipsis(),
+                                                ),
                                         )
                                         .child(
-                                            Button::new("export-customs")
-                                                .label(rust_i18n::t!("button.export").to_string())
+                                            Button::new("pick-project")
+                                                .label(pick_label.clone())
+                                                .small()
                                                 .secondary()
                                                 .on_click(cx.listener(|view, _ev, _window, cx| {
-                                                    view.export_customs(cx);
+                                                    view.pick_project(cx)
                                                 })),
-                                        ),
+                                        )
+                                    }),
+                            )
+                            .child(
+                                TabBar::new("registry-tabs")
+                                    .w_full()
+                                    .segmented()
+                                    .selected_index(active_tab)
+                                    .on_click(cx.listener(|view, index: &usize, _window, cx| {
+                                        view.app.update(cx, |model, cx| {
+                                            model.state.active_tab = *index;
+                                            cx.notify();
+                                        });
+                                        // 切换标签页时收起不属于当前页的底部表单
+                                        if *index != 1 && view.bottom_panel == BottomPanel::AddForm
+                                        {
+                                            view.bottom_panel = BottomPanel::None;
+                                        }
+                                        if *index != 2
+                                            && view.bottom_panel == BottomPanel::RegistryForm
+                                        {
+                                            view.bottom_panel = BottomPanel::None;
+                                        }
+                                        cx.notify();
+                                    }))
+                                    .child(
+                                        Tab::new()
+                                            .flex_1()
+                                            .label(rust_i18n::t!("tab.builtin").to_string()),
+                                    )
+                                    .child(
+                                        Tab::new()
+                                            .flex_1()
+                                            .label(rust_i18n::t!("tab.custom").to_string()),
+                                    )
+                                    .child(
+                                        Tab::new()
+                                            .flex_1()
+                                            .label(rust_i18n::t!("tab.private").to_string()),
+                                    ),
+                            )
+                            .child(if active_tab == 0 {
+                                self.render_preset_list(cx)
+                            } else if active_tab == 1 {
+                                v_flex()
+                                    .flex_1()
+                                    .min_h_0()
+                                    .gap_3()
+                                    .child(
+                                        h_flex()
+                                            .items_center()
+                                            .justify_end()
+                                            .gap_2()
+                                            .child({
+                                                let is_add_active =
+                                                    self.bottom_panel == BottomPanel::AddForm;
+                                                let add_btn = Button::new("toggle-add-form").label(
+                                                    if is_add_active {
+                                                        rust_i18n::t!("button.add_collapse")
+                                                            .to_string()
+                                                    } else {
+                                                        rust_i18n::t!("button.add").to_string()
+                                                    },
+                                                );
+                                                if is_add_active {
+                                                    add_btn.primary()
+                                                } else {
+                                                    add_btn.secondary()
+                                                }
+                                                .on_click(cx.listener(|view, _ev, _window, cx| {
+                                                    view.bottom_panel = match view.bottom_panel {
+                                                        BottomPanel::AddForm => BottomPanel::None,
+                                                        _ => BottomPanel::AddForm,
+                                                    };
+                                                    cx.notify();
+                                                }))
+                                            })
+                                            .child(
+                                                Button::new("import-customs")
+                                                    .label(
+                                                        rust_i18n::t!("button.import").to_string(),
+                                                    )
+                                                    .secondary()
+                                                    .on_click(cx.listener(
+                                                        |view, _ev, _window, cx| {
+                                                            view.import_customs(cx);
+                                                        },
+                                                    )),
+                                            )
+                                            .child(
+                                                Button::new("export-customs")
+                                                    .label(
+                                                        rust_i18n::t!("button.export").to_string(),
+                                                    )
+                                                    .secondary()
+                                                    .on_click(cx.listener(
+                                                        |view, _ev, _window, cx| {
+                                                            view.export_customs(cx);
+                                                        },
+                                                    )),
+                                            ),
+                                    )
+                                    .child(self.render_custom_list(cx))
+                                    .into_any_element()
+                            } else {
+                                v_flex()
+                                    .flex_1()
+                                    .min_h_0()
+                                    .gap_3()
+                                    .child(h_flex().items_center().justify_end().gap_2().child({
+                                        let is_add_active =
+                                            self.bottom_panel == BottomPanel::RegistryForm;
+                                        let add_btn = Button::new("toggle-registry-form").label(
+                                            if is_add_active {
+                                                rust_i18n::t!("button.add_collapse").to_string()
+                                            } else {
+                                                rust_i18n::t!("button.add").to_string()
+                                            },
+                                        );
+                                        if is_add_active {
+                                            add_btn.primary()
+                                        } else {
+                                            add_btn.secondary()
+                                        }
+                                        .on_click(
+                                            cx.listener(|view, _ev, _window, cx| {
+                                                view.bottom_panel = match view.bottom_panel {
+                                                    BottomPanel::RegistryForm => BottomPanel::None,
+                                                    _ => BottomPanel::RegistryForm,
+                                                };
+                                                cx.notify();
+                                            }),
+                                        )
+                                    }))
+                                    .child(render_private_list(self, cx))
+                                    .into_any_element()
+                            }),
+                    )
+                    .children(match self.bottom_panel {
+                        BottomPanel::None => vec![],
+                        BottomPanel::AddForm => vec![
+                            div()
+                                .id("bottom-panel-slide")
+                                .with_animation(
+                                    "bottom-panel-slide-in",
+                                    Animation::new(Duration::from_millis(220)),
+                                    |this, delta| this.opacity(delta).mt(px(16.0 * (1.0 - delta))),
                                 )
-                                .child(self.render_custom_list(cx))
-                                .into_any_element()
-                        }),
-                )
-                .children(match self.bottom_panel {
-                    BottomPanel::None => vec![],
-                    BottomPanel::AddForm => vec![div()
-                        .id("bottom-panel-slide")
-                        .with_animation(
-                            "bottom-panel-slide-in",
-                            Animation::new(Duration::from_millis(220)),
-                            |this, delta| {
-                                this.opacity(delta)
-                                    .mt(px(16.0 * (1.0 - delta)))
-                            },
-                        )
-                        .child(render_add_form(self, cx))
-                        .into_any_element()],
-                    BottomPanel::LogPanel => vec![div()
-                        .id("bottom-panel-slide")
-                        .with_animation(
-                            "bottom-panel-slide-in",
-                            Animation::new(Duration::from_millis(220)),
-                            |this, delta| {
-                                this.opacity(delta)
-                                    .mt(px(16.0 * (1.0 - delta)))
-                            },
-                        )
-                        .child(render_log_panel(viewport_height, cx))
-                        .into_any_element()],
-                })
-                .child(self.render_status_bar(cx)),
+                                .child(render_add_form(self, cx))
+                                .into_any_element(),
+                        ],
+                        BottomPanel::RegistryForm => vec![
+                            div()
+                                .id("bottom-panel-slide")
+                                .with_animation(
+                                    "bottom-panel-slide-in",
+                                    Animation::new(Duration::from_millis(220)),
+                                    |this, delta| this.opacity(delta).mt(px(16.0 * (1.0 - delta))),
+                                )
+                                .child(render_private_form(self, cx))
+                                .into_any_element(),
+                        ],
+                        BottomPanel::LogPanel => vec![
+                            div()
+                                .id("bottom-panel-slide")
+                                .with_animation(
+                                    "bottom-panel-slide-in",
+                                    Animation::new(Duration::from_millis(220)),
+                                    |this, delta| this.opacity(delta).mt(px(16.0 * (1.0 - delta))),
+                                )
+                                .child(render_log_panel(viewport_height, cx))
+                                .into_any_element(),
+                        ],
+                    })
+                    .child(self.render_status_bar(cx)),
             )
     }
 }

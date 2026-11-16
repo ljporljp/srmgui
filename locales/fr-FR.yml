@@ -20,6 +20,7 @@ theme:
 tab:
   builtin: Intégrés
   custom: Personnalisés
+  private: Registres privés
 
 button:
   about_tip: À propos
@@ -65,6 +66,24 @@ add:
   error_exists: « %{id} » existe déjà
   success: Miroir personnalisé ajouté
 
+private:
+  empty: Aucun registre privé pour l'instant. Veuillez en ajouter un.
+  label_name: Nom
+  label_index: URL de l'index
+  label_token: Jeton d'authentification (facultatif)
+  placeholder_name: ex. company
+  placeholder_index: sparse+https://registry.example.com/index/
+  placeholder_token: Facultatif, écrit dans ~/.cargo/credentials.toml
+  ok: OK
+  token_label: Jeton d'authentification
+  token_yes: Configuré
+  token_no: Non configuré
+  tip: "Nom : %{name}\nURL de l'index : %{index}\nJeton d'authentification : %{token}"
+  error_empty: Le nom et l'URL de l'index sont obligatoires
+  error_reserved: « crates-io » est un nom réservé
+  error_name: Le nom ne peut contenir que des lettres, des chiffres, des tirets et des traits de soulignement
+  error_exists: « %{name} » existe déjà. Supprimez-le avant de l'ajouter à nouveau.
+
 status:
   hint: Sélectionnez un miroir puis cliquez sur « Appliquer » pour écrire la configuration globale ou du projet
   applied: "Passé à %{source}. Configuration écrite dans %{path} (sauvegarde : config.toml.bak)."
@@ -82,6 +101,9 @@ status:
   export_failed: "Échec d’écriture de %{path} : %{error}"
   snapshot_restored: "Restauré à l'instantané du %{time} (%{path})"
   snapshot_restore_failed: "Échec de la restauration de l'instantané : %{error}"
+  private_added: "Registre privé %{name} ajouté"
+  private_deleted: "Registre privé %{name} supprimé"
+  private_failed: "Échec de la configuration du registre privé : %{error}"
 
 dialog:
   import_title: Choisir un fichier de miroirs srmgui
@@ -111,6 +133,10 @@ log:
   add_builtin: "Échec de l’ajout : « %{id} » est un miroir intégré"
   add_exists: "Échec de l’ajout : « %{id} » existe déjà"
   add: "Miroir personnalisé ajouté : %{id} (%{url})"
+  private_add: "Registre privé ajouté : %{name} (%{index})"
+  private_delete: "Registre privé supprimé : %{name}"
+  private_failed: "Échec de la configuration du registre privé : %{error}"
+  private_empty: "Échec de l'ajout du registre privé : le nom ou l'URL de l'index est vide"
 
 probe:
   tcp: Connexion TCP

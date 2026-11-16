@@ -20,6 +20,7 @@ theme:
 tab:
   builtin: Built-in
   custom: Custom
+  private: Private registries
 
 button:
   about_tip: About
@@ -65,6 +66,24 @@ add:
   error_exists: '"%{id}" already exists'
   success: Custom source added
 
+private:
+  empty: No private registries yet. Please add one.
+  label_name: Name
+  label_index: Index URL
+  label_token: Auth token (optional)
+  placeholder_name: e.g. company
+  placeholder_index: sparse+https://registry.example.com/index/
+  placeholder_token: Optional, written to ~/.cargo/credentials.toml
+  ok: OK
+  token_label: Auth token
+  token_yes: Configured
+  token_no: Not configured
+  tip: "Name: %{name}\nIndex URL: %{index}\nAuth token: %{token}"
+  error_empty: Name and Index URL are required
+  error_reserved: '"crates-io" is a reserved name'
+  error_name: Name may only contain letters, digits, hyphens and underscores
+  error_exists: '"%{name}" already exists. Delete it before adding it again.'
+
 status:
   hint: Select a source, then click "Apply" to write the global or project config
   applied: Switched to %{source}. Config written to %{path} (backup at config.toml.bak).
@@ -82,6 +101,9 @@ status:
   export_failed: "Failed to write %{path}: %{error}"
   snapshot_restored: Rolled back to the snapshot from %{time} (%{path})
   snapshot_restore_failed: "Failed to roll back the snapshot: %{error}"
+  private_added: "Added private registry: %{name}"
+  private_deleted: "Deleted private registry: %{name}"
+  private_failed: "Failed to configure the private registry: %{error}"
 
 dialog:
   import_title: Select a srmgui custom sources file
@@ -111,6 +133,10 @@ log:
   add_builtin: 'Add failed: "%{id}" is a built-in source'
   add_exists: 'Add failed: "%{id}" already exists'
   add: "Added custom source: %{id} (%{url})"
+  private_add: "Added private registry: %{name} (%{index})"
+  private_delete: "Deleted private registry: %{name}"
+  private_failed: "Failed to configure the private registry: %{error}"
+  private_empty: "Add private registry failed: name or Index URL is empty"
 
 probe:
   tcp: TCP

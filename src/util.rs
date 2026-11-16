@@ -12,6 +12,33 @@ pub(crate) fn normalize_registry_url(url: &str) -> String {
     }
 }
 
+/// 规范化私有 registry 的 index URL。
+///
+/// 私有镜像既可能是 sparse 索引（`sparse+https://...`），也可能是 git 索引
+/// （`https://...` / `ssh://...` / `git@...`），后两者不能强行加 `sparse+`。
+pub(crate) fn normalize_registry_index(input: &str) -> String {
+    let url = input.trim();
+    if url.starts_with("sparse+") {
+        if url.ends_with('/') {
+            url.to_string()
+        } else {
+            format!("{url}/")
+        }
+    } else if url.contains("://") || url.starts_with("git@") {
+        url.to_string()
+    } else {
+        format!("sparse+https://{}/", url.trim_end_matches('/'))
+    }
+}
+
+/// 私有 registry 名称是否合法：仅允许字母、数字、连字符与下划线。
+pub(crate) fn valid_registry_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
 /// 补全导出文件的 `.srmgui` 扩展名。
 pub(crate) fn with_sources_extension(path: &Path) -> PathBuf {
     if path.extension().is_some() {

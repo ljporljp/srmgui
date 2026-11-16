@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use gpui_kit::{App, AppContext as _, Entity, SharedString};
 
 use crate::config_io;
-use crate::config_io::CustomSource;
+use crate::config_io::{CustomSource, PrivateRegistry};
 use crate::model::{Language, Probe, Status, ThemeChoice};
 use crate::update::UpdateState;
 
@@ -15,6 +15,8 @@ pub(crate) struct State {
     pub(crate) current: Option<SharedString>,
     pub(crate) active_tab: usize,
     pub(crate) customs: HashMap<String, CustomSource>,
+    /// 当前作用域下 cargo 配置中的私有 registry。
+    pub(crate) registries: Vec<PrivateRegistry>,
     pub(crate) status: Status,
     pub(crate) probes: HashMap<String, Probe>,
     pub(crate) theme: ThemeChoice,
@@ -30,6 +32,7 @@ impl State {
     fn new(
         current: Option<String>,
         customs: HashMap<String, CustomSource>,
+        registries: Vec<PrivateRegistry>,
         language: Language,
         project_root: Option<PathBuf>,
         project_scope: bool,
@@ -40,6 +43,7 @@ impl State {
             current: current.map(Into::into),
             active_tab: 0,
             customs,
+            registries,
             status: Status::Info(rust_i18n::t!("status.hint").to_string().into()),
             probes: HashMap::new(),
             theme: ThemeChoice::System,
@@ -87,8 +91,20 @@ impl CargoMirrorApp {
         .ok()
         .flatten();
         let customs = config_io::read_customs().unwrap_or_default();
+        let registries = config_io::read_private_registries_scoped(if project_scope {
+            project_root.as_deref()
+        } else {
+            None
+        });
         cx.new(|_cx| Self {
-            state: State::new(current, customs, language, project_root, project_scope),
+            state: State::new(
+                current,
+                customs,
+                registries,
+                language,
+                project_root,
+                project_scope,
+            ),
         })
     }
 }

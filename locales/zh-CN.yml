@@ -20,6 +20,7 @@ theme:
 tab:
   builtin: 内置源
   custom: 自定义源
+  private: 私有 Registry
 
 button:
   about_tip: 关于
@@ -65,6 +66,24 @@ add:
   error_exists: 「%{id}」已存在，请勿重复添加
   success: 已添加自定义源
 
+private:
+  empty: 还没有私有 Registry，请添加
+  label_name: 名称
+  label_index: Index URL
+  label_token: 认证 Token（可选）
+  placeholder_name: 如 company
+  placeholder_index: sparse+https://registry.example.com/index/
+  placeholder_token: 可选，写入 ~/.cargo/credentials.toml
+  ok: 确定
+  token_label: 认证 Token
+  token_yes: 已配置
+  token_no: 未配置
+  tip: "名称：%{name}\nIndex URL：%{index}\n认证 Token：%{token}"
+  error_empty: 名称和 Index URL 都不能为空
+  error_reserved: 「crates-io」是保留名称，不能使用
+  error_name: 名称只能包含字母、数字、连字符和下划线
+  error_exists: 「%{name}」已存在，请先删除再重新添加
+
 status:
   hint: 选择一个源，然后点击「应用」写入全局或项目配置
   applied: 已切换到 %{source}，配置已写入 %{path}（备份在 config.toml.bak）
@@ -82,6 +101,9 @@ status:
   export_failed: 写入 %{path} 失败：%{error}
   snapshot_restored: 已回滚到 %{time} 的配置快照（%{path}）
   snapshot_restore_failed: 回滚配置快照失败：%{error}
+  private_added: 已添加私有 Registry：%{name}
+  private_deleted: 已删除私有 Registry：%{name}
+  private_failed: 私有 Registry 配置失败：%{error}
 
 dialog:
   import_title: 选择 srmgui 自定义源文件
@@ -111,6 +133,10 @@ log:
   add_builtin: 添加失败：「%{id}」是内置源
   add_exists: 添加失败：「%{id}」已存在
   add: 添加自定义源：%{id} (%{url})
+  private_add: 添加私有 Registry：%{name} (%{index})
+  private_delete: 删除私有 Registry：%{name}
+  private_failed: 私有 Registry 配置失败：%{error}
+  private_empty: 添加私有 Registry 失败：名称或 Index URL 为空
 
 probe:
   tcp: TCP 连通

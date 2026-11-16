@@ -20,6 +20,7 @@ theme:
 tab:
   builtin: Integriert
   custom: Benutzerdefiniert
+  private: Private Registries
 
 button:
   about_tip: Über
@@ -65,6 +66,24 @@ add:
   error_exists: „%{id}“ existiert bereits
   success: Benutzerdefinierter Spiegel hinzugefügt
 
+private:
+  empty: Noch keine privaten Registries. Bitte eine hinzufügen.
+  label_name: Name
+  label_index: Index-URL
+  label_token: Auth-Token (optional)
+  placeholder_name: z. B. company
+  placeholder_index: sparse+https://registry.example.com/index/
+  placeholder_token: Optional, wird in ~/.cargo/credentials.toml gespeichert
+  ok: OK
+  token_label: Auth-Token
+  token_yes: Konfiguriert
+  token_no: Nicht konfiguriert
+  tip: "Name: %{name}\nIndex-URL: %{index}\nAuth-Token: %{token}"
+  error_empty: Name und Index-URL sind erforderlich
+  error_reserved: '"crates-io" ist ein reservierter Name'
+  error_name: Der Name darf nur Buchstaben, Ziffern, Bindestriche und Unterstriche enthalten
+  error_exists: '"%{name}" existiert bereits. Bitte zuerst löschen und dann erneut hinzufügen.'
+
 status:
   hint: Wählen Sie einen Spiegel und klicken Sie auf „Anwenden“, um die globale oder die Projektkonfiguration zu schreiben
   applied: "Zu %{source} gewechselt. Konfiguration nach %{path} geschrieben (Sicherung: config.toml.bak)."
@@ -82,6 +101,9 @@ status:
   export_failed: "Schreiben von %{path} fehlgeschlagen: %{error}"
   snapshot_restored: "Auf den Snapshot von %{time} zurückgesetzt (%{path})"
   snapshot_restore_failed: "Snapshot konnte nicht zurückgesetzt werden: %{error}"
+  private_added: "Private Registry %{name} hinzugefügt"
+  private_deleted: "Private Registry %{name} gelöscht"
+  private_failed: "Private Registry konnte nicht konfiguriert werden: %{error}"
 
 dialog:
   import_title: srmgui-Spiegeldatei auswählen
@@ -111,6 +133,10 @@ log:
   add_builtin: "Hinzufügen fehlgeschlagen: „%{id}“ ist ein integrierter Spiegel"
   add_exists: "Hinzufügen fehlgeschlagen: „%{id}“ existiert bereits"
   add: "Benutzerdefinierten Spiegel hinzugefügt: %{id} (%{url})"
+  private_add: "Private Registry hinzugefügt: %{name} (%{index})"
+  private_delete: "Private Registry gelöscht: %{name}"
+  private_failed: "Private Registry konnte nicht konfiguriert werden: %{error}"
+  private_empty: "Private Registry hinzufügen fehlgeschlagen: Name oder Index-URL ist leer"
 
 probe:
   tcp: TCP-Verbindung

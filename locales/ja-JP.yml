@@ -20,6 +20,7 @@ theme:
 tab:
   builtin: 組み込み
   custom: カスタム
+  private: プライベート Registry
 
 button:
   about_tip: このアプリについて
@@ -65,6 +66,24 @@ add:
   error_exists: 「%{id}」は既に存在します
   success: カスタムミラーを追加しました
 
+private:
+  empty: プライベート Registry はまだありません。追加してください。
+  label_name: 名前
+  label_index: Index URL
+  label_token: 認証トークン（任意）
+  placeholder_name: 例：company
+  placeholder_index: sparse+https://registry.example.com/index/
+  placeholder_token: 任意、~/.cargo/credentials.toml に保存
+  ok: 確定
+  token_label: 認証トークン
+  token_yes: 設定済み
+  token_no: 未設定
+  tip: "名前：%{name}\nIndex URL：%{index}\n認証トークン：%{token}"
+  error_empty: 名前と Index URL は必須です
+  error_reserved: 「crates-io」は予約名のため使用できません
+  error_name: 名前には英数字・ハイフン・アンダースコアのみ使用できます
+  error_exists: 「%{name}」は既に存在します。削除してから再追加してください
+
 status:
   hint: ミラーを選択して「適用」をクリックすると、グローバルまたはプロジェクトの設定に書き込まれます
   applied: "%{source} に切り替えました。設定を %{path} に書き込みました（バックアップ: config.toml.bak）"
@@ -82,6 +101,9 @@ status:
   export_failed: "%{path} への書き込みに失敗しました：%{error}"
   snapshot_restored: "%{time} の設定スナップショットに復元しました（%{path}）"
   snapshot_restore_failed: "設定スナップショットの復元に失敗しました：%{error}"
+  private_added: "プライベート Registry を追加しました：%{name}"
+  private_deleted: "プライベート Registry を削除しました：%{name}"
+  private_failed: "プライベート Registry の設定に失敗しました：%{error}"
 
 dialog:
   import_title: srmgui カスタムミラーファイルを選択
@@ -111,6 +133,10 @@ log:
   add_builtin: "追加に失敗：「%{id}」は組み込みミラーです"
   add_exists: "追加に失敗：「%{id}」は既に存在します"
   add: "カスタムミラーを追加：%{id} (%{url})"
+  private_add: "プライベート Registry を追加：%{name} (%{index})"
+  private_delete: "プライベート Registry を削除：%{name}"
+  private_failed: "プライベート Registry の設定に失敗：%{error}"
+  private_empty: "プライベート Registry の追加に失敗：名前または Index URL が空です"
 
 probe:
   tcp: TCP 接続
