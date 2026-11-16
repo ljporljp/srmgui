@@ -8,15 +8,10 @@ use std::time::Instant;
 use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned};
 
-const TIMEOUT: Duration = Duration::from_secs(8);
-/// 第 4 层下载测速的字节上限，避免定时测速产生过多流量。
-const DOWNLOAD_MAX_BYTES: usize = 512 * 1024;
-/// 最多的重定向跟随次数。
-const MAX_REDIRECTS: usize = 5;
-/// 更新安装包允许的最大下载字节数。
+use crate::config_io::{AppConfig, effective_config, read_settings};
+
+/// 更新安装包允许的最大下载字节数（256MB，不建议修改）。
 const MAX_INSTALLER_BYTES: usize = 256 * 1024 * 1024;
-/// 用于索引解析与下载测速的示例 crate。
-const SAMPLE_CRATE: &str = "serde";
 
 /// 单层探测结果。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,6 +52,7 @@ impl ProbeReport {
 ///
 /// 任一层失败时，后续层标记为 `Skipped`。
 pub fn probe(registry_url: &str) -> ProbeReport {
+    let cfg = effective_config(&read_settings());
     let mut report = ProbeReport::skipped();
 
     let target = match parse(registry_url) {
@@ -71,7 +67,7 @@ pub fn probe(registry_url: &str) -> ProbeReport {
 
     // 第 1 层：TCP 连通
     let started = Instant::now();
-    if let Err(e) = probe_tcp(&target) {
+    if let Err(e) = probe_tcp(&target, &cfg) {
         report.tcp = Layer::Failed(e.to_string());
         return report;
     }
@@ -79,7 +75,7 @@ pub fn probe(registry_url: &str) -> ProbeReport {
 
     // 第 2 层：HTTP 索引探测
     let started = Instant::now();
-    let config_body = match probe_config(&target) {
+    let config_body = match probe_config(&target, &cfg) {
         Ok(body) => body,
         Err(e) => {
             report.http = Layer::Failed(e.to_string());
@@ -97,7 +93,7 @@ pub fn probe(registry_url: &str) -> ProbeReport {
             return report;
         }
     };
-    let version = match probe_index_version(&target, SAMPLE_CRATE) {
+    let version = match probe_index_version(&target, &cfg) {
         Ok(v) => v,
         Err(e) => {
             report.parse = Layer::Failed(e.to_string());
@@ -107,7 +103,7 @@ pub fn probe(registry_url: &str) -> ProbeReport {
     report.parse = Layer::Passed(format!("{version} · {} ms", started.elapsed().as_millis()));
 
     // 第 4 层：下载端点速度
-    match download_speed(&dl, SAMPLE_CRATE, &version) {
+    match download_speed(&dl, &version, &cfg) {
         Ok((elapsed, speed)) => {
             report.download =
                 Layer::Passed(format!("{} ms · {}", elapsed.as_millis(), format_speed(speed)));
@@ -118,30 +114,32 @@ pub fn probe(registry_url: &str) -> ProbeReport {
     report
 }
 
-fn probe_tcp(target: &Target) -> std::io::Result<()> {
-    let _ = connect(&target.host, target.port, TIMEOUT)?;
+fn probe_tcp(target: &Target, cfg: &AppConfig) -> std::io::Result<()> {
+    let _ = connect(&target.host, target.port, Duration::from_secs(cfg.timeout_secs))?;
     Ok(())
 }
 
 /// 请求 sparse registry 的 `config.json`，返回响应正文。
-fn probe_config(target: &Target) -> std::io::Result<String> {
+fn probe_config(target: &Target, cfg: &AppConfig) -> std::io::Result<String> {
     let resp = http_get(
         target,
         &join_path(&target.path, "config.json"),
         "text/plain",
         256 * 1024,
+        cfg,
     )?;
     ensure_success(&resp.status)?;
     Ok(String::from_utf8_lossy(&resp.body).to_string())
 }
 
 /// 拉取 crate 的 sparse 索引项并解析出最新版本号。
-fn probe_index_version(target: &Target, krate: &str) -> std::io::Result<String> {
+fn probe_index_version(target: &Target, cfg: &AppConfig) -> std::io::Result<String> {
     let resp = http_get(
         target,
-        &join_path(&target.path, &index_path(krate)),
+        &join_path(&target.path, &index_path(&cfg.sample_crate)),
         "text/plain",
         512 * 1024,
+        cfg,
     )?;
     ensure_success(&resp.status)?;
     let body = String::from_utf8_lossy(&resp.body);
@@ -151,11 +149,17 @@ fn probe_index_version(target: &Target, krate: &str) -> std::io::Result<String> 
 }
 
 /// 从下载端点拉取示例 crate，返回（耗时, 吞吐 字节/秒）。
-fn download_speed(dl: &str, krate: &str, version: &str) -> std::io::Result<(Duration, f64)> {
-    let url = download_url(dl, krate, version);
+fn download_speed(dl: &str, version: &str, cfg: &AppConfig) -> std::io::Result<(Duration, f64)> {
+    let url = download_url(dl, &cfg.sample_crate, version);
     let target = parse(&url)?;
     let started = Instant::now();
-    let resp = http_get(&target, &target.path, "*/*", DOWNLOAD_MAX_BYTES)?;
+    let resp = http_get(
+        &target,
+        &target.path,
+        "*/*",
+        cfg.download_max_kb as usize * 1024,
+        cfg,
+    )?;
     let elapsed = started.elapsed();
     ensure_success(&resp.status)?;
     if resp.body.is_empty() {
@@ -205,8 +209,9 @@ fn parse_latest_version(body: &str) -> Option<String> {
 
 /// 获取任意 URL 的响应（状态码 + 正文），供更新检查等通用场景使用。
 pub fn fetch(url: &str, accept: &str, max_bytes: usize) -> std::io::Result<(String, Vec<u8>)> {
+    let cfg = effective_config(&read_settings());
     let target = parse(url)?;
-    let resp = http_get(&target, &target.path, accept, max_bytes)?;
+    let resp = http_get(&target, &target.path, accept, max_bytes, &cfg)?;
     Ok((resp.status, resp.body))
 }
 
@@ -336,14 +341,16 @@ fn http_get(
     path: &str,
     accept: &str,
     max_bytes: usize,
+    cfg: &AppConfig,
 ) -> std::io::Result<Response> {
     let mut host = target.host.clone();
     let mut port = target.port;
     let mut https = target.https;
     let mut path = path.to_string();
 
-    for _ in 0..=MAX_REDIRECTS {
-        let resp = http_get_once(&host, port, https, &path, accept, max_bytes)?;
+    let max_redirects = cfg.max_redirects as usize;
+    for _ in 0..=max_redirects {
+        let resp = http_get_once(&host, port, https, &path, accept, max_bytes, cfg)?;
         if !is_redirect(&resp.status) {
             return Ok(resp);
         }
@@ -361,7 +368,7 @@ fn http_get(
         path = next_path;
     }
     Err(std::io::Error::other(
-        rust_i18n::t!("net.too_many_redirects", max = MAX_REDIRECTS).to_string(),
+        rust_i18n::t!("net.too_many_redirects", max = max_redirects).to_string(),
     ))
 }
 
@@ -400,6 +407,7 @@ fn http_get_once(
     path: &str,
     accept: &str,
     max_bytes: usize,
+    cfg: &AppConfig,
 ) -> std::io::Result<Response> {
     let host_header = if (https && port == 443) || (!https && port == 80) {
         host.to_string()
@@ -416,9 +424,9 @@ fn http_get_once(
     );
 
     let raw = if https {
-        https_get(host, port, &request, max_bytes)?
+        https_get(host, port, &request, max_bytes, cfg)?
     } else {
-        let mut stream = tcp_stream(host, port)?;
+        let mut stream = tcp_stream(host, port, cfg)?;
         stream.write_all(request.as_bytes())?;
         read_all(&mut stream, max_bytes)?
     };
@@ -426,10 +434,11 @@ fn http_get_once(
     parse_response(&raw)
 }
 
-fn tcp_stream(host: &str, port: u16) -> std::io::Result<TcpStream> {
-    let tcp = connect(host, port, TIMEOUT)?;
-    tcp.set_read_timeout(Some(TIMEOUT))?;
-    tcp.set_write_timeout(Some(TIMEOUT))?;
+fn tcp_stream(host: &str, port: u16, cfg: &AppConfig) -> std::io::Result<TcpStream> {
+    let timeout = Duration::from_secs(cfg.timeout_secs);
+    let tcp = connect(host, port, timeout)?;
+    tcp.set_read_timeout(Some(timeout))?;
+    tcp.set_write_timeout(Some(timeout))?;
     Ok(tcp)
 }
 
@@ -438,8 +447,9 @@ fn https_get(
     port: u16,
     request: &str,
     max_bytes: usize,
+    cfg: &AppConfig,
 ) -> std::io::Result<Vec<u8>> {
-    let tcp = tcp_stream(host, port)?;
+    let tcp = tcp_stream(host, port, cfg)?;
     let server_name = ServerName::try_from(host)
         .map_err(std::io::Error::other)?
         .to_owned();

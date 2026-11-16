@@ -28,12 +28,13 @@ use crate::health;
 use crate::log_panel::render_log_panel;
 use crate::logger;
 use crate::model::{
-    Language, Level, LevelTone, PROBE_INTERVAL, Probe, Status, ThemeChoice, apply_theme,
+    Language, Level, LevelTone, Probe, Status, ThemeChoice, apply_theme,
     level_display, probe_summary,
 };
 use crate::net;
 use crate::private_list::render_private_list;
 use crate::registry;
+use crate::settings_dialog;
 use crate::source_list::{SourceItem, SourceList};
 use crate::ui::{STEP_WIDTH, level_tip, logo_icon, open_about_dialog, v_separator};
 use crate::update::{self, Available, UpdateState};
@@ -125,11 +126,15 @@ impl RootView {
         })
         .detach();
 
-        // 启动时立即测速，之后按固定周期自动重新测速。
+        // 启动时立即测速，之后按配置周期自动重新测速。
         cx.spawn(async move |view, cx| {
             loop {
                 let _ = view.update(cx, |view, cx| view.measure_all(cx));
-                cx.background_executor().timer(PROBE_INTERVAL).await;
+                let settings = config_io::read_settings();
+                let interval = std::time::Duration::from_secs(
+                    config_io::effective_config(&settings).probe_interval_secs,
+                );
+                cx.background_executor().timer(interval).await;
             }
         })
         .detach();
@@ -138,9 +143,11 @@ impl RootView {
         cx.spawn(async move |view, cx| {
             loop {
                 let _ = view.update(cx, |view, cx| view.check_for_updates(cx));
-                cx.background_executor()
-                    .timer(update::UPDATE_INTERVAL)
-                    .await;
+                let settings = config_io::read_settings();
+                let interval = std::time::Duration::from_secs(
+                    config_io::effective_config(&settings).update_interval_secs,
+                );
+                cx.background_executor().timer(interval).await;
             }
         })
         .detach();
@@ -181,11 +188,12 @@ impl RootView {
     /// 把当前语言与配置作用域写回设置文件。
     fn persist_settings(&self, cx: &Context<Self>) {
         let state = &self.app.read(cx).state;
-        let _ = config_io::write_settings(&config_io::Settings {
-            language: Some(state.language.code().to_string()),
-            project_root: state.project_root.clone(),
-            project_scope: state.project_scope,
-        });
+        // 读取当前已有设置，保留用户可能已自定义的其他字段
+        let mut settings = config_io::read_settings();
+        settings.language = Some(state.language.code().to_string());
+        settings.project_root = state.project_root.clone();
+        settings.project_scope = state.project_scope;
+        let _ = config_io::write_settings(&settings);
     }
 
     /// 切换配置作用域：全局 ↔ 项目，并重新读取该作用域当前生效的源。
@@ -1403,7 +1411,7 @@ impl Render for RootView {
         };
         let snapshot_tip = rust_i18n::t!(
             "snapshot.tip",
-            count = config_io::SNAPSHOT_LIMIT.to_string()
+            count = config_io::effective_config(&config_io::read_settings()).snapshot_limit.to_string()
         )
         .to_string();
         let health_tip = rust_i18n::t!("health.tip").to_string();
@@ -1474,6 +1482,16 @@ impl Render for RootView {
                                     .on_click(cx.listener(|view, _ev, window, cx| {
                                         view.check_health(window, cx);
                                     })),
+                            )
+                            .child(
+                                // 应用设置：自定义网络参数、测速间隔、日志参数等
+                                Button::new("open-settings")
+                                    .icon(IconName::Settings)
+                                    .label(rust_i18n::t!("settings.button").to_string())
+                                    .small()
+                                    .secondary()
+                                    .tooltip(rust_i18n::t!("settings.button_tip").to_string())
+                                    .on_click(|_, window, cx| settings_dialog::open_settings_dialog(window, cx)),
                             )
                             .child(
                                 h_flex()

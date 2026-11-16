@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use gpui_kit::component::{Theme, ThemeMode};
 use gpui_kit::{App, SharedString, WindowAppearance};
 
@@ -12,9 +10,6 @@ pub(crate) enum Status {
     Success(SharedString),
     Error(SharedString),
 }
-
-/// 自动测速周期。
-pub(crate) const PROBE_INTERVAL: Duration = Duration::from_secs(180);
 
 /// 单层探测在 UI 中的状态。
 #[derive(Debug, Clone, PartialEq, Eq)]

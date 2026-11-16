@@ -3,16 +3,18 @@
 //! - 日志格式遵循业内通用约定：`[YYYY-MM-DD HH:MM:SS.mmm] [LEVEL] [module] message`
 //! - 日志文件归档到用户主目录下以应用名命名的目录：`<HOME>/srmgui/logs/srmgui.log`
 //! - 归档策略采用业内标准的按大小滚动（size-based rotation）：
-//!   * 单个日志文件最大 10 MB，超出后滚动；
-//!   * 保留最近 5 个滚动文件（`srmgui.log.1` ~ `srmgui.log.5`），更旧的自动删除；
+//!   * 单个日志文件最大 10 MB（可通过设置覆盖），超出后滚动；
+//!   * 保留最近 5 个滚动文件（可通过设置覆盖），更旧的自动删除；
 //!   * 启动时若现存日志已超限，先执行一次滚动。
-//! - 内存中保留最近 1000 条日志，供 UI 面板展示。
+//! - 内存中保留最近 1000 条日志（可通过设置覆盖），供 UI 面板展示。
 
 use std::fs::{self, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::config_io::{effective_config, read_settings};
 
 /// 日志级别，从低到高排列。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -57,14 +59,10 @@ impl LogEntry {
     }
 }
 
-/// 单个日志文件最大字节数（10 MB）。
-const MAX_LOG_SIZE: u64 = 10 * 1024 * 1024;
-
-/// 保留的滚动日志文件数量（不含当前写入文件）。
-const MAX_ROTATED_FILES: usize = 5;
-
-/// 内存中保留的最大日志条数，超出后丢弃最旧的。
-const MAX_IN_MEMORY_ENTRIES: usize = 1000;
+/// 从设置读取日志参数，回退默认值。
+fn cfg() -> crate::config_io::AppConfig {
+    effective_config(&read_settings())
+}
 
 /// 应用日志目录：`<HOME>/srmgui/logs`。
 pub fn log_dir() -> PathBuf {
@@ -118,8 +116,11 @@ impl LoggerInner {
         let line = entry.format();
         let bytes = line.len() as u64 + 1; // +1 换行符
 
+        let log_size_limit = cfg().max_log_mb * 1024 * 1024;
+        let max_entries = cfg().max_log_entries;
+
         // 若写入后会超限，先滚动再写。
-        if self.bytes_written + bytes > MAX_LOG_SIZE {
+        if self.bytes_written + bytes > log_size_limit {
             self.rotate();
         }
 
@@ -131,8 +132,8 @@ impl LoggerInner {
 
         // 内存缓冲：保留最近 N 条。
         self.entries.push(entry);
-        if self.entries.len() > MAX_IN_MEMORY_ENTRIES {
-            let overflow = self.entries.len() - MAX_IN_MEMORY_ENTRIES;
+        if self.entries.len() > max_entries {
+            let overflow = self.entries.len() - max_entries;
             self.entries.drain(0..overflow);
         }
     }
@@ -220,12 +221,14 @@ pub fn error(module: &str, message: impl AsRef<str>) {
 
 /// 按大小滚动日志文件。
 ///
-/// 当 `path` 指向的当前日志文件大小超过 `MAX_LOG_SIZE` 时执行滚动：
+/// 当 `path` 指向的当前日志文件大小超过配置的上限时执行滚动：
 /// `srmgui.log` -> `srmgui.log.1`，旧的 `.1` -> `.2`，以此类推，
-/// 超过 `MAX_ROTATED_FILES` 的最旧文件被删除。
+/// 超过配置保留数量的最旧文件被删除。
 fn rotate_files(path: &Path) {
+    let log_size_limit = cfg().max_log_mb * 1024 * 1024;
+    let max_rotated = cfg().max_rotated_logs;
     let size = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-    if size < MAX_LOG_SIZE {
+    if size < log_size_limit {
         return;
     }
 
@@ -236,11 +239,11 @@ fn rotate_files(path: &Path) {
         .unwrap_or("srmgui.log");
 
     // 先删除最旧的归档文件，腾出编号空间。
-    let oldest = parent.join(format!("{stem}.{MAX_ROTATED_FILES}"));
+    let oldest = parent.join(format!("{stem}.{max_rotated}"));
     let _ = fs::remove_file(&oldest);
 
     // 从高到低依次轮转，避免覆盖。
-    for i in (1..MAX_ROTATED_FILES).rev() {
+    for i in (1..max_rotated).rev() {
         let src = parent.join(format!("{stem}.{i}"));
         let dst = parent.join(format!("{stem}.{}", i + 1));
         if src.exists() {

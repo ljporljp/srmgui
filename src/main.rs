@@ -15,6 +15,7 @@ mod net;
 mod private_list;
 mod registry;
 mod root_view;
+mod settings_dialog;
 mod source_list;
 mod ui;
 mod update;

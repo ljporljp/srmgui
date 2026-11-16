@@ -6,14 +6,10 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
 
 use crate::config_io;
 use crate::logger;
 use crate::net;
-
-/// 后台检查更新的周期。
-pub(crate) const UPDATE_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 /// 最新版本查询接口。
 const RELEASE_API: &str = "https://api.github.com/repos/ljporljp/srmgui/releases/latest";
