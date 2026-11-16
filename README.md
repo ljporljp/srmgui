@@ -2,13 +2,15 @@
 
 # srmgui
 
-一个基于 [GPUI Kit](https://crates.io/crates/gpui-kit) 的桌面小工具，用于查看、测速并切换 Rust Cargo 的镜像源，配置直接写入 `~/.cargo/config.toml`。
+一个基于 [GPUI Kit](https://crates.io/crates/gpui-kit) 的桌面小工具，用于查看、测速并切换 Rust Cargo 的镜像源，同时支持企业私有 Registry 的索引与认证 token 管理，配置直接写入 Cargo 配置与凭据文件。
 
 ## 界面预览
 
 | 内置源（测速结果） | 自定义源 |
 | --- | --- |
 | ![内置源](.screenshots/01-builtin-sources.png) | ![自定义源](.screenshots/04-custom-sources.png) |
+| 私有 Registry | 添加私有 Registry |
+| ![私有 Registry](.screenshots/05-private-registry.png) | ![添加私有 Registry](.screenshots/06-private-add.png) |
 | 日志面板 | 深色模式 |
 | ![日志面板](.screenshots/03-log.png) | ![深色模式](.screenshots/02-dark-mode.png) |
 
@@ -22,6 +24,7 @@
   4. 下载测速（报告速度）
 - **定时刷新**：启动后自动测速，并每 180 秒重新探测一轮。
 - **自定义源**：支持添加任意 sparse registry，按标识名判重、自动补全 `sparse+https://` 前缀。
+- **私有 Registry**：独立管理 `[registries.<name>]` 索引与认证 token，支持 sparse / git 索引，适配企业私有镜像；token 单独写入 `~/.cargo/credentials.toml`，不会进入项目配置。
 - **导入 / 导出**：自定义源可导出为 srmgui 自定义的 `.srmgui` 文件，也可从该格式导入并自动合并（跳过内置源与重复标识）。
 - **主题切换**：跟随系统 / 浅色 / 深色。
 - **细节体验**：固定列宽布局，过长文字循环滚动显示，悬停显示完整详情 tips。
@@ -69,6 +72,15 @@
 ### 自定义源
 
 在「自定义源」标签页填写标识名、名称、Registry URL（说明可选）后点击「添加」。URL 若未带协议，会自动规范化为 `sparse+https://<host>/`。
+
+### 私有 Registry
+
+在「私有 Registry」标签页管理企业私有镜像，和内置源替换是两套独立配置：
+
+- **名称**：对应 `Cargo.toml` 中 `registry = "名称"` 的标识，仅允许字母、数字、连字符与下划线，`crates-io` 为保留名称；
+- **Index URL**：支持 `sparse+https://...` sparse 索引，也支持 `https://...`、`ssh://...`、`git@...` 等 git 索引；未带协议时自动补全为 `sparse+https://<host>/`；
+- **认证 Token（可选）**：写入 `$CARGO_HOME/credentials.toml` 的 `[registries.<name>]`，列表中显示「已配置 / 未配置」。匿名只读镜像或使用 credential provider 时可留空；
+- 索引写入当前作用域的 `config.toml`（全局或项目级），删除时会同步移除对应 registry，并在没有其他配置引用时清理 token。
 
 ### 导入 / 导出
 
@@ -123,6 +135,20 @@ git-fetch-with-cli = true
 
 选择「官方 crates.io」时不写 `replace-with`，即回到 Cargo 默认行为。
 
+私有 Registry 的索引与 token 分开存放：
+
+```toml
+# ~/.cargo/config.toml
+[registries.company]
+index = "sparse+https://cargo.example.com/index/"
+```
+
+```toml
+# ~/.cargo/credentials.toml
+[registries.company]
+token = "******"
+```
+
 ## 构建与运行
 
 需要 Rust 工具链（edition 2024）。
@@ -170,10 +196,12 @@ srmgui/
 │   ├── main.rs       # 程序入口与窗口初始化
 │   ├── root_view.rs  # 主界面布局、应用/回滚等交互
 │   ├── source_list.rs # 源列表与测速结果展示
+│   ├── private_list.rs # 私有 Registry 列表与删除
+│   ├── add_form.rs   # 自定义源与私有 Registry 添加表单
 │   ├── config_dialog.rs # 写入前预览、快照列表、diff 查看对话框
 │   ├── diff.rs       # 行级 LCS diff 算法
 │   ├── registry.rs   # 内置源列表与 config.toml 内容生成
-│   ├── config_io.rs  # 配置读取/写入、快照保存与恢复、自定义源导入导出
+│   ├── config_io.rs  # 配置读取/写入、快照保存与恢复、自定义源与私有 Registry 管理
 │   ├── update.rs     # 检查 GitHub Releases、下载并启动安装包
 │   └── net.rs        # 四层网络探测
 └── Cargo.toml
