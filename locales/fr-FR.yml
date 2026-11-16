@@ -137,6 +137,14 @@ log:
   private_delete: "Registre privé supprimé : %{name}"
   private_failed: "Échec de la configuration du registre privé : %{error}"
   private_empty: "Échec de l'ajout du registre privé : le nom ou l'URL de l'index est vide"
+  search_placeholder: Rechercher dans les journaux…
+  filter_all: Tous
+  filtered_empty: Aucun journal ne correspond aux filtres actuels
+  export_diag: Exporter le diagnostic
+  export_diag_tip: Regroupe journaux, configurations et informations d'environnement pour le dépannage
+  diag_exported: Diagnostic exporté vers %{path}
+  diag_export_failed: "Échec de l'export du diagnostic : %{error}"
+  diag_picker_failed: "Impossible d'ouvrir la boîte de dialogue d'enregistrement : %{error}"
 
 probe:
   tcp: Connexion TCP

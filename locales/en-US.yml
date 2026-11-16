@@ -137,6 +137,14 @@ log:
   private_delete: "Deleted private registry: %{name}"
   private_failed: "Failed to configure the private registry: %{error}"
   private_empty: "Add private registry failed: name or Index URL is empty"
+  search_placeholder: Search logs…
+  filter_all: All
+  filtered_empty: No logs match the current filters
+  export_diag: Export diagnostics
+  export_diag_tip: Packages logs, configs, and environment info for troubleshooting
+  diag_exported: Diagnostics exported to %{path}
+  diag_export_failed: "Failed to export diagnostics: %{error}"
+  diag_picker_failed: "Failed to open the save dialog: %{error}"
 
 probe:
   tcp: TCP

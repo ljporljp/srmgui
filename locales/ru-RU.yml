@@ -137,6 +137,14 @@ log:
   private_delete: "Удалён приватный Registry: %{name}"
   private_failed: "Не удалось настроить приватный Registry: %{error}"
   private_empty: "Не удалось добавить приватный Registry: имя или Index URL пусты"
+  search_placeholder: Поиск по журналам…
+  filter_all: Все
+  filtered_empty: Нет журналов, соответствующих текущим фильтрам
+  export_diag: Экспорт диагностики
+  export_diag_tip: Упаковывает журналы, конфигурации и сведения о среде для поиска проблем
+  diag_exported: "Диагностический пакет сохранён: %{path}"
+  diag_export_failed: "Не удалось экспортировать диагностику: %{error}"
+  diag_picker_failed: "Не удалось открыть диалог сохранения: %{error}"
 
 probe:
   tcp: TCP-соединение

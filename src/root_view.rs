@@ -27,8 +27,9 @@ use crate::cache_dialog;
 use crate::config_dialog;
 use crate::config_io;
 use crate::config_io::CustomSource;
+use crate::diagnostics;
 use crate::health;
-use crate::log_panel::render_log_panel;
+use crate::log_panel::{LogLevelFilter, render_log_panel};
 use crate::logger;
 use crate::manifest::{self, ManifestSource};
 use crate::model::{
@@ -68,6 +69,10 @@ pub(crate) struct RootView {
     pub(crate) new_registry_name_input: Entity<InputState>,
     pub(crate) new_registry_index_input: Entity<InputState>,
     pub(crate) new_registry_token_input: Entity<InputState>,
+    /// 日志面板的关键字搜索框。
+    pub(crate) log_search_input: Entity<InputState>,
+    /// 日志面板的级别过滤条件。
+    pub(crate) log_level: LogLevelFilter,
     /// 测速定时任务，配置变更时丢弃并以新周期重建。
     probe_task: Option<Task<()>>,
     /// 更新检查定时任务，配置变更时丢弃并以新周期重建。
@@ -111,6 +116,10 @@ impl RootView {
         new_registry_token_input.update(cx, |state, cx| {
             state.set_masked(true, window, cx);
         });
+        let log_search_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("log.search_placeholder").to_string())
+        });
         let mut view = Self {
             app,
             bottom_panel: BottomPanel::None,
@@ -121,9 +130,15 @@ impl RootView {
             new_registry_name_input,
             new_registry_index_input,
             new_registry_token_input,
+            log_search_input: log_search_input.clone(),
+            log_level: LogLevelFilter::all(),
             probe_task: None,
             update_task: None,
         };
+
+        // 搜索框内容变化时重绘日志面板，实时刷新过滤结果。
+        cx.observe(&log_search_input, |_view, _input, cx| cx.notify())
+            .detach();
 
         logger::info("app", rust_i18n::t!("log.app_start").to_string());
 
@@ -1664,6 +1679,131 @@ impl RootView {
         .detach();
     }
 
+    /// 导出诊断包：日志、Cargo 配置、应用设置与环境信息打包为 zip。
+    pub(crate) fn export_diagnostics(&mut self, cx: &mut Context<Self>) {
+        let (project_root, context) = {
+            let state = &self.app.read(cx).state;
+            let region = region::location_label(
+                state.region.as_deref().unwrap_or(""),
+                state.province.as_deref(),
+                state.province_name.as_deref(),
+            );
+            let theme = match state.theme {
+                ThemeChoice::System => "system",
+                ThemeChoice::Light => "light",
+                ThemeChoice::Dark => "dark",
+            };
+            let context = vec![
+                (
+                    "scope".to_string(),
+                    if state.project_scope {
+                        "project"
+                    } else {
+                        "global"
+                    }
+                    .to_string(),
+                ),
+                (
+                    "project_root".to_string(),
+                    state
+                        .project_root
+                        .as_ref()
+                        .map(|root| root.display().to_string())
+                        .unwrap_or_default(),
+                ),
+                (
+                    "current_source".to_string(),
+                    state
+                        .current
+                        .as_ref()
+                        .map(|id| id.to_string())
+                        .unwrap_or_else(|| "<none>".to_string()),
+                ),
+                ("selected_source".to_string(), state.selected.to_string()),
+                ("region".to_string(), region),
+                ("language".to_string(), state.language.code().to_string()),
+                ("theme".to_string(), theme.to_string()),
+            ];
+            (state.project_root.clone(), context)
+        };
+
+        let directory = config_io::app_dir()
+            .ok()
+            .and_then(|dir| dir.parent().map(Path::to_path_buf))
+            .unwrap_or_else(|| PathBuf::from("."));
+        let stamp: String = logger::format_timestamp()
+            .chars()
+            .filter(|c| c.is_ascii_digit())
+            .take(14)
+            .collect();
+        let suggested = format!("srmgui-diagnostics-{}-{}.zip", &stamp[0..8], &stamp[8..14]);
+
+        let receiver = cx.prompt_for_new_path(&directory, Some(&suggested));
+        cx.spawn(async move |view, cx| {
+            let path = match receiver.await {
+                Ok(Ok(Some(path))) => path,
+                Ok(Ok(None)) => return,
+                Ok(Err(error)) => {
+                    let message =
+                        rust_i18n::t!("log.diag_picker_failed", error = error.to_string())
+                            .to_string();
+                    let _ = view.update(cx, |view, cx| {
+                        view.app.update(cx, |model, cx| {
+                            model.state.status = Status::Error(message.clone().into());
+                            cx.notify();
+                        });
+                    });
+                    return;
+                }
+                Err(_) => return,
+            };
+            let target = if path.extension().is_none() {
+                path.with_extension("zip")
+            } else {
+                path
+            };
+            let target_text = target.display().to_string();
+
+            // 读盘与打包放到后台执行，避免日志较多时阻塞界面。
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    diagnostics::export_bundle(&target, project_root.as_deref(), &context)
+                })
+                .await;
+
+            match &result {
+                Ok(_) => logger::info(
+                    "diag",
+                    rust_i18n::t!("log.diag_exported", path = target_text.as_str()).to_string(),
+                ),
+                Err(error) => logger::error(
+                    "diag",
+                    rust_i18n::t!("log.diag_export_failed", error = format!("{error:#}"))
+                        .to_string(),
+                ),
+            }
+            let _ = view.update(cx, |view, cx| {
+                view.app.update(cx, |model, cx| {
+                    model.state.status = match result {
+                        Ok(_) => Status::Success(
+                            rust_i18n::t!("log.diag_exported", path = target_text.as_str())
+                                .to_string()
+                                .into(),
+                        ),
+                        Err(error) => Status::Error(
+                            rust_i18n::t!("log.diag_export_failed", error = format!("{error:#}"))
+                                .to_string()
+                                .into(),
+                        ),
+                    };
+                    cx.notify();
+                });
+            });
+        })
+        .detach();
+    }
+
     /// 单个源的四个步骤：步骤之间用贯通上下的分隔线隔开，并各自带状态 tips。
     pub(crate) fn render_probe(&self, id: &str, cx: &mut Context<Self>) -> AnyElement {
         let Some(probe) = self.app.read(cx).state.probes.get(id).cloned() else {
@@ -2574,7 +2714,7 @@ impl Render for RootView {
                                     Animation::new(Duration::from_millis(220)),
                                     |this, delta| this.opacity(delta).mt(px(16.0 * (1.0 - delta))),
                                 )
-                                .child(render_log_panel(viewport_height, cx))
+                                .child(render_log_panel(self, viewport_height, cx))
                                 .into_any_element(),
                         ],
                     })

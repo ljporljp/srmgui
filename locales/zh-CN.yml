@@ -137,6 +137,14 @@ log:
   private_delete: 删除私有 Registry：%{name}
   private_failed: 私有 Registry 配置失败：%{error}
   private_empty: 添加私有 Registry 失败：名称或 Index URL 为空
+  search_placeholder: 搜索日志关键字…
+  filter_all: 全部
+  filtered_empty: 没有匹配当前过滤条件的日志
+  export_diag: 导出诊断包
+  export_diag_tip: 打包日志、配置与环境信息，便于排查和反馈问题
+  diag_exported: 诊断包已导出：%{path}
+  diag_export_failed: 导出诊断包失败：%{error}
+  diag_picker_failed: 打开保存对话框失败：%{error}
 
 probe:
   tcp: TCP 连通

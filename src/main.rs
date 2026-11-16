@@ -7,6 +7,7 @@ mod cache_dialog;
 mod cli;
 mod config_dialog;
 mod config_io;
+mod diagnostics;
 mod diff;
 mod health;
 mod log_panel;

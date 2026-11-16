@@ -137,6 +137,14 @@ log:
   private_delete: "プライベート Registry を削除：%{name}"
   private_failed: "プライベート Registry の設定に失敗：%{error}"
   private_empty: "プライベート Registry の追加に失敗：名前または Index URL が空です"
+  search_placeholder: ログを検索…
+  filter_all: すべて
+  filtered_empty: 現在のフィルターに一致するログはありません
+  export_diag: 診断パッケージを書き出す
+  export_diag_tip: ログ・設定・環境情報をまとめて問題調査に役立てます
+  diag_exported: 診断パッケージを書き出しました：%{path}
+  diag_export_failed: 診断パッケージの書き出しに失敗しました：%{error}
+  diag_picker_failed: 保存ダイアログを開けませんでした：%{error}
 
 probe:
   tcp: TCP 接続

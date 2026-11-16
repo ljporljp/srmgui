@@ -137,6 +137,14 @@ log:
   private_delete: "Private Registry gelöscht: %{name}"
   private_failed: "Private Registry konnte nicht konfiguriert werden: %{error}"
   private_empty: "Private Registry hinzufügen fehlgeschlagen: Name oder Index-URL ist leer"
+  search_placeholder: Protokolle durchsuchen…
+  filter_all: Alle
+  filtered_empty: Keine Protokolle entsprechen den aktuellen Filtern
+  export_diag: Diagnosepaket exportieren
+  export_diag_tip: Packt Protokolle, Konfigurationen und Umgebungsinfos für die Fehlersuche
+  diag_exported: "Diagnosepaket exportiert: %{path}"
+  diag_export_failed: "Diagnosepaket konnte nicht exportiert werden: %{error}"
+  diag_picker_failed: "Speichern-Dialog konnte nicht geöffnet werden: %{error}"
 
 probe:
   tcp: TCP-Verbindung

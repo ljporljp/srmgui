@@ -137,6 +137,14 @@ log:
   private_delete: "Registro privado eliminado: %{name}"
   private_failed: "No se pudo configurar el registro privado: %{error}"
   private_empty: "No se pudo añadir el registro privado: el nombre o la URL del índice están vacíos"
+  search_placeholder: Buscar en los registros…
+  filter_all: Todos
+  filtered_empty: Ningún registro coincide con los filtros actuales
+  export_diag: Exportar diagnóstico
+  export_diag_tip: Empaqueta registros, configuraciones e información del entorno para diagnosticar problemas
+  diag_exported: Diagnóstico exportado a %{path}
+  diag_export_failed: "No se pudo exportar el diagnóstico: %{error}"
+  diag_picker_failed: "No se pudo abrir el diálogo de guardado: %{error}"
 
 probe:
   tcp: Conexión TCP

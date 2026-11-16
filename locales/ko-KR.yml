@@ -137,6 +137,14 @@ log:
   private_delete: "프라이빗 Registry 삭제: %{name}"
   private_failed: "프라이빗 Registry 설정 실패: %{error}"
   private_empty: "프라이빗 Registry 추가 실패: 이름 또는 Index URL이 비어 있습니다"
+  search_placeholder: 로그 검색…
+  filter_all: 전체
+  filtered_empty: 현재 필터와 일치하는 로그가 없습니다
+  export_diag: 진단 패키지 내보내기
+  export_diag_tip: 로그, 설정, 환경 정보를 묶어 문제 해결에 사용합니다
+  diag_exported: "진단 패키지를 내보냈습니다: %{path}"
+  diag_export_failed: "진단 패키지 내보내기 실패: %{error}"
+  diag_picker_failed: "저장 대화상자를 열지 못했습니다: %{error}"
 
 probe:
   tcp: TCP 연결
