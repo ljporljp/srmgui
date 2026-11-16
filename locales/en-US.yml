@@ -36,7 +36,7 @@ source:
   current: In use
   apply: Apply
   delete: Delete
-  tip: "ID: %{id}\nName: %{name}\nDescription: %{description}\nRegistry URL: %{url}"
+  tip: "ID: %{id}\nName: %{name}\nDescription: %{description}\nRegion: %{region}\nRegistry URL: %{url}"
   none: (none)
   empty: No custom sources yet. Please add one.
 
@@ -185,22 +185,49 @@ error:
 registry:
   rsproxy:
     name: RsProxy (ByteDance)
-    description: Most stable in China, recommended for daily use
+    description: Fastest in mainland China, recommended for daily use
   aliyun:
     name: Alibaba Cloud
-    description: Backup source; index sometimes works but downloads may 404
+    description: Enterprise mirror with stable downloads
   ustc:
     name: USTC
-    description: Docs still online; connectivity fluctuates
+    description: East China education network mirror
   tuna:
     name: Tsinghua TUNA
-    description: Docs still online; occasionally unresponsive
+    description: North China education network mirror
   sjtu:
     name: SJTUG (Shanghai Jiao Tong University)
-    description: University mirror, good for emergencies
+    description: Shanghai university mirror, good for emergencies
+  huawei:
+    name: Huawei Cloud
+    description: Enterprise mirror covering the whole country
+  cernet:
+    name: CERNET
+    description: Joint education network mirror with automatic scheduling
+  nju:
+    name: Nanjing University
+    description: Jiangsu university mirror (East China backup)
+  bfsu:
+    name: BFSU
+    description: Beijing education network mirror
+  sdu:
+    name: Shandong University
+    description: Shandong university mirror
+  hust:
+    name: HUST
+    description: Central China university mirror
+  zju:
+    name: Zhejiang University
+    description: Zhejiang university mirror
+  neusoft:
+    name: Neusoft
+    description: Northeast China mirror
+  nyist:
+    name: NYIST
+    description: Henan university mirror (Central China backup)
   official:
     name: Official crates.io
-    description: Default source; switch back before cargo publish
+    description: Global official source, best outside China
 
 update:
   available: New version %{version} available
@@ -240,6 +267,18 @@ manifest:
   log_failed: "Failed to refresh the built-in source manifest: %{error}"
   refreshed: Built-in source manifest updated, %{count} source(s)
   refresh_failed: "Failed to fetch the built-in source manifest: %{error}"
+
+region:
+  cn: China
+  global: Global
+  unknown: Unspecified
+
+recommend:
+  title: "Detected region: %{region} · Recommended: %{source}"
+  apply: Use recommended
+  basis: "Measured %{speed} · index %{latency}"
+  log_detected: "Detected region: %{region}"
+  log_failed: Failed to detect region, keeping the previous result
 
 share:
   button: Share

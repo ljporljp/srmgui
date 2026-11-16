@@ -199,6 +199,12 @@ pub struct Snapshot {
 pub struct Settings {
     /// 持久化的界面语言（如 `zh-CN` / `en-US`）。
     pub language: Option<String>,
+    /// 上次识别到的所在地区（`CN` / 国家代码），用于离线时展示推荐源。
+    pub region: Option<String>,
+    /// 上次识别到的省份代码（如 `ZJ`），仅中国大陆有值。
+    pub province: Option<String>,
+    /// 上次识别到的省份显示名（接口原始值，如 `浙江` / `Zhejiang`）。
+    pub province_name: Option<String>,
     /// 上次选中的项目根目录（含 `Cargo.toml` 的目录）。
     pub project_root: Option<PathBuf>,
     /// 是否写入项目级配置（`<项目根>/.cargo/config.toml`）。
@@ -339,6 +345,18 @@ pub fn read_settings() -> Settings {
             .get("language")
             .and_then(toml::Value::as_str)
             .map(str::to_string),
+        region: root
+            .get("region")
+            .and_then(toml::Value::as_str)
+            .map(str::to_string),
+        province: root
+            .get("province")
+            .and_then(toml::Value::as_str)
+            .map(str::to_string),
+        province_name: root
+            .get("province_name")
+            .and_then(toml::Value::as_str)
+            .map(str::to_string),
         project_root: root
             .get("project_root")
             .and_then(toml::Value::as_str)
@@ -369,6 +387,15 @@ pub fn write_settings(settings: &Settings) -> Result<()> {
     let mut content = String::from("# srmgui 设置（由 srmgui 管理，请勿手动编辑）\n");
     if let Some(code) = &settings.language {
         content.push_str(&format!("language = {}\n", quote(code)));
+    }
+    if let Some(region) = &settings.region {
+        content.push_str(&format!("region = {}\n", quote(region)));
+    }
+    if let Some(province) = &settings.province {
+        content.push_str(&format!("province = {}\n", quote(province)));
+    }
+    if let Some(name) = &settings.province_name {
+        content.push_str(&format!("province_name = {}\n", quote(name)));
     }
     let scope = if settings.project_scope {
         "project"

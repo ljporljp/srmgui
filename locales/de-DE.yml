@@ -36,7 +36,7 @@ source:
   current: Aktiv
   apply: Anwenden
   delete: Löschen
-  tip: "ID: %{id}\nName: %{name}\nBeschreibung: %{description}\nRegistry-URL: %{url}"
+  tip: "ID: %{id}\nName: %{name}\nBeschreibung: %{description}\nRegion: %{region}\nRegistry-URL: %{url}"
   none: (keine)
   empty: Noch keine benutzerdefinierten Spiegel. Bitte fügen Sie einen hinzu.
 
@@ -185,22 +185,49 @@ error:
 registry:
   rsproxy:
     name: RsProxy (ByteDance)
-    description: In China am stabilsten, für den täglichen Einsatz empfohlen
+    description: Am schnellsten in Festlandchina, für den täglichen Einsatz empfohlen
   aliyun:
     name: Alibaba Cloud
-    description: Ausweichspiegel; Index oft erreichbar, Downloads teils 404
+    description: Unternehmensspiegel mit stabilen Downloads
   ustc:
     name: USTC (Uni. Wissenschaft und Technik China)
-    description: Doku noch online, Verbindung schwankt
+    description: Spiegel des Bildungsnetzes Ostchina
   tuna:
     name: Tsinghua TUNA
-    description: Doku noch online, gelegentlich ohne Antwort
+    description: Spiegel des Bildungsnetzes Nordchina
   sjtu:
     name: SJTUG (Shanghai Jiao Tong University)
-    description: Universitäts-Spiegel, gut für Notfälle
+    description: Shanghaier Universitäts-Spiegel, gut für Notfälle
+  huawei:
+    name: Huawei Cloud
+    description: Unternehmensspiegel mit landesweiter Abdeckung
+  cernet:
+    name: CERNET
+    description: Gemeinsamer Bildungsnetz-Spiegel mit automatischer Verteilung
+  nju:
+    name: Nanjing University
+    description: Jiangsu-Universitäts-Spiegel (Ostchina-Reserve)
+  bfsu:
+    name: BFSU
+    description: Pekinger Bildungsnetz-Spiegel
+  sdu:
+    name: Shandong University
+    description: Shandong-Universitäts-Spiegel
+  hust:
+    name: HUST
+    description: Zentralchina-Universitäts-Spiegel
+  zju:
+    name: Zhejiang University
+    description: Zhejiang-Universitäts-Spiegel
+  neusoft:
+    name: Neusoft
+    description: Spiegel für Nordostchina
+  nyist:
+    name: NYIST
+    description: Henan-Universitäts-Spiegel (Zentralchina-Reserve)
   official:
     name: Offizielles crates.io
-    description: Standardspiegel; vor cargo publish zurückwechseln
+    description: Globaler offizieller Quell, außerhalb Chinas empfohlen
 
 update:
   available: Neue Version %{version} verfügbar
@@ -240,6 +267,18 @@ manifest:
   log_failed: "Aktualisieren des integrierten Quellenmanifests fehlgeschlagen: %{error}"
   refreshed: Integriertes Quellenmanifest aktualisiert, %{count} Quelle(n)
   refresh_failed: "Abrufen des integrierten Quellenmanifests fehlgeschlagen: %{error}"
+
+region:
+  cn: China
+  global: Global
+  unknown: Unbekannt
+
+recommend:
+  title: "Erkannte Region: %{region} · Empfohlen: %{source}"
+  apply: Empfohlenen Quell verwenden
+  basis: "Gemessen %{speed} · Index %{latency}"
+  log_detected: "Erkannte Region: %{region}"
+  log_failed: Region konnte nicht ermittelt werden, vorheriges Ergebnis bleibt erhalten
 
 share:
   button: Teilen

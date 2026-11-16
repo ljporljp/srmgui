@@ -25,6 +25,12 @@ pub(crate) struct State {
     pub(crate) probes: HashMap<String, Probe>,
     pub(crate) theme: ThemeChoice,
     pub(crate) language: Language,
+    /// 出口 IP 所在地区（`CN` / `GLOBAL`），用于推荐本地镜像源。
+    pub(crate) region: Option<String>,
+    /// 出口 IP 所在省份代码（如 `ZJ`），仅中国大陆有值。
+    pub(crate) province: Option<String>,
+    /// 出口 IP 所在省份显示名（接口原始值，如 `浙江` / `Zhejiang`）。
+    pub(crate) province_name: Option<String>,
     pub(crate) update: UpdateState,
     /// 上次选中的项目根目录（含 `Cargo.toml` 的目录）。
     pub(crate) project_root: Option<PathBuf>,
@@ -40,6 +46,9 @@ impl State {
         customs: HashMap<String, CustomSource>,
         registries: Vec<PrivateRegistry>,
         language: Language,
+        region: Option<String>,
+        province: Option<String>,
+        province_name: Option<String>,
         project_root: Option<PathBuf>,
         project_scope: bool,
     ) -> Self {
@@ -55,6 +64,9 @@ impl State {
             probes: HashMap::new(),
             theme: ThemeChoice::System,
             language,
+            region,
+            province,
+            province_name,
             update: UpdateState::Idle,
             project_root,
             project_scope,
@@ -90,6 +102,9 @@ impl CargoMirrorApp {
                     .and_then(|dir| config_io::detect_project_root(&dir))
             });
         let project_scope = settings.project_scope && project_root.is_some();
+        let region = settings.region.clone();
+        let province = settings.province.clone();
+        let province_name = settings.province_name.clone();
 
         let current = config_io::current_source_scoped(if project_scope {
             project_root.as_deref()
@@ -110,6 +125,9 @@ impl CargoMirrorApp {
                 customs,
                 registries,
                 language,
+                region,
+                province,
+                province_name,
                 project_root,
                 project_scope,
             ),

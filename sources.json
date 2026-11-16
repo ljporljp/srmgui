@@ -1,43 +1,127 @@
 {
   "format": "srmgui.manifest",
-  "version": 1,
+  "version": 3,
   "updated": "2026-11-16",
   "sources": [
     {
       "id": "rsproxy",
       "name": "RsProxy（字节）",
-      "description": "国内实测最稳，推荐日常使用",
-      "url": "sparse+https://rsproxy.cn/index/"
+      "description": "国内实测最快，推荐日常使用",
+      "url": "sparse+https://rsproxy.cn/index/",
+      "region": "CN",
+      "province": "BJ"
     },
     {
       "id": "aliyun",
       "name": "阿里云",
-      "description": "备用源，偶发索引通但下载 404",
-      "url": "sparse+https://mirrors.aliyun.com/crates.io-index/"
+      "description": "企业级镜像，下载稳定",
+      "url": "sparse+https://mirrors.aliyun.com/crates.io-index/",
+      "region": "CN",
+      "province": "ZJ"
     },
     {
       "id": "ustc",
       "name": "中科大 USTC",
-      "description": "文档仍在，连通性波动较大",
-      "url": "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
+      "description": "华东教育网镜像，连通性好",
+      "url": "sparse+https://mirrors.ustc.edu.cn/crates.io-index/",
+      "region": "CN",
+      "province": "AH"
     },
     {
       "id": "tuna",
       "name": "清华 TUNA",
-      "description": "帮助文档仍在，偶发无响应",
-      "url": "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"
+      "description": "华北教育网镜像，更新及时",
+      "url": "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/",
+      "region": "CN",
+      "province": "BJ"
     },
     {
       "id": "sjtu",
       "name": "上海交大 SJTUG",
-      "description": "高校源，适合应急",
-      "url": "sparse+https://mirrors.sjtug.sjtu.edu.cn/crates.io-index/"
+      "description": "华东高校镜像，适合应急",
+      "url": "sparse+https://mirrors.sjtug.sjtu.edu.cn/crates.io-index/",
+      "region": "CN",
+      "province": "SH"
+    },
+    {
+      "id": "huawei",
+      "name": "华为云",
+      "description": "企业级镜像，覆盖全国",
+      "url": "sparse+https://mirrors.huaweicloud.com/crates.io-index/",
+      "region": "CN",
+      "province": "GD"
+    },
+    {
+      "id": "cernet",
+      "name": "CERNET 联合镜像",
+      "description": "教育网联合镜像，自动调度",
+      "url": "sparse+https://mirrors.cernet.edu.cn/crates.io-index/",
+      "region": "CN",
+      "province": ""
+    },
+    {
+      "id": "nju",
+      "name": "南京大学",
+      "description": "江苏高校镜像，华东备用",
+      "url": "sparse+https://mirrors.nju.edu.cn/crates.io-index/",
+      "region": "CN",
+      "province": "JS"
+    },
+    {
+      "id": "bfsu",
+      "name": "北外 BFSU",
+      "description": "北京教育网镜像，华北备用",
+      "url": "sparse+https://mirrors.bfsu.edu.cn/crates.io-index/",
+      "region": "CN",
+      "province": "BJ"
+    },
+    {
+      "id": "sdu",
+      "name": "山东大学",
+      "description": "山东高校镜像，华北备用",
+      "url": "sparse+https://mirrors.sdu.edu.cn/crates.io-index/",
+      "region": "CN",
+      "province": "SD"
+    },
+    {
+      "id": "hust",
+      "name": "华中科技大学",
+      "description": "华中高校镜像，中部备用",
+      "url": "sparse+https://mirrors.hust.edu.cn/crates.io-index/",
+      "region": "CN",
+      "province": "HB"
+    },
+    {
+      "id": "zju",
+      "name": "浙江大学",
+      "description": "浙江高校镜像，华东备用",
+      "url": "sparse+https://mirrors.zju.edu.cn/crates.io-index/",
+      "region": "CN",
+      "province": "ZJ"
+    },
+    {
+      "id": "neusoft",
+      "name": "东软",
+      "description": "东北镜像，北方备用",
+      "url": "sparse+https://mirrors.neusoft.edu.cn/crates.io-index/",
+      "region": "CN",
+      "province": "LN"
+    },
+    {
+      "id": "nyist",
+      "name": "南阳理工学院",
+      "description": "河南高校镜像，中原备用",
+      "url": "sparse+https://mirror.nyist.edu.cn/crates.io-index/",
+      "region": "CN",
+      "province": "HA"
     },
     {
       "id": "official",
       "name": "官方 crates.io",
-      "description": "默认源，cargo publish 前建议切回",
-      "url": "sparse+https://index.crates.io/"
+      "description": "全球官方源，海外首选",
+      "url": "sparse+https://index.crates.io/",
+      "region": "GLOBAL",
+      "province": ""
     }
   ]
 }

@@ -36,7 +36,7 @@ source:
   current: En uso
   apply: Aplicar
   delete: Eliminar
-  tip: "ID: %{id}\nNombre: %{name}\nDescripción: %{description}\nURL del registro: %{url}"
+  tip: "ID: %{id}\nNombre: %{name}\nDescripción: %{description}\nRegión: %{region}\nURL del registro: %{url}"
   none: (ninguno)
   empty: Aún no hay espejos personalizados. Añade uno.
 
@@ -185,22 +185,49 @@ error:
 registry:
   rsproxy:
     name: RsProxy (ByteDance)
-    description: El más estable en China, recomendado para el día a día
+    description: El más rápido en China continental, recomendado para el día a día
   aliyun:
     name: Alibaba Cloud
-    description: Espejo de respaldo; el índice responde pero las descargas pueden dar 404
+    description: Espejo empresarial con descargas estables
   ustc:
     name: USTC (Univ. de Ciencia y Tecnología de China)
-    description: La documentación sigue en línea, la conexión es inestable
+    description: Espejo de la red educativa del este de China
   tuna:
     name: Tsinghua TUNA
-    description: La documentación sigue en línea, a veces no responde
+    description: Espejo de la red educativa del norte de China
   sjtu:
     name: SJTUG (Universidad Jiao Tong de Shanghái)
-    description: Espejo universitario, útil en emergencias
+    description: Espejo universitario de Shanghái, útil en emergencias
+  huawei:
+    name: Huawei Cloud
+    description: Espejo empresarial con cobertura nacional
+  cernet:
+    name: CERNET
+    description: Espejo conjunto de la red educativa con distribución automática
+  nju:
+    name: Universidad de Nankín
+    description: Espejo universitario de Jiangsu (respaldo del este)
+  bfsu:
+    name: BFSU
+    description: Espejo de la red educativa de Pekín
+  sdu:
+    name: Universidad de Shandong
+    description: Espejo universitario de Shandong
+  hust:
+    name: HUST
+    description: Espejo universitario del centro de China
+  zju:
+    name: Universidad de Zhejiang
+    description: Espejo universitario de Zhejiang
+  neusoft:
+    name: Neusoft
+    description: Espejo del noreste de China
+  nyist:
+    name: NYIST
+    description: Espejo universitario de Henan (respaldo del centro)
   official:
     name: crates.io oficial
-    description: Espejo predeterminado; vuelve a él antes de cargo publish
+    description: Fuente oficial global, recomendada fuera de China
 
 update:
   available: Nueva versión %{version} disponible
@@ -240,6 +267,18 @@ manifest:
   log_failed: "Error al actualizar el manifiesto de fuentes integradas: %{error}"
   refreshed: Manifiesto de fuentes integradas actualizado, %{count} fuente(s)
   refresh_failed: "Error al obtener el manifiesto de fuentes integradas: %{error}"
+
+region:
+  cn: China
+  global: Global
+  unknown: Sin definir
+
+recommend:
+  title: "Región detectada: %{region} · Recomendado: %{source}"
+  apply: Usar fuente recomendada
+  basis: "Medido %{speed} · índice %{latency}"
+  log_detected: "Región detectada: %{region}"
+  log_failed: No se pudo detectar la región, se mantiene el último resultado
 
 share:
   button: Compartir

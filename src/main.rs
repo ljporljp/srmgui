@@ -15,6 +15,7 @@ mod manifest;
 mod model;
 mod net;
 mod private_list;
+mod region;
 mod registry;
 mod root_view;
 mod settings_dialog;

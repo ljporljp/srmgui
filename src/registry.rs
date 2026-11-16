@@ -8,6 +8,10 @@ use crate::manifest::ManifestSource;
 pub struct Registry {
     pub id: &'static str,
     pub url: &'static str,
+    /// 所属地区代码：`CN`（中国大陆）/ `GLOBAL`（全球），用于按 IP 地区推荐。
+    pub region: &'static str,
+    /// 所属省份代码（ISO 3166-2:CN，如 `ZJ`）；跨省调度或全球源为空。
+    pub province: &'static str,
 }
 
 /// 编译期内置的兜底源清单。远端订阅与本地缓存都不可用时使用，顺序即展示顺序。
@@ -16,26 +20,92 @@ pub fn builtins() -> Vec<Registry> {
         Registry {
             id: "rsproxy",
             url: "sparse+https://rsproxy.cn/index/",
+            region: "CN",
+            province: "BJ",
         },
         Registry {
             id: "aliyun",
             url: "sparse+https://mirrors.aliyun.com/crates.io-index/",
+            region: "CN",
+            province: "ZJ",
         },
         Registry {
             id: "ustc",
             url: "sparse+https://mirrors.ustc.edu.cn/crates.io-index/",
+            region: "CN",
+            province: "AH",
         },
         Registry {
             id: "tuna",
             url: "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/",
+            region: "CN",
+            province: "BJ",
         },
         Registry {
             id: "sjtu",
             url: "sparse+https://mirrors.sjtug.sjtu.edu.cn/crates.io-index/",
+            region: "CN",
+            province: "SH",
+        },
+        Registry {
+            id: "huawei",
+            url: "sparse+https://mirrors.huaweicloud.com/crates.io-index/",
+            region: "CN",
+            province: "GD",
+        },
+        Registry {
+            id: "cernet",
+            url: "sparse+https://mirrors.cernet.edu.cn/crates.io-index/",
+            region: "CN",
+            province: "",
+        },
+        Registry {
+            id: "nju",
+            url: "sparse+https://mirrors.nju.edu.cn/crates.io-index/",
+            region: "CN",
+            province: "JS",
+        },
+        Registry {
+            id: "bfsu",
+            url: "sparse+https://mirrors.bfsu.edu.cn/crates.io-index/",
+            region: "CN",
+            province: "BJ",
+        },
+        Registry {
+            id: "sdu",
+            url: "sparse+https://mirrors.sdu.edu.cn/crates.io-index/",
+            region: "CN",
+            province: "SD",
+        },
+        Registry {
+            id: "hust",
+            url: "sparse+https://mirrors.hust.edu.cn/crates.io-index/",
+            region: "CN",
+            province: "HB",
+        },
+        Registry {
+            id: "zju",
+            url: "sparse+https://mirrors.zju.edu.cn/crates.io-index/",
+            region: "CN",
+            province: "ZJ",
+        },
+        Registry {
+            id: "neusoft",
+            url: "sparse+https://mirrors.neusoft.edu.cn/crates.io-index/",
+            region: "CN",
+            province: "LN",
+        },
+        Registry {
+            id: "nyist",
+            url: "sparse+https://mirror.nyist.edu.cn/crates.io-index/",
+            region: "CN",
+            province: "HA",
         },
         Registry {
             id: "official",
             url: "sparse+https://index.crates.io/",
+            region: "GLOBAL",
+            province: "",
         },
     ]
 }

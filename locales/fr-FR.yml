@@ -36,7 +36,7 @@ source:
   current: Actif
   apply: Appliquer
   delete: Supprimer
-  tip: "ID : %{id}\nNom : %{name}\nDescription : %{description}\nURL du registre : %{url}"
+  tip: "ID : %{id}\nNom : %{name}\nDescription : %{description}\nRégion : %{region}\nURL du registre : %{url}"
   none: (aucun)
   empty: Aucun miroir personnalisé pour l’instant. Veuillez en ajouter un.
 
@@ -185,22 +185,49 @@ error:
 registry:
   rsproxy:
     name: RsProxy (ByteDance)
-    description: Le plus stable en Chine, recommandé au quotidien
+    description: Le plus rapide en Chine continentale, recommandé au quotidien
   aliyun:
     name: Alibaba Cloud
-    description: Miroir de secours ; l’index répond mais les téléchargements peuvent renvoyer 404
+    description: Miroir entreprise avec des téléchargements stables
   ustc:
     name: USTC (Université de science et technologie de Chine)
-    description: Documentation encore en ligne, connexion instable
+    description: Miroir du réseau éducatif de l’Est de la Chine
   tuna:
     name: Tsinghua TUNA
-    description: Documentation encore en ligne, parfois sans réponse
+    description: Miroir du réseau éducatif du Nord de la Chine
   sjtu:
     name: SJTUG (Université Jiao Tong de Shanghai)
-    description: Miroir universitaire, utile en urgence
+    description: Miroir universitaire de Shanghai, utile en urgence
+  huawei:
+    name: Huawei Cloud
+    description: Miroir entreprise couvrant tout le pays
+  cernet:
+    name: CERNET
+    description: Miroir commun du réseau éducatif avec répartition automatique
+  nju:
+    name: Université de Nankin
+    description: Miroir universitaire du Jiangsu (secours Est)
+  bfsu:
+    name: BFSU
+    description: Miroir du réseau éducatif de Pékin
+  sdu:
+    name: Université du Shandong
+    description: Miroir universitaire du Shandong
+  hust:
+    name: HUST
+    description: Miroir universitaire du Centre de la Chine
+  zju:
+    name: Université du Zhejiang
+    description: Miroir universitaire du Zhejiang
+  neusoft:
+    name: Neusoft
+    description: Miroir du Nord-Est de la Chine
+  nyist:
+    name: NYIST
+    description: Miroir universitaire du Henan (secours Centre)
   official:
     name: crates.io officiel
-    description: Miroir par défaut ; revenez-y avant cargo publish
+    description: Source officielle mondiale, recommandée à l’étranger
 
 update:
   available: Nouvelle version %{version} disponible
@@ -240,6 +267,18 @@ manifest:
   log_failed: "Échec de l'actualisation du manifeste des sources intégrées : %{error}"
   refreshed: Manifeste des sources intégrées actualisé, %{count} source(s)
   refresh_failed: "Échec de la récupération du manifeste des sources intégrées : %{error}"
+
+region:
+  cn: Chine
+  global: Mondial
+  unknown: Non défini
+
+recommend:
+  title: "Région détectée : %{region} · Recommandé : %{source}"
+  apply: Utiliser la source recommandée
+  basis: "Mesuré %{speed} · index %{latency}"
+  log_detected: "Région détectée : %{region}"
+  log_failed: Impossible de détecter la région, conservation du dernier résultat
 
 share:
   button: Partager

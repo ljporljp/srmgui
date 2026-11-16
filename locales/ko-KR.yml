@@ -36,7 +36,7 @@ source:
   current: 사용 중
   apply: 적용
   delete: 삭제
-  tip: "ID: %{id}\n이름: %{name}\n설명: %{description}\n레지스트리 URL: %{url}"
+  tip: "ID: %{id}\n이름: %{name}\n설명: %{description}\n지역: %{region}\n레지스트리 URL: %{url}"
   none: (없음)
   empty: 사용자 정의 미러가 없습니다. 추가하세요.
 
@@ -185,22 +185,49 @@ error:
 registry:
   rsproxy:
     name: RsProxy (ByteDance)
-    description: 중국 내에서 가장 안정적, 일상 사용 권장
+    description: 중국 본토에서 가장 빠름, 일상 사용 권장
   aliyun:
     name: Alibaba Cloud (알리윤)
-    description: 예비 미러, 인덱스는 되지만 다운로드가 404인 경우가 있음
+    description: 기업용 미러, 안정적인 다운로드
   ustc:
     name: 중국과학기술대학 USTC
-    description: 문서는 남아 있으나 연결이 불안정함
+    description: 화동 교육망 미러
   tuna:
     name: 칭화대학 TUNA
-    description: 문서는 남아 있으나 응답이 없는 경우가 있음
+    description: 화북 교육망 미러
   sjtu:
     name: 상하이교통대학 SJTUG
-    description: 대학 미러, 비상시 사용에 적합
+    description: 상하이 대학 미러, 비상시 사용에 적합
+  huawei:
+    name: Huawei Cloud (화웨이 클라우드)
+    description: 전국을 커버하는 기업용 미러
+  cernet:
+    name: CERNET 연합 미러
+    description: 교육망 연합 미러, 자동 분산
+  nju:
+    name: 난징대학
+    description: 장쑤 대학 미러(화동 예비)
+  bfsu:
+    name: 베이징외국어대학 BFSU
+    description: 베이징 교육망 미러
+  sdu:
+    name: 산둥대학
+    description: 산둥 대학 미러
+  hust:
+    name: 화중과학기술대학
+    description: 화중 대학 미러
+  zju:
+    name: 저장대학
+    description: 저장 대학 미러
+  neusoft:
+    name: 동소프트
+    description: 중국 동북 미러
+  nyist:
+    name: 난양이공학원
+    description: 허난 대학 미러(중원 예비)
   official:
     name: 공식 crates.io
-    description: 기본 미러, cargo publish 전에 되돌리는 것을 권장
+    description: 글로벌 공식 소스, 해외 권장
 
 update:
   available: 새 버전 %{version} 사용 가능
@@ -238,6 +265,18 @@ manifest:
   log_failed: "내장 소스 목록 새로고침 실패: %{error}"
   refreshed: 내장 소스 목록이 업데이트되었습니다. 총 %{count}개
   refresh_failed: "내장 소스 목록을 가져오지 못했습니다: %{error}"
+
+region:
+  cn: 중국
+  global: 글로벌
+  unknown: 미지정
+
+recommend:
+  title: "감지된 지역: %{region} · 추천 소스: %{source}"
+  apply: 추천 소스 사용
+  basis: "실측 다운로드 %{speed} · 인덱스 %{latency}"
+  log_detected: "감지된 지역: %{region}"
+  log_failed: 지역 감지에 실패하여 이전 결과를 사용합니다
 
 share:
   button: 공유

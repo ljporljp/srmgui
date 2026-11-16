@@ -38,6 +38,12 @@ pub(crate) struct ManifestSource {
     pub(crate) description: String,
     #[serde(default)]
     pub(crate) url: String,
+    /// 所属地区代码（`CN` / `GLOBAL`），用于按 IP 地区匹配推荐源。
+    #[serde(default)]
+    pub(crate) region: String,
+    /// 所属省份代码（ISO 3166-2:CN，如 `ZJ`），用于同省优先推荐。
+    #[serde(default)]
+    pub(crate) province: String,
 }
 
 impl ManifestSource {
@@ -52,6 +58,8 @@ impl ManifestSource {
             name: name.into(),
             description: description.into(),
             url: url.into(),
+            region: String::new(),
+            province: String::new(),
         }
     }
 }
@@ -75,7 +83,14 @@ struct ShareDocument {
 pub(crate) fn fallback_sources() -> Vec<ManifestSource> {
     registry::builtins()
         .into_iter()
-        .map(|r| ManifestSource::new(r.id, "", "", r.url))
+        .map(|r| ManifestSource {
+            id: r.id.to_string(),
+            name: String::new(),
+            description: String::new(),
+            url: r.url.to_string(),
+            region: r.region.to_string(),
+            province: r.province.to_string(),
+        })
         .collect()
 }
 
@@ -134,11 +149,31 @@ pub(crate) fn parse_manifest(text: &str) -> Result<Vec<ManifestSource>, String> 
         if id.is_empty() || url.is_empty() || !seen.insert(id.clone()) {
             continue;
         }
+        // 旧版清单没有地区字段：按编译期内置源补齐，保证推荐逻辑可用。
+        let builtin = registry::builtins()
+            .into_iter()
+            .find(|builtin| builtin.id == id);
+        let region = match item.region.trim().to_ascii_uppercase() {
+            region if !region.is_empty() => region,
+            _ => builtin
+                .as_ref()
+                .map(|builtin| builtin.region.to_string())
+                .unwrap_or_default(),
+        };
+        let province = match item.province.trim().to_ascii_uppercase() {
+            province if !province.is_empty() => province,
+            _ => builtin
+                .as_ref()
+                .map(|builtin| builtin.province.to_string())
+                .unwrap_or_default(),
+        };
         sources.push(ManifestSource {
             id,
             name: item.name,
             description: item.description,
             url: normalize_registry_url(&url),
+            region,
+            province,
         });
     }
 
@@ -218,6 +253,19 @@ mod tests {
         // 缺少协议时补全 sparse+https。
         assert_eq!(sources[1].url, "sparse+https://mirror.example.com/index/");
         assert_eq!(sources[1].name, "");
+        // 旧清单没有地区字段时按内置源补齐。
+        assert_eq!(sources[0].region, "CN");
+        assert_eq!(sources[0].province, "BJ");
+        assert_eq!(sources[1].region, "");
+        assert_eq!(sources[1].province, "");
+    }
+
+    #[test]
+    fn keeps_explicit_region() {
+        let json = r#"{"sources":[{"id":"mirror","url":"https://m.example.com/","region":"jp","province":"13"}]}"#;
+        let sources = parse_manifest(json).unwrap();
+        assert_eq!(sources[0].region, "JP");
+        assert_eq!(sources[0].province, "13");
     }
 
     #[test]

@@ -37,6 +37,7 @@ use crate::model::{
 };
 use crate::net;
 use crate::private_list::render_private_list;
+use crate::region;
 use crate::registry;
 use crate::settings_dialog;
 use crate::source_list::{SourceItem, SourceList};
@@ -141,8 +142,78 @@ impl RootView {
         view.start_update_timer(cx, true);
         // 启动时后台刷新内置源清单（失败时继续沿用缓存 / 兜底清单）。
         view.refresh_manifest(false, cx);
+        // 后台识别出口 IP 所在地区，用于在主页推荐当地镜像源。
+        view.detect_region(cx);
 
         view
+    }
+
+    /// 后台识别所在地区（国家 + 省份）：结果写入状态并持久化，离线启动时沿用上次结果。
+    fn detect_region(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |view, cx| {
+            let location = cx
+                .background_executor()
+                .spawn(async { region::detect_location() })
+                .await;
+            let _ = view.update(cx, |view, cx| view.finish_region(location, cx));
+        })
+        .detach();
+    }
+
+    /// 处理地区识别结果：成功时更新状态与设置，失败时保留上次识别结果。
+    fn finish_region(&mut self, location: Option<region::Location>, cx: &mut Context<Self>) {
+        let Some(location) = location else {
+            logger::error("region", rust_i18n::t!("recommend.log_failed").to_string());
+            return;
+        };
+        // 只识别到国家时保留上次的省份信息，避免接口降级导致详情丢失。
+        let (previous_region, previous_province, previous_province_name) = {
+            let state = &self.app.read(cx).state;
+            (
+                state.region.clone(),
+                state.province.clone(),
+                state.province_name.clone(),
+            )
+        };
+        let same_country = previous_region.as_deref() == Some(location.country.as_str());
+        let province = location
+            .province
+            .clone()
+            .or_else(|| same_country.then(|| previous_province.clone()).flatten());
+        let province_name = location.province_name.clone().or_else(|| {
+            same_country
+                .then(|| previous_province_name.clone())
+                .flatten()
+        });
+        let changed = previous_region.as_deref() != Some(location.country.as_str())
+            || previous_province != province
+            || previous_province_name != province_name;
+        if changed {
+            self.app.update(cx, |model, cx| {
+                model.state.region = Some(location.country.clone());
+                model.state.province = province.clone();
+                model.state.province_name = province_name.clone();
+                cx.notify();
+            });
+            let mut settings = config_io::read_settings();
+            settings.region = Some(location.country.clone());
+            settings.province = province;
+            settings.province_name = province_name;
+            let _ = config_io::write_settings(&settings);
+        }
+        logger::info(
+            "region",
+            rust_i18n::t!(
+                "recommend.log_detected",
+                region = region::location_label(
+                    &location.country,
+                    location.province.as_deref(),
+                    location.province_name.as_deref()
+                )
+                .as_str()
+            )
+            .to_string(),
+        );
     }
 
     /// 启动测速定时任务：先立即测速一次，之后按配置周期重复。
@@ -1664,6 +1735,113 @@ impl RootView {
             .into_any_element()
     }
 
+    /// 主页地区推荐条：按出口 IP 的国家 + 省份与最近测速结果推荐当地源，可直接应用。
+    fn render_recommendation(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (location_label, id, source, is_current, basis) = {
+            let state = &self.app.read(cx).state;
+            let region_code = state.region.clone()?;
+            let province = state.province.clone();
+            let province_name = state.province_name.clone();
+            let id = region::recommend(
+                &region_code,
+                province.as_deref(),
+                &state.builtins,
+                &state.probes,
+            )?;
+            let source = state
+                .builtins
+                .iter()
+                .find(|source| source.id == id)?
+                .clone();
+            let is_current = state.current.as_ref().map(|c| c.as_ref()) == Some(id.as_str());
+            let basis = state.probes.get(&id).and_then(region::basis);
+            let location_label =
+                region::location_label(&region_code, province.as_deref(), province_name.as_deref());
+            (location_label, id, source, is_current, basis)
+        };
+
+        let name = manifest::display_name(&source);
+        let description = manifest::display_description(&source);
+        let basis = basis.map(|(speed, latency)| {
+            rust_i18n::t!(
+                "recommend.basis",
+                speed = speed.as_str(),
+                latency = latency.as_str()
+            )
+            .to_string()
+        });
+        let detail = match (description.is_empty(), basis) {
+            (true, None) => String::new(),
+            (false, None) => description,
+            (true, Some(basis)) => basis,
+            (false, Some(basis)) => format!("{description} · {basis}"),
+        };
+        let tip: SharedString = if detail.is_empty() {
+            format!("{location_label}\n{}", source.url).into()
+        } else {
+            format!("{location_label}\n{detail}\n{}", source.url).into()
+        };
+
+        let action = if is_current {
+            Label::new(rust_i18n::t!("source.current").to_string())
+                .text_sm()
+                .text_color(cx.theme().success)
+                .into_any_element()
+        } else {
+            let apply_id = id.clone();
+            Button::new("apply-recommended")
+                .label(rust_i18n::t!("recommend.apply").to_string())
+                .small()
+                .primary()
+                .on_click(cx.listener(move |view, _ev, window, cx| {
+                    view.app.update(cx, |model, cx| {
+                        model.state.selected = apply_id.clone().into();
+                        cx.notify();
+                    });
+                    view.apply(window, cx);
+                }))
+                .into_any_element()
+        };
+
+        Some(
+            h_flex()
+                .id("region-recommendation")
+                .w_full()
+                .items_center()
+                .gap_2()
+                .p_2()
+                .rounded_lg()
+                .bg(cx.theme().muted)
+                .border_1()
+                .border_color(cx.theme().border)
+                .tooltip(move |_, cx| cx.new(|_| Tooltip::new(tip.clone())).into())
+                .child(
+                    Label::new(
+                        rust_i18n::t!(
+                            "recommend.title",
+                            region = location_label.as_str(),
+                            source = name.as_str()
+                        )
+                        .to_string(),
+                    )
+                    .text_sm()
+                    .font_semibold(),
+                )
+                .child(
+                    div().flex_1().min_w_0().overflow_hidden().child(
+                        Label::new(detail)
+                            .w_full()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .whitespace_nowrap()
+                            .text_ellipsis(),
+                    ),
+                )
+                .child(div().flex_shrink_0().child(action))
+                .into_any_element(),
+        )
+    }
+
     fn render_preset_list(&self, cx: &mut Context<Self>) -> AnyElement {
         let state = &self.app.read(cx).state;
         let selected = state.selected.clone();
@@ -1676,14 +1854,21 @@ impl RootView {
                 let id = r.id.clone();
                 let name = manifest::display_name(r);
                 let description = manifest::display_description(r);
+                let region_label = region::source_region_label(&r.region, &r.province);
+                let detail = if description.is_empty() {
+                    region_label.clone()
+                } else {
+                    format!("{region_label} · {description}")
+                };
                 SourceItem {
                     name: name.clone().into(),
-                    detail: description.clone().into(),
+                    detail: detail.into(),
                     tip: rust_i18n::t!(
                         "source.tip",
                         id = id.as_str(),
                         name = name.as_str(),
                         description = description.as_str(),
+                        region = region_label.as_str(),
                         url = r.url.as_str()
                     )
                     .to_string()
@@ -1739,6 +1924,7 @@ impl RootView {
                     id = id.as_str(),
                     name = display_name.as_str(),
                     description = desc_tip.as_str(),
+                    region = region::label("").as_str(),
                     url = src.url.as_str()
                 )
                 .to_string()
@@ -2230,6 +2416,7 @@ impl Render for RootView {
                                                     )),
                                             ),
                                     )
+                                    .children(self.render_recommendation(cx))
                                     .child(self.render_preset_list(cx))
                                     .into_any_element()
                             } else if active_tab == 1 {
