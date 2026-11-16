@@ -178,7 +178,17 @@ registry:
 
 update:
   available: 发现新版本 %{version}
-  tip: 点击下载并安装新版本
+  tip: 点击选择下载方式
+  choose_title: 下载新版本 %{version}
+  choose_hint: 请选择安装包的下载方式
+  asset: 安装包：%{name}
+  system_download: 系统下载工具
+  system_tip: 在系统浏览器 / 下载工具中打开下载链接
+  builtin_download: 应用内下载
+  builtin_tip: 在应用内下载安装包，完成后自动启动安装
+  cancel: 取消
+  system_opened: 已在系统下载工具中打开下载链接
+  log_system_open: 在系统下载工具中打开：%{url}
   downloading: 正在下载 %{version}…
   install_start: 安装包已下载，正在启动安装程序
   download_failed: 下载安装包失败：%{error}

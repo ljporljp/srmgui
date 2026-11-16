@@ -592,8 +592,37 @@ impl RootView {
         }
     }
 
+    /// 点击右上角更新提示：让用户选择用系统下载工具还是应用内下载。
+    fn open_update_options(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(self.app.read(cx).state.update, UpdateState::Downloading(_)) {
+            return;
+        }
+        let Some(available) = self.app.read(cx).state.update.available().cloned() else {
+            return;
+        };
+        let entity = cx.entity();
+        config_dialog::open_update_dialog(window, cx, entity, available);
+    }
+
+    /// 用系统默认下载工具（浏览器）打开安装包下载链接。
+    pub(crate) fn open_update_in_system(&mut self, url: String, cx: &mut Context<Self>) {
+        logger::info(
+            "update",
+            rust_i18n::t!("update.log_system_open", url = url.as_str()).to_string(),
+        );
+        self.app.update(cx, |model, cx| {
+            model.state.status = Status::Info(
+                rust_i18n::t!("update.system_opened")
+                    .to_string()
+                    .into(),
+            );
+            cx.notify();
+        });
+        cx.open_url(url.as_str());
+    }
+
     /// 点击右上角更新提示：下载安装包并启动安装程序。
-    fn start_update(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn start_update(&mut self, cx: &mut Context<Self>) {
         let Some(available) = self.app.read(cx).state.update.available().cloned() else {
             return;
         };
@@ -1140,7 +1169,7 @@ impl Render for RootView {
         let theme_app = self.app.clone();
         let viewport_height = _window.viewport_size().height.as_f32();
 
-        // 右上角更新提示：仅在发现新版本时出现，点击后下载并启动安装程序。
+        // 右上角更新提示：仅在发现新版本时出现，点击后选择下载方式。
         let update_button = match &update_state {
             UpdateState::Available(available) => {
                 let version = available.version.clone();
@@ -1153,7 +1182,9 @@ impl Render for RootView {
                         .tooltip(rust_i18n::t!("update.tip").to_string())
                         .small()
                         .primary()
-                        .on_click(cx.listener(|view, _ev, _window, cx| view.start_update(cx))),
+                        .on_click(cx.listener(|view, _ev, window, cx| {
+                            view.open_update_options(window, cx)
+                        })),
                 )
             }
             UpdateState::Downloading(available) => Some(

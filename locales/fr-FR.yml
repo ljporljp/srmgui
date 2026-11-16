@@ -178,7 +178,17 @@ registry:
 
 update:
   available: Nouvelle version %{version} disponible
-  tip: Cliquez pour télécharger et installer
+  tip: Cliquez pour choisir le mode de téléchargement
+  choose_title: Télécharger la version %{version}
+  choose_hint: Choisissez comment télécharger l'installateur
+  asset: "Installateur : %{name}"
+  system_download: Outil de téléchargement système
+  system_tip: Ouvrir le lien de téléchargement dans le navigateur / gestionnaire de téléchargements
+  builtin_download: Téléchargement intégré
+  builtin_tip: Télécharger l'installateur dans l'application puis lancer l'installation automatiquement
+  cancel: Annuler
+  system_opened: Lien de téléchargement ouvert dans l'outil système
+  log_system_open: "Ouvert dans l'outil de téléchargement système : %{url}"
   downloading: "Téléchargement de %{version}…"
   install_start: Installateur téléchargé, démarrage de l'installation
   download_failed: "Échec du téléchargement de l'installateur : %{error}"

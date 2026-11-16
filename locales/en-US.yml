@@ -178,7 +178,17 @@ registry:
 
 update:
   available: New version %{version} available
-  tip: Click to download and install
+  tip: Click to choose how to download
+  choose_title: Download version %{version}
+  choose_hint: Choose how to download the installer
+  asset: "Installer: %{name}"
+  system_download: System downloader
+  system_tip: Open the download link in your system browser or download manager
+  builtin_download: In-app download
+  builtin_tip: Download the installer in the app and start installation automatically
+  cancel: Cancel
+  system_opened: Download link opened in your system downloader
+  log_system_open: "Opened in system downloader: %{url}"
   downloading: Downloading %{version}…
   install_start: Installer downloaded, starting installation
   download_failed: "Failed to download the installer: %{error}"

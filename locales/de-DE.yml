@@ -178,7 +178,17 @@ registry:
 
 update:
   available: Neue Version %{version} verfügbar
-  tip: Klicken zum Herunterladen und Installieren
+  tip: Klicken, um die Download-Methode zu wählen
+  choose_title: Version %{version} herunterladen
+  choose_hint: Wählen Sie, wie der Installer heruntergeladen werden soll
+  asset: "Installer: %{name}"
+  system_download: System-Downloadprogramm
+  system_tip: Download-Link im Systembrowser bzw. Download-Manager öffnen
+  builtin_download: Download in der App
+  builtin_tip: Installer in der App herunterladen und anschließend automatisch installieren
+  cancel: Abbrechen
+  system_opened: Download-Link im System-Downloadprogramm geöffnet
+  log_system_open: "Im System-Downloadprogramm geöffnet: %{url}"
   downloading: "%{version} wird heruntergeladen…"
   install_start: Installer heruntergeladen, Installation wird gestartet
   download_failed: "Installer konnte nicht heruntergeladen werden: %{error}"

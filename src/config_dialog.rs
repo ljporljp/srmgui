@@ -13,6 +13,7 @@ use gpui_kit::{AnyElement, App, Entity, Hsla, Window, px};
 use crate::config_io;
 use crate::diff::{DiffLine, LineKind, diff_lines};
 use crate::root_view::RootView;
+use crate::update;
 
 /// 一次等待用户确认的配置写入。
 #[derive(Debug, Clone)]
@@ -291,6 +292,83 @@ pub(crate) fn open_diff_dialog(
                         .secondary()
                         .on_click(|_, window, cx| window.close_dialog(cx)),
                 ),
+            )
+    });
+}
+
+/// 发现新版本后让用户选择下载方式：系统下载工具 / 应用内下载。
+pub(crate) fn open_update_dialog(
+    window: &mut Window,
+    cx: &mut App,
+    view: Entity<RootView>,
+    available: update::Available,
+) {
+    let version = available.version.clone();
+    let asset_name = available.asset_name.clone();
+    let asset_url = available.asset_url.clone();
+
+    window.open_dialog(cx, move |dialog, _window, cx| {
+        let muted = cx.theme().muted_foreground;
+        let view_for_system = view.clone();
+        let view_for_builtin = view.clone();
+        let url_for_system = asset_url.clone();
+
+        dialog
+            .title(rust_i18n::t!("update.choose_title", version = version.as_str()).to_string())
+            .w(px(480.))
+            .child(
+                v_flex()
+                    .w_full()
+                    .gap_2()
+                    .child(
+                        Label::new(rust_i18n::t!("update.choose_hint").to_string())
+                            .text_sm()
+                            .text_color(muted),
+                    )
+                    .child(
+                        Label::new(
+                            rust_i18n::t!("update.asset", name = asset_name.as_str()).to_string(),
+                        )
+                        .text_sm()
+                        .whitespace_nowrap()
+                        .text_ellipsis(),
+                    ),
+            )
+            .footer(
+                h_flex()
+                    .w_full()
+                    .justify_end()
+                    .gap_2()
+                    .child(
+                        Button::new("update-cancel")
+                            .label(rust_i18n::t!("update.cancel").to_string())
+                            .secondary()
+                            .on_click(|_, window, cx| window.close_dialog(cx)),
+                    )
+                    .child(
+                        Button::new("update-system-download")
+                            .label(rust_i18n::t!("update.system_download").to_string())
+                            .tooltip(rust_i18n::t!("update.system_tip").to_string())
+                            .secondary()
+                            .on_click(move |_, window, cx| {
+                                let url = url_for_system.clone();
+                                view_for_system.update(cx, |view, cx| {
+                                    view.open_update_in_system(url, cx)
+                                });
+                                window.close_dialog(cx);
+                            }),
+                    )
+                    .child(
+                        Button::new("update-builtin-download")
+                            .label(rust_i18n::t!("update.builtin_download").to_string())
+                            .tooltip(rust_i18n::t!("update.builtin_tip").to_string())
+                            .primary()
+                            .on_click(move |_, window, cx| {
+                                view_for_builtin
+                                    .update(cx, |view, cx| view.start_update(cx));
+                                window.close_dialog(cx);
+                            }),
+                    ),
             )
     });
 }

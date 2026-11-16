@@ -178,7 +178,17 @@ registry:
 
 update:
   available: 새 버전 %{version} 사용 가능
-  tip: 클릭하여 다운로드 및 설치
+  tip: 클릭하여 다운로드 방식을 선택
+  choose_title: 버전 %{version} 다운로드
+  choose_hint: 설치 파일 다운로드 방식을 선택하세요
+  asset: "설치 파일: %{name}"
+  system_download: 시스템 다운로드 도구
+  system_tip: 시스템 브라우저 / 다운로드 도구에서 다운로드 링크를 엽니다
+  builtin_download: 앱 내 다운로드
+  builtin_tip: 앱에서 설치 파일을 다운로드하고 완료 후 자동으로 설치를 시작합니다
+  cancel: 취소
+  system_opened: 시스템 다운로드 도구에서 다운로드 링크를 열었습니다
+  log_system_open: "시스템 다운로드 도구에서 열기: %{url}"
   downloading: "%{version} 다운로드 중…"
   install_start: 설치 파일 다운로드 완료, 설치를 시작합니다
   download_failed: "설치 파일 다운로드 실패: %{error}"

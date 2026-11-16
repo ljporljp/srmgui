@@ -178,7 +178,17 @@ registry:
 
 update:
   available: 新しいバージョン %{version} があります
-  tip: クリックしてダウンロードとインストール
+  tip: クリックしてダウンロード方法を選択
+  choose_title: バージョン %{version} をダウンロード
+  choose_hint: インストーラーのダウンロード方法を選択してください
+  asset: インストーラー：%{name}
+  system_download: システムのダウンロードツール
+  system_tip: システムのブラウザ / ダウンロードツールでダウンロードリンクを開きます
+  builtin_download: アプリ内ダウンロード
+  builtin_tip: アプリ内でインストーラーをダウンロードし、完了後に自動でインストールを開始します
+  cancel: キャンセル
+  system_opened: システムのダウンロードツールでダウンロードリンクを開きました
+  log_system_open: システムのダウンロードツールで開く：%{url}
   downloading: バージョン %{version} をダウンロード中…
   install_start: インストーラーのダウンロードが完了しました。インストールを開始します
   download_failed: インストーラーのダウンロードに失敗しました：%{error}
