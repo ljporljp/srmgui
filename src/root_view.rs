@@ -689,11 +689,20 @@ impl RootView {
         });
     }
 
-    /// 打开缓存管理对话框，并在后台统计缓存体积。
+    /// 打开缓存管理对话框：优先复用内存或应用缓存中的统计结果，缓存有更新时才重新统计。
     fn open_cache_manager(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(
+            self.app.read(cx).state.cache,
+            cache::CacheState::Idle | cache::CacheState::Failed(_)
+        ) {
+            match cache::load_report() {
+                // 缓存目录未变化，直接展示上次结果，避免每次打开都全量扫描。
+                Some(report) => self.set_cache_state(cache::CacheState::Ready(report), cx),
+                None => self.start_cache_scan(cx),
+            }
+        }
         let entity = cx.entity();
         cache_dialog::open_cache_dialog(window, cx, entity);
-        self.start_cache_scan(cx);
     }
 
     /// 后台统计 `CARGO_HOME` 下的 registry / git 缓存体积与无效缓存。
@@ -801,8 +810,11 @@ impl RootView {
         }
     }
 
-    /// 更新缓存管理状态并触发重绘。
+    /// 更新缓存管理状态并触发重绘；统计结果同时写入应用缓存，供下次直接读取。
     fn set_cache_state(&mut self, state: cache::CacheState, cx: &mut Context<Self>) {
+        if let cache::CacheState::Ready(report) = &state {
+            cache::save_report(report);
+        }
         self.app.update(cx, |model, cx| {
             model.state.cache = state;
             cx.notify();

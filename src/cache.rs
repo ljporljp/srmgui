@@ -11,11 +11,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 
 use crate::config_io;
 
 /// 参与统计的缓存类别。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum Category {
     RegistryIndex,
     RegistryCache,
@@ -25,21 +26,21 @@ pub(crate) enum Category {
 }
 
 /// 缓存来源类型。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum SourceKind {
     Registry,
     Git,
 }
 
 /// 来源内某一缓存类别的体积。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct SourcePart {
     pub category: Category,
     pub bytes: u64,
 }
 
 /// 一个缓存来源：一个 registry 镜像站或一个 git 仓库。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Source {
     pub kind: SourceKind,
     pub name: String,
@@ -52,7 +53,7 @@ pub(crate) struct Source {
 }
 
 /// 无效缓存类型。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum InvalidKind {
     /// 解压未完成（缺少 `.cargo-ok`）的源码目录。
     IncompleteSrc,
@@ -63,7 +64,7 @@ pub(crate) enum InvalidKind {
 }
 
 /// 一条无效缓存。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct InvalidEntry {
     pub kind: InvalidKind,
     pub path: PathBuf,
@@ -71,7 +72,7 @@ pub(crate) struct InvalidEntry {
 }
 
 /// 一次缓存扫描的结果。
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub(crate) struct CacheReport {
     pub home: PathBuf,
     /// 按来源（registry 索引 / git 仓库）统计的明细，按体积从大到小排列。
@@ -79,6 +80,8 @@ pub(crate) struct CacheReport {
     pub invalid: Vec<InvalidEntry>,
     pub registry_bytes: u64,
     pub git_bytes: u64,
+    /// 统计时缓存目录的变更指纹，用于判断结果是否仍然有效。
+    pub fingerprint: String,
 }
 
 impl CacheReport {
@@ -142,6 +145,100 @@ pub(crate) fn scan_at_with_urls(home: &Path, index_urls: &[String]) -> CacheRepo
         invalid: find_invalid(home),
         registry_bytes,
         git_bytes,
+        fingerprint: fingerprint(home),
+    }
+}
+
+/// 缓存统计结果的持久化文件（应用数据目录）。
+fn report_path() -> Result<PathBuf> {
+    Ok(config_io::app_dir()?.join("cache-report.json"))
+}
+
+/// 把统计结果写入应用缓存；写入失败只影响下次是否复用，不影响界面。
+pub(crate) fn save_report(report: &CacheReport) {
+    let Ok(path) = report_path() else {
+        return;
+    };
+    let Ok(text) = serde_json::to_string(report) else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = fs::write(path, text);
+}
+
+/// 读取应用缓存中的统计结果；没有缓存、`CARGO_HOME` 变化或缓存目录已更新时返回 `None`。
+pub(crate) fn load_report() -> Option<CacheReport> {
+    load_report_at(&config_io::cargo_home().ok()?)
+}
+
+/// 读取指定 cargo home 的缓存统计结果，仅当指纹与磁盘现状一致时复用。
+pub(crate) fn load_report_at(home: &Path) -> Option<CacheReport> {
+    let text = fs::read_to_string(report_path().ok()?).ok()?;
+    let report: CacheReport = serde_json::from_str(&text).ok()?;
+    (report.home == home && report.fingerprint == fingerprint(home)).then_some(report)
+}
+
+/// 判定缓存变化时计入指纹的目录层级。
+const FINGERPRINT_DEPTH: usize = 3;
+
+/// 缓存目录的变更指纹。
+///
+/// 只读取各缓存根目录及其近三层子目录的修改时间与条目数量，不做全量遍历：
+/// cargo 新增或删除缓存文件都会改变所在目录的修改时间与条目数，因此指纹变化
+/// 即表示需要重新统计，指纹不变则可以直接复用上次的结果。
+pub(crate) fn fingerprint(home: &Path) -> String {
+    let mut stamps = Vec::new();
+    for sub in [
+        "registry/index",
+        "registry/cache",
+        "registry/src",
+        "git/db",
+        "git/checkouts",
+    ] {
+        collect_stamps(&home.join(sub), 0, &mut stamps);
+    }
+    stamps.sort();
+
+    // FNV-1a：结果稳定，且无需额外依赖。
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for stamp in stamps {
+        for byte in stamp.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    format!("{hash:016x}")
+}
+
+/// 记录目录的修改时间与条目数，并向下递归到限定层级。
+fn collect_stamps(dir: &Path, depth: usize, out: &mut Vec<String>) {
+    let Ok(reader) = fs::read_dir(dir) else {
+        return;
+    };
+    let modified = fs::metadata(dir)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|dur| dur.as_nanos())
+        .unwrap_or(0);
+
+    let mut count = 0;
+    let mut children = Vec::new();
+    for entry in reader.flatten() {
+        count += 1;
+        if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
+            children.push(entry.path());
+        }
+    }
+    out.push(format!("{}|{modified}|{count}", dir.display()));
+
+    if depth >= FINGERPRINT_DEPTH {
+        return;
+    }
+    for child in children {
+        collect_stamps(&child, depth + 1, out);
     }
 }
 
@@ -845,5 +942,48 @@ mod tests {
         assert_eq!(format_size(512), "512 B");
         assert_eq!(format_size(1536), "1.50 KB");
         assert_eq!(format_size(3 * 1024 * 1024), "3.00 MB");
+    }
+
+    #[test]
+    fn fingerprint_changes_only_when_cache_updates() {
+        let sandbox = fixture("fingerprint");
+        let before = scan_at_with_urls(&sandbox.home, &[]);
+        // 未改动时两次统计的指纹一致，可复用结果。
+        assert_eq!(
+            before.fingerprint,
+            scan_at_with_urls(&sandbox.home, &[]).fingerprint
+        );
+
+        sandbox.write("registry/cache/index.crates.io-abc/new-1.0.0.crate", 6);
+        assert_ne!(before.fingerprint, fingerprint(&sandbox.home));
+    }
+
+    #[test]
+    fn reuses_saved_report_until_cache_changes() {
+        let sandbox = fixture("persist");
+        config_io::set_test_app_dir(Some(sandbox.home.join("app")));
+
+        let report = scan_at_with_urls(&sandbox.home, &[]);
+        save_report(&report);
+        let loaded = load_report_at(&sandbox.home).expect("缓存结果应可直接复用");
+        assert_eq!(loaded.total_bytes(), report.total_bytes());
+        assert_eq!(loaded.sources.len(), report.sources.len());
+
+        // 缓存有更新后旧结果失效。
+        sandbox.write("git/db/gpui-123/new", 1);
+        assert!(load_report_at(&sandbox.home).is_none());
+
+        config_io::set_test_app_dir(None);
+    }
+
+    #[test]
+    fn ignores_report_from_other_cargo_home() {
+        let sandbox = fixture("other-home");
+        config_io::set_test_app_dir(Some(sandbox.home.join("app")));
+
+        save_report(&scan_at_with_urls(&sandbox.home, &[]));
+        assert!(load_report_at(&sandbox.home.join("another")).is_none());
+
+        config_io::set_test_app_dir(None);
     }
 }
