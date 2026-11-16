@@ -70,9 +70,7 @@ pub(crate) fn probe_summary(probe: &Probe) -> String {
     let running = rust_i18n::t!("probe.summary_running").to_string();
     let level_text = |level: &Level| match level {
         Level::Passed(d) => d.to_string(),
-        Level::Failed(e) => {
-            rust_i18n::t!("probe.summary_failed", error = e.as_ref()).to_string()
-        }
+        Level::Failed(e) => rust_i18n::t!("probe.summary_failed", error = e.as_ref()).to_string(),
         Level::Skipped => skipped.clone(),
         Level::Running => running.clone(),
     };

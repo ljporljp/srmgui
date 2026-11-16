@@ -328,6 +328,42 @@ health:
   log_failed: "Error en la comprobación de la configuración: %{error}"
   log_unfixable: "No se pudo analizar la configuración y no hay copias disponibles: %{path}"
 
+cache:
+  button: Caché
+  button_tip: "Medir el tamaño de la caché registry / git en CARGO_HOME y limpiar la caché no válida"
+  title: Gestión de la caché de Cargo
+  home: "CARGO_HOME: %{path}"
+  scanning: Midiendo el tamaño de la caché…
+  cleaning: Limpiando la caché no válida…
+  failed: "Error al medir la caché: %{error}"
+  empty: No se encontró caché registry / git
+  total: Tamaño total de la caché
+  registry: Caché registry
+  git: Caché git
+  category:
+    index: Índice
+    cache: Descargas
+    src: Fuentes extraídas
+    db: Repositorios bare
+    checkouts: Copias de trabajo
+  invalid_title: Caché no válida
+  invalid_none: No se encontró caché no válida
+  invalid_found: "%{count} entrada(s) no válida(s), %{size} en total"
+  invalid_kind:
+    incomplete_src: Fuente extraída de forma incompleta
+    orphan_checkout: Copia de trabajo Git sin repositorio
+    orphan_registry: Directorio de caché sin índice
+  invalid_hint: La limpieza solo elimina las entradas anteriores y no afecta a las cachés de dependencias válidas.
+  refresh: Volver a medir
+  clean: Limpiar caché no válida
+  clean_tip: Eliminar entradas incompletas, sin índice o sin repositorio
+  close: Cerrar
+  cleaned: "Se limpiaron %{count} entrada(s) no válida(s) y se liberaron %{size}"
+  cleaned_partial: "Se limpiaron %{count} entrada(s), %{failed} no se pudieron eliminar"
+  clean_failed: "Error al limpiar la caché no válida: %{error}"
+  log_scan_failed: "Error al medir la caché de Cargo: %{error}"
+  log_clean_failed: "Error al limpiar la caché no válida: %{error}"
+
 settings:
   title: Ajustes de la aplicación
   button: Ajustes

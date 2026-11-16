@@ -69,9 +69,8 @@ pub(crate) fn check() -> Result<Option<Available>, String> {
     }
 
     let assets = parse_assets(&json);
-    let (asset_name, asset_url) = pick_asset(&assets, platform_suffixes()).ok_or_else(|| {
-        rust_i18n::t!("update.no_asset", version = version.as_str()).to_string()
-    })?;
+    let (asset_name, asset_url) = pick_asset(&assets, platform_suffixes())
+        .ok_or_else(|| rust_i18n::t!("update.no_asset", version = version.as_str()).to_string())?;
 
     Ok(Some(Available {
         version,
@@ -90,11 +89,7 @@ pub(crate) fn download(update: &Available) -> Result<PathBuf, String> {
     let bytes = net::download(&update.asset_url, &path).map_err(|error| error.to_string())?;
     logger::info(
         "update",
-        rust_i18n::t!(
-            "update.log_downloaded",
-            path = path.display().to_string()
-        )
-        .to_string(),
+        rust_i18n::t!("update.log_downloaded", path = path.display().to_string()).to_string(),
     );
     logger::debug("update", format!("installer size: {bytes} bytes"));
     Ok(path)
@@ -112,7 +107,10 @@ pub(crate) fn launch(path: &Path) -> Result<(), String> {
     }
     #[cfg(target_os = "macos")]
     {
-        Command::new("open").arg(path).spawn().map_err(error_message)?;
+        Command::new("open")
+            .arg(path)
+            .spawn()
+            .map_err(error_message)?;
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
@@ -126,7 +124,10 @@ pub(crate) fn launch(path: &Path) -> Result<(), String> {
             let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755));
             Command::new(path).spawn().map_err(error_message)?;
         } else {
-            Command::new("xdg-open").arg(path).spawn().map_err(error_message)?;
+            Command::new("xdg-open")
+                .arg(path)
+                .spawn()
+                .map_err(error_message)?;
         }
     }
 

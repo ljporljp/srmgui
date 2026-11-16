@@ -328,6 +328,42 @@ health:
   log_failed: "設定ヘルスチェックに失敗しました：%{error}"
   log_unfixable: "設定を解析できず、使用可能なバックアップもありません：%{path}"
 
+cache:
+  button: キャッシュ管理
+  button_tip: "CARGO_HOME 配下の registry / git キャッシュ容量を計測し、無効なキャッシュを削除します"
+  title: Cargo キャッシュ管理
+  home: "CARGO_HOME：%{path}"
+  scanning: キャッシュ容量を計測中…
+  cleaning: 無効なキャッシュを削除中…
+  failed: "キャッシュの計測に失敗しました：%{error}"
+  empty: registry / git キャッシュが見つかりません
+  total: キャッシュ合計サイズ
+  registry: Registry キャッシュ
+  git: Git キャッシュ
+  category:
+    index: インデックス
+    cache: ダウンロード済みパッケージ
+    src: 展開済みソース
+    db: ベアリポジトリ
+    checkouts: 作業コピー
+  invalid_title: 無効なキャッシュ
+  invalid_none: 無効なキャッシュはありません
+  invalid_found: "無効なキャッシュが %{count} 件、合計 %{size}"
+  invalid_kind:
+    incomplete_src: 展開が完了していないソース
+    orphan_checkout: 対応リポジトリのない Git 作業コピー
+    orphan_registry: 対応インデックスのないキャッシュ
+  invalid_hint: 削除の対象は上記の無効な項目のみで、正常な依存キャッシュには影響しません。
+  refresh: 再計測
+  clean: 無効なキャッシュを削除
+  clean_tip: 展開未完了・インデックスやリポジトリから孤立したキャッシュを削除します
+  close: 閉じる
+  cleaned: "無効なキャッシュを %{count} 件削除し、%{size} を解放しました"
+  cleaned_partial: "無効なキャッシュを %{count} 件削除しました（%{failed} 件は削除失敗）"
+  clean_failed: "無効なキャッシュの削除に失敗しました：%{error}"
+  log_scan_failed: "Cargo キャッシュの計測に失敗しました：%{error}"
+  log_clean_failed: "無効なキャッシュの削除に失敗しました：%{error}"
+
 settings:
   title: アプリ設定
   button: 設定

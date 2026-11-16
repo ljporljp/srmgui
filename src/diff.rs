@@ -98,7 +98,10 @@ mod tests {
 
     #[test]
     fn changed_line_reports_removed_then_added() {
-        let lines = diff_lines("replace-with = \"old\"\nkeep = 1\n", "replace-with = \"new\"\nkeep = 1\n");
+        let lines = diff_lines(
+            "replace-with = \"old\"\nkeep = 1\n",
+            "replace-with = \"new\"\nkeep = 1\n",
+        );
         assert_eq!(lines[0].kind, LineKind::Removed);
         assert_eq!(lines[0].text, "replace-with = \"old\"");
         assert_eq!(lines[1].kind, LineKind::Added);

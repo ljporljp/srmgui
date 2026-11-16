@@ -369,9 +369,7 @@ fn dedupe_tables(content: &str) -> String {
             continue;
         }
         // 只保留最后一次出现。
-        let is_last = !headers[index + 1..]
-            .iter()
-            .any(|(_, later)| later == name);
+        let is_last = !headers[index + 1..].iter().any(|(_, later)| later == name);
         if is_last {
             continue;
         }
@@ -587,10 +585,8 @@ mod integration_tests {
         fn new(label: &str) -> Self {
             static NEXT: AtomicUsize = AtomicUsize::new(0);
             let id = NEXT.fetch_add(1, Ordering::Relaxed);
-            let root = std::env::temp_dir().join(format!(
-                "srmgui-health-{label}-{}-{id}",
-                std::process::id()
-            ));
+            let root = std::env::temp_dir()
+                .join(format!("srmgui-health-{label}-{}-{id}", std::process::id()));
             let _ = fs::remove_dir_all(&root);
             let app = root.join("app");
             fs::create_dir_all(&app).unwrap();
@@ -635,18 +631,24 @@ mod integration_tests {
         let report = scan(&config, SCOPE_GLOBAL).unwrap();
         assert!(report.exists);
         assert_eq!(report.issues.len(), 3);
-        assert!(report
-            .issues
-            .iter()
-            .any(|issue| issue.kind == IssueKind::DuplicateTable));
-        assert!(report
-            .issues
-            .iter()
-            .any(|issue| issue.kind == IssueKind::DanglingReplace));
-        assert!(report
-            .issues
-            .iter()
-            .any(|issue| issue.kind == IssueKind::OrphanSource));
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.kind == IssueKind::DuplicateTable)
+        );
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.kind == IssueKind::DanglingReplace)
+        );
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.kind == IssueKind::OrphanSource)
+        );
 
         let summary = fix(&config, SCOPE_GLOBAL).unwrap();
         assert_eq!(
@@ -664,9 +666,11 @@ mod integration_tests {
         assert!(!repaired.contains("source.leftover"));
         // 修复前的内容进入 `.bak`，并保留了一份快照。
         assert_eq!(fs::read_to_string(sandbox.backup()).unwrap(), broken);
-        assert!(config_io::read_snapshots()
-            .iter()
-            .any(|snapshot| snapshot.target == config && snapshot.content == broken));
+        assert!(
+            config_io::read_snapshots()
+                .iter()
+                .any(|snapshot| snapshot.target == config && snapshot.content == broken)
+        );
         // 修复后复检应为健康状态。
         assert!(scan(&config, SCOPE_GLOBAL).unwrap().is_healthy());
     }

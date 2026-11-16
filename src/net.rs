@@ -58,9 +58,8 @@ pub fn probe(registry_url: &str) -> ProbeReport {
     let target = match parse(registry_url) {
         Ok(t) => t,
         Err(e) => {
-            report.tcp = Layer::Failed(
-                rust_i18n::t!("net.url_invalid", error = e.to_string()).to_string(),
-            );
+            report.tcp =
+                Layer::Failed(rust_i18n::t!("net.url_invalid", error = e.to_string()).to_string());
             return report;
         }
     };
@@ -105,8 +104,11 @@ pub fn probe(registry_url: &str) -> ProbeReport {
     // 第 4 层：下载端点速度
     match download_speed(&dl, &version, &cfg) {
         Ok((elapsed, speed)) => {
-            report.download =
-                Layer::Passed(format!("{} ms · {}", elapsed.as_millis(), format_speed(speed)));
+            report.download = Layer::Passed(format!(
+                "{} ms · {}",
+                elapsed.as_millis(),
+                format_speed(speed)
+            ));
         }
         Err(e) => report.download = Layer::Failed(e.to_string()),
     }
@@ -115,7 +117,11 @@ pub fn probe(registry_url: &str) -> ProbeReport {
 }
 
 fn probe_tcp(target: &Target, cfg: &AppConfig) -> std::io::Result<()> {
-    let _ = connect(&target.host, target.port, Duration::from_secs(cfg.timeout_secs))?;
+    let _ = connect(
+        &target.host,
+        target.port,
+        Duration::from_secs(cfg.timeout_secs),
+    )?;
     Ok(())
 }
 
@@ -143,9 +149,8 @@ fn probe_index_version(target: &Target, cfg: &AppConfig) -> std::io::Result<Stri
     )?;
     ensure_success(&resp.status)?;
     let body = String::from_utf8_lossy(&resp.body);
-    parse_latest_version(&body).ok_or_else(|| {
-        std::io::Error::other(rust_i18n::t!("net.index_parse_failed").to_string())
-    })
+    parse_latest_version(&body)
+        .ok_or_else(|| std::io::Error::other(rust_i18n::t!("net.index_parse_failed").to_string()))
 }
 
 /// 从下载端点拉取示例 crate，返回（耗时, 吞吐 字节/秒）。
@@ -283,7 +288,9 @@ pub(crate) fn scan_json_string(raw: &str) -> Option<(String, usize)> {
                 'r' => out.push('\r'),
                 't' => out.push('\t'),
                 'u' => {
-                    let hex: String = (0..4).filter_map(|_| chars.next().map(|(_, c)| c)).collect();
+                    let hex: String = (0..4)
+                        .filter_map(|_| chars.next().map(|(_, c)| c))
+                        .collect();
                     out.push(char::from_u32(u32::from_str_radix(&hex, 16).ok()?)?);
                 }
                 _ => return None,
@@ -354,12 +361,9 @@ fn http_get(
         if !is_redirect(&resp.status) {
             return Ok(resp);
         }
-        let location = resp
-            .location
-            .as_deref()
-            .ok_or_else(|| {
-                std::io::Error::other(rust_i18n::t!("net.missing_location").to_string())
-            })?;
+        let location = resp.location.as_deref().ok_or_else(|| {
+            std::io::Error::other(rust_i18n::t!("net.missing_location").to_string())
+        })?;
         let (next_host, next_port, next_https, next_path) =
             resolve_location(&host, port, https, &path, location)?;
         host = next_host;
@@ -474,9 +478,7 @@ fn read_all(stream: &mut impl Read, max_bytes: usize) -> std::io::Result<Vec<u8>
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             // 部分服务端（如 GitHub API 前置代理）不发送 TLS close_notify 就断开，
             // 此时已收到的数据是完整的，按正常结束处理。
-            Err(e)
-                if e.kind() == std::io::ErrorKind::UnexpectedEof && !buf.is_empty() =>
-            {
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof && !buf.is_empty() => {
                 break;
             }
             Err(e) => return Err(e),
@@ -486,9 +488,8 @@ fn read_all(stream: &mut impl Read, max_bytes: usize) -> std::io::Result<Vec<u8>
 }
 
 fn parse_response(raw: &[u8]) -> std::io::Result<Response> {
-    let split = find_subsequence(raw, b"\r\n\r\n").ok_or_else(|| {
-        std::io::Error::other(rust_i18n::t!("net.bad_response").to_string())
-    })?;
+    let split = find_subsequence(raw, b"\r\n\r\n")
+        .ok_or_else(|| std::io::Error::other(rust_i18n::t!("net.bad_response").to_string()))?;
     let head = String::from_utf8_lossy(&raw[..split]);
     let mut body = raw[split + 4..].to_vec();
     let status = head

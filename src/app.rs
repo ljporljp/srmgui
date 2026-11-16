@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use gpui_kit::{App, AppContext as _, Entity, SharedString};
 
+use crate::cache::CacheState;
 use crate::config_io;
 use crate::config_io::{CustomSource, PrivateRegistry};
 use crate::manifest::{self, ManifestSource};
@@ -29,6 +30,8 @@ pub(crate) struct State {
     pub(crate) project_root: Option<PathBuf>,
     /// 是否写入项目级配置（`<项目根>/.cargo/config.toml`）。
     pub(crate) project_scope: bool,
+    /// Cargo 缓存管理（统计与清理）的当前状态。
+    pub(crate) cache: CacheState,
 }
 
 impl State {
@@ -55,6 +58,7 @@ impl State {
             update: UpdateState::Idle,
             project_root,
             project_scope,
+            cache: CacheState::Idle,
         }
     }
 }

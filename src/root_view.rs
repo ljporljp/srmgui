@@ -22,6 +22,8 @@ use gpui_kit::{
 
 use crate::add_form::{render_add_form, render_private_form};
 use crate::app::CargoMirrorApp;
+use crate::cache;
+use crate::cache_dialog;
 use crate::config_dialog;
 use crate::config_io;
 use crate::config_io::CustomSource;
@@ -30,8 +32,8 @@ use crate::log_panel::render_log_panel;
 use crate::logger;
 use crate::manifest::{self, ManifestSource};
 use crate::model::{
-    Language, Level, LevelTone, Probe, Status, ThemeChoice, apply_theme,
-    level_display, probe_summary,
+    Language, Level, LevelTone, Probe, Status, ThemeChoice, apply_theme, level_display,
+    probe_summary,
 };
 use crate::net;
 use crate::private_list::render_private_list;
@@ -687,6 +689,126 @@ impl RootView {
         });
     }
 
+    /// 打开缓存管理对话框，并在后台统计缓存体积。
+    fn open_cache_manager(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let entity = cx.entity();
+        cache_dialog::open_cache_dialog(window, cx, entity);
+        self.start_cache_scan(cx);
+    }
+
+    /// 后台统计 `CARGO_HOME` 下的 registry / git 缓存体积与无效缓存。
+    pub(crate) fn start_cache_scan(&mut self, cx: &mut Context<Self>) {
+        if matches!(
+            self.app.read(cx).state.cache,
+            cache::CacheState::Scanning | cache::CacheState::Cleaning
+        ) {
+            return;
+        }
+        self.set_cache_state(cache::CacheState::Scanning, cx);
+
+        cx.spawn(async move |view, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async { cache::scan() })
+                .await;
+            let _ = view.update(cx, |view, cx| match result {
+                Ok(report) => view.set_cache_state(cache::CacheState::Ready(report), cx),
+                Err(error) => {
+                    logger::error(
+                        "cache",
+                        rust_i18n::t!("cache.log_scan_failed", error = format!("{error:#}"))
+                            .to_string(),
+                    );
+                    view.set_cache_state(cache::CacheState::Failed(format!("{error:#}")), cx);
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// 后台清理无效缓存，完成后自动重新统计。
+    pub(crate) fn clean_cache(&mut self, cx: &mut Context<Self>) {
+        if matches!(
+            self.app.read(cx).state.cache,
+            cache::CacheState::Scanning | cache::CacheState::Cleaning
+        ) {
+            return;
+        }
+        self.set_cache_state(cache::CacheState::Cleaning, cx);
+
+        cx.spawn(async move |view, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async { (cache::clean(), cache::scan()) })
+                .await;
+            let _ = view.update(cx, |view, cx| view.finish_cache_clean(result, cx));
+        })
+        .detach();
+    }
+
+    /// 处理清理结果：更新状态栏，并用重新统计的结果刷新对话框。
+    fn finish_cache_clean(
+        &mut self,
+        result: (Result<cache::CleanReport>, Result<cache::CacheReport>),
+        cx: &mut Context<Self>,
+    ) {
+        let (cleaned, rescanned) = result;
+        let status = match cleaned {
+            Ok(report) if report.failed > 0 => {
+                let message = rust_i18n::t!(
+                    "cache.cleaned_partial",
+                    count = report.removed.to_string(),
+                    failed = report.failed.to_string()
+                )
+                .to_string();
+                logger::warn("cache", message.clone());
+                Status::Error(message.into())
+            }
+            Ok(report) if report.removed == 0 => {
+                Status::Info(rust_i18n::t!("cache.invalid_none").to_string().into())
+            }
+            Ok(report) => {
+                let size = cache::format_size(report.bytes);
+                let message = rust_i18n::t!(
+                    "cache.cleaned",
+                    count = report.removed.to_string(),
+                    size = size
+                )
+                .to_string();
+                logger::info("cache", message.clone());
+                Status::Success(message.into())
+            }
+            Err(error) => {
+                logger::error(
+                    "cache",
+                    rust_i18n::t!("cache.log_clean_failed", error = format!("{error:#}"))
+                        .to_string(),
+                );
+                Status::Error(
+                    rust_i18n::t!("cache.clean_failed", error = format!("{error:#}"))
+                        .to_string()
+                        .into(),
+                )
+            }
+        };
+        self.app.update(cx, |model, cx| {
+            model.state.status = status;
+            cx.notify();
+        });
+        match rescanned {
+            Ok(report) => self.set_cache_state(cache::CacheState::Ready(report), cx),
+            Err(error) => self.set_cache_state(cache::CacheState::Failed(format!("{error:#}")), cx),
+        }
+    }
+
+    /// 更新缓存管理状态并触发重绘。
+    fn set_cache_state(&mut self, state: cache::CacheState, cx: &mut Context<Self>) {
+        self.app.update(cx, |model, cx| {
+            model.state.cache = state;
+            cx.notify();
+        });
+    }
+
     /// 对所有内置源与自定义源发起一轮分层测速。
     fn measure_all(&mut self, cx: &mut Context<Self>) {
         let (builtins, customs) = {
@@ -1137,7 +1259,11 @@ impl RootView {
         self.app.update(cx, |model, cx| {
             model.state.builtins = sources;
             let selected = model.state.selected.to_string();
-            let still_exists = model.state.builtins.iter().any(|source| source.id == selected)
+            let still_exists = model
+                .state
+                .builtins
+                .iter()
+                .any(|source| source.id == selected)
                 || model.state.customs.contains_key(&selected);
             if !still_exists {
                 if let Some(first) = model.state.builtins.first().map(|source| source.id.clone()) {
@@ -1193,8 +1319,7 @@ impl RootView {
 
         let Some(source) = source else {
             self.app.update(cx, |model, cx| {
-                model.state.status =
-                    Status::Error(rust_i18n::t!("share.none").to_string().into());
+                model.state.status = Status::Error(rust_i18n::t!("share.none").to_string().into());
                 cx.notify();
             });
             return;
@@ -1675,7 +1800,9 @@ impl Render for RootView {
         };
         let snapshot_tip = rust_i18n::t!(
             "snapshot.tip",
-            count = config_io::effective_config(&config_io::read_settings()).snapshot_limit.to_string()
+            count = config_io::effective_config(&config_io::read_settings())
+                .snapshot_limit
+                .to_string()
         )
         .to_string();
         let health_tip = rust_i18n::t!("health.tip").to_string();
@@ -1745,6 +1872,18 @@ impl Render for RootView {
                                     .tooltip(health_tip)
                                     .on_click(cx.listener(|view, _ev, window, cx| {
                                         view.check_health(window, cx);
+                                    })),
+                            )
+                            .child(
+                                // 缓存管理：统计 registry / git 缓存体积并清理无效缓存
+                                Button::new("open-cache")
+                                    .icon(IconName::HardDrive)
+                                    .label(rust_i18n::t!("cache.button").to_string())
+                                    .small()
+                                    .secondary()
+                                    .tooltip(rust_i18n::t!("cache.button_tip").to_string())
+                                    .on_click(cx.listener(|view, _ev, window, cx| {
+                                        view.open_cache_manager(window, cx);
                                     })),
                             )
                             .child(
@@ -2007,9 +2146,7 @@ impl Render for RootView {
                                                         |_view, _ev, window, cx| {
                                                             let entity = cx.entity();
                                                             config_dialog::open_import_link_dialog(
-                                                                window,
-                                                                cx,
-                                                                entity,
+                                                                window, cx, entity,
                                                             );
                                                         },
                                                     )),
@@ -2098,9 +2235,7 @@ impl Render for RootView {
                                                         |_view, _ev, window, cx| {
                                                             let entity = cx.entity();
                                                             config_dialog::open_import_link_dialog(
-                                                                window,
-                                                                cx,
-                                                                entity,
+                                                                window, cx, entity,
                                                             );
                                                         },
                                                     )),

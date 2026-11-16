@@ -328,6 +328,42 @@ health:
   log_failed: "配置健康检查失败：%{error}"
   log_unfixable: "配置无法解析且没有可用备份：%{path}"
 
+cache:
+  button: 缓存管理
+  button_tip: "统计 CARGO_HOME 下的 registry / git 缓存体积，并清理无效缓存"
+  title: Cargo 缓存管理
+  home: "CARGO_HOME：%{path}"
+  scanning: 正在统计缓存体积…
+  cleaning: 正在清理无效缓存…
+  failed: "统计缓存失败：%{error}"
+  empty: 未找到 registry / git 缓存
+  total: 缓存总大小
+  registry: Registry 缓存
+  git: Git 缓存
+  category:
+    index: 索引
+    cache: 下载包
+    src: 解压源码
+    db: 裸仓库
+    checkouts: 工作副本
+  invalid_title: 无效缓存
+  invalid_none: 未发现无效缓存
+  invalid_found: "发现 %{count} 项无效缓存，共 %{size}"
+  invalid_kind:
+    incomplete_src: 解压未完成的源码目录
+    orphan_checkout: 无对应仓库的 Git 工作副本
+    orphan_registry: 无对应索引的缓存目录
+  invalid_hint: 清理只删除上述无效条目，不会影响正常依赖的缓存。
+  refresh: 重新统计
+  clean: 清理无效缓存
+  clean_tip: 删除解压未完成、脱离索引或仓库的缓存条目
+  close: 关闭
+  cleaned: "已清理 %{count} 项无效缓存，释放 %{size}"
+  cleaned_partial: "已清理 %{count} 项无效缓存，%{failed} 项删除失败"
+  clean_failed: "清理无效缓存失败：%{error}"
+  log_scan_failed: "统计 Cargo 缓存失败：%{error}"
+  log_clean_failed: "清理无效缓存失败：%{error}"
+
 settings:
   title: 应用设置
   button: 设置

@@ -328,6 +328,42 @@ health:
   log_failed: "Konfigurations-Zustandsprüfung fehlgeschlagen: %{error}"
   log_unfixable: "Konfiguration konnte nicht geparst werden und es gibt keine nutzbare Sicherung: %{path}"
 
+cache:
+  button: Cache
+  button_tip: "Registry-/Git-Cache-Größe unter CARGO_HOME messen und ungültigen Cache bereinigen"
+  title: Cargo-Cache-Verwaltung
+  home: "CARGO_HOME: %{path}"
+  scanning: Cache-Größe wird gemessen…
+  cleaning: Ungültiger Cache wird bereinigt…
+  failed: "Cache-Messung fehlgeschlagen: %{error}"
+  empty: Kein registry-/git-Cache gefunden
+  total: Gesamte Cache-Größe
+  registry: Registry-Cache
+  git: Git-Cache
+  category:
+    index: Index
+    cache: Downloads
+    src: Entpackte Quellen
+    db: Bare-Repositorys
+    checkouts: Arbeitskopien
+  invalid_title: Ungültiger Cache
+  invalid_none: Kein ungültiger Cache gefunden
+  invalid_found: "%{count} ungültige Einträge, insgesamt %{size}"
+  invalid_kind:
+    incomplete_src: Unvollständig entpackte Quelle
+    orphan_checkout: Git-Arbeitskopie ohne Repository
+    orphan_registry: Cache-Verzeichnis ohne Index
+  invalid_hint: Die Bereinigung löscht nur die obigen Einträge und lässt gültige Abhängigkeits-Caches unberührt.
+  refresh: Neu messen
+  clean: Ungültigen Cache bereinigen
+  clean_tip: Unvollständige, index- oder repositorylose Cache-Einträge löschen
+  close: Schließen
+  cleaned: "%{count} ungültige Einträge bereinigt, %{size} freigegeben"
+  cleaned_partial: "%{count} ungültige Einträge bereinigt, %{failed} konnten nicht gelöscht werden"
+  clean_failed: "Bereinigen des ungültigen Caches fehlgeschlagen: %{error}"
+  log_scan_failed: "Cargo-Cache-Messung fehlgeschlagen: %{error}"
+  log_clean_failed: "Bereinigen des ungültigen Caches fehlgeschlagen: %{error}"
+
 settings:
   title: Anwendungseinstellungen
   button: Einstellungen

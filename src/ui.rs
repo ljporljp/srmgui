@@ -3,7 +3,9 @@ use std::time::Duration;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::label::Label;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{ActiveTheme, IconName, Sizable, StyledExt, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::{
+    ActiveTheme, IconName, Sizable, StyledExt, WindowExt as _, h_flex, v_flex,
+};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Animation, AnimationExt as _, AnyElement, App, ClipboardItem, Hsla, Image, ImageFormat,
@@ -261,12 +263,8 @@ pub(crate) fn v_separator(color: Hsla) -> AnyElement {
 /// 步骤悬停提示：说明该步骤的含义与当前状态。
 pub(crate) fn level_tip(title: &str, level: &Level) -> String {
     match level {
-        Level::Running => {
-            rust_i18n::t!("probe.tip_running", title = title).to_string()
-        }
-        Level::Skipped => {
-            rust_i18n::t!("probe.tip_skipped", title = title).to_string()
-        }
+        Level::Running => rust_i18n::t!("probe.tip_running", title = title).to_string(),
+        Level::Skipped => rust_i18n::t!("probe.tip_skipped", title = title).to_string(),
         Level::Passed(detail) => {
             rust_i18n::t!("probe.tip_passed", title = title, detail = detail.as_ref()).to_string()
         }

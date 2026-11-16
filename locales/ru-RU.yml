@@ -328,6 +328,42 @@ health:
   log_failed: "Ошибка проверки конфигурации: %{error}"
   log_unfixable: "Не удалось разобрать конфигурацию, а подходящих копий нет: %{path}"
 
+cache:
+  button: Кэш
+  button_tip: "Измерить размер кэша registry / git в CARGO_HOME и удалить недействительный кэш"
+  title: Управление кэшем Cargo
+  home: "CARGO_HOME: %{path}"
+  scanning: Измерение размера кэша…
+  cleaning: Очистка недействительного кэша…
+  failed: "Не удалось измерить кэш: %{error}"
+  empty: Кэш registry / git не найден
+  total: Общий размер кэша
+  registry: Кэш registry
+  git: Кэш git
+  category:
+    index: Индекс
+    cache: Загрузки
+    src: Распакованные исходники
+    db: Bare-репозитории
+    checkouts: Рабочие копии
+  invalid_title: Недействительный кэш
+  invalid_none: Недействительный кэш не обнаружен
+  invalid_found: "Недействительных записей: %{count}, всего %{size}"
+  invalid_kind:
+    incomplete_src: Недораспакованный каталог исходников
+    orphan_checkout: Рабочая копия Git без репозитория
+    orphan_registry: Каталог кэша без индекса
+  invalid_hint: Очистка удаляет только перечисленные записи и не затрагивает рабочий кэш зависимостей.
+  refresh: Измерить снова
+  clean: Очистить недействительный кэш
+  clean_tip: Удалить неполные записи, записи без индекса или репозитория
+  close: Закрыть
+  cleaned: "Очищено записей: %{count}, освобождено %{size}"
+  cleaned_partial: "Очищено записей: %{count}, не удалось удалить: %{failed}"
+  clean_failed: "Не удалось очистить недействительный кэш: %{error}"
+  log_scan_failed: "Не удалось измерить кэш Cargo: %{error}"
+  log_clean_failed: "Не удалось очистить недействительный кэш: %{error}"
+
 settings:
   title: Настройки приложения
   button: Настройки

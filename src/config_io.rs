@@ -261,7 +261,10 @@ impl Default for AppConfig {
 pub fn effective_config(settings: &Settings) -> AppConfig {
     let defaults = AppConfig::default();
     AppConfig {
-        timeout_secs: settings.timeout_secs.unwrap_or(defaults.timeout_secs).max(1),
+        timeout_secs: settings
+            .timeout_secs
+            .unwrap_or(defaults.timeout_secs)
+            .max(1),
         download_max_kb: settings
             .download_max_kb
             .unwrap_or(defaults.download_max_kb)
@@ -271,7 +274,10 @@ pub fn effective_config(settings: &Settings) -> AppConfig {
             .clone()
             .filter(|s| !s.is_empty())
             .unwrap_or(defaults.sample_crate),
-        max_redirects: settings.max_redirects.unwrap_or(defaults.max_redirects).min(20),
+        max_redirects: settings
+            .max_redirects
+            .unwrap_or(defaults.max_redirects)
+            .min(20),
         probe_interval_secs: settings
             .probe_interval_secs
             .unwrap_or(defaults.probe_interval_secs)
@@ -280,7 +286,10 @@ pub fn effective_config(settings: &Settings) -> AppConfig {
             .update_interval_secs
             .unwrap_or(defaults.update_interval_secs)
             .max(60),
-        snapshot_limit: settings.snapshot_limit.unwrap_or(defaults.snapshot_limit).clamp(1, 100),
+        snapshot_limit: settings
+            .snapshot_limit
+            .unwrap_or(defaults.snapshot_limit)
+            .clamp(1, 100),
         max_log_mb: settings.max_log_mb.unwrap_or(defaults.max_log_mb).max(1),
         max_rotated_logs: settings
             .max_rotated_logs
@@ -374,7 +383,10 @@ pub fn write_settings(settings: &Settings) -> Result<()> {
         ));
     }
     // 仅写入与默认值不同的参数
-    if let Some(value) = settings.timeout_secs.filter(|v| *v != defaults.timeout_secs) {
+    if let Some(value) = settings
+        .timeout_secs
+        .filter(|v| *v != defaults.timeout_secs)
+    {
         content.push_str(&format!("timeout_secs = {value}\n"));
     }
     if let Some(value) = settings
@@ -390,7 +402,10 @@ pub fn write_settings(settings: &Settings) -> Result<()> {
     {
         content.push_str(&format!("sample_crate = {}\n", quote(krate)));
     }
-    if let Some(value) = settings.max_redirects.filter(|v| *v != defaults.max_redirects) {
+    if let Some(value) = settings
+        .max_redirects
+        .filter(|v| *v != defaults.max_redirects)
+    {
         content.push_str(&format!("max_redirects = {value}\n"));
     }
     if let Some(value) = settings

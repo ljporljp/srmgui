@@ -328,6 +328,42 @@ health:
   log_failed: "Config health check failed: %{error}"
   log_unfixable: "Config could not be parsed and no usable backup exists: %{path}"
 
+cache:
+  button: Cache
+  button_tip: "Measure registry / git cache size under CARGO_HOME and clean invalid cache"
+  title: Cargo Cache Management
+  home: "CARGO_HOME: %{path}"
+  scanning: Measuring cache size…
+  cleaning: Cleaning invalid cache…
+  failed: "Failed to measure cache: %{error}"
+  empty: No registry / git cache found
+  total: Total cache size
+  registry: Registry cache
+  git: Git cache
+  category:
+    index: Index
+    cache: Downloads
+    src: Extracted sources
+    db: Bare repositories
+    checkouts: Working copies
+  invalid_title: Invalid cache
+  invalid_none: No invalid cache found
+  invalid_found: "%{count} invalid entr(ies), %{size} in total"
+  invalid_kind:
+    incomplete_src: Incomplete extracted source
+    orphan_checkout: Git working copy without repository
+    orphan_registry: Cache directory without index
+  invalid_hint: Cleaning only removes the entries above and never touches valid dependency caches.
+  refresh: Rescan
+  clean: Clean invalid cache
+  clean_tip: Delete incomplete, index-less or repository-less cache entries
+  close: Close
+  cleaned: "Cleaned %{count} invalid entr(ies), freed %{size}"
+  cleaned_partial: "Cleaned %{count} invalid entr(ies), %{failed} failed to delete"
+  clean_failed: "Failed to clean invalid cache: %{error}"
+  log_scan_failed: "Failed to measure Cargo cache: %{error}"
+  log_clean_failed: "Failed to clean invalid cache: %{error}"
+
 settings:
   title: Application Settings
   button: Settings

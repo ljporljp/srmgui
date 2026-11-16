@@ -202,16 +202,34 @@ pub(crate) fn open_settings_dialog(
                 .label(rust_i18n::t!("settings.reset").to_string())
                 .secondary()
                 .on_click(move |_, window, cx| {
-                    i_timeout.update(cx, |s, cx| s.set_value(d.timeout_secs.to_string(), window, cx));
-                    i_download.update(cx, |s, cx| s.set_value(d.download_max_kb.to_string(), window, cx));
+                    i_timeout.update(cx, |s, cx| {
+                        s.set_value(d.timeout_secs.to_string(), window, cx)
+                    });
+                    i_download.update(cx, |s, cx| {
+                        s.set_value(d.download_max_kb.to_string(), window, cx)
+                    });
                     i_crate.update(cx, |s, cx| s.set_value(d.sample_crate.clone(), window, cx));
-                    i_redirects.update(cx, |s, cx| s.set_value(d.max_redirects.to_string(), window, cx));
-                    i_probe.update(cx, |s, cx| s.set_value(d.probe_interval_secs.to_string(), window, cx));
-                    i_update.update(cx, |s, cx| s.set_value(d.update_interval_secs.to_string(), window, cx));
-                    i_snap.update(cx, |s, cx| s.set_value(d.snapshot_limit.to_string(), window, cx));
-                    i_log_mb.update(cx, |s, cx| s.set_value(d.max_log_mb.to_string(), window, cx));
-                    i_log_rot.update(cx, |s, cx| s.set_value(d.max_rotated_logs.to_string(), window, cx));
-                    i_log_ent.update(cx, |s, cx| s.set_value(d.max_log_entries.to_string(), window, cx));
+                    i_redirects.update(cx, |s, cx| {
+                        s.set_value(d.max_redirects.to_string(), window, cx)
+                    });
+                    i_probe.update(cx, |s, cx| {
+                        s.set_value(d.probe_interval_secs.to_string(), window, cx)
+                    });
+                    i_update.update(cx, |s, cx| {
+                        s.set_value(d.update_interval_secs.to_string(), window, cx)
+                    });
+                    i_snap.update(cx, |s, cx| {
+                        s.set_value(d.snapshot_limit.to_string(), window, cx)
+                    });
+                    i_log_mb.update(cx, |s, cx| {
+                        s.set_value(d.max_log_mb.to_string(), window, cx)
+                    });
+                    i_log_rot.update(cx, |s, cx| {
+                        s.set_value(d.max_rotated_logs.to_string(), window, cx)
+                    });
+                    i_log_ent.update(cx, |s, cx| {
+                        s.set_value(d.max_log_entries.to_string(), window, cx)
+                    });
                     *error.borrow_mut() = None;
                     cx.refresh_windows();
                 })
@@ -370,12 +388,7 @@ pub(crate) fn open_settings_dialog(
                         .rounded_full()
                         .bg(cx.theme().primary),
                 )
-                .child(
-                    Label::new(text)
-                        .text_xs()
-                        .font_semibold()
-                        .text_color(muted),
-                )
+                .child(Label::new(text).text_xs().font_semibold().text_color(muted))
                 .into_any_element()
         };
 

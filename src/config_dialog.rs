@@ -47,7 +47,10 @@ pub(crate) fn open_preview_dialog(
     let target = plan.target.display().to_string();
     let unchanged = plan.old == plan.new;
     let lines = diff_lines(&plan.old, &plan.new);
-    let added = lines.iter().filter(|line| line.kind == LineKind::Added).count();
+    let added = lines
+        .iter()
+        .filter(|line| line.kind == LineKind::Added)
+        .count();
     let removed = lines
         .iter()
         .filter(|line| line.kind == LineKind::Removed)
@@ -103,12 +106,7 @@ pub(crate) fn open_preview_dialog(
                             .bg(cx.theme().muted)
                             .overflow_y_scrollbar()
                             .children(lines.iter().map(|line| {
-                                diff_row(
-                                    line,
-                                    muted,
-                                    cx.theme().success,
-                                    cx.theme().danger,
-                                )
+                                diff_row(line, muted, cx.theme().success, cx.theme().danger)
                             })),
                     ),
             )
@@ -129,8 +127,7 @@ pub(crate) fn open_preview_dialog(
                             .primary()
                             .on_click(move |_, window, cx| {
                                 let plan = plan_for_ok.clone();
-                                view_for_ok
-                                    .update(cx, |view, cx| view.apply_confirmed(plan, cx));
+                                view_for_ok.update(cx, |view, cx| view.apply_confirmed(plan, cx));
                                 window.close_dialog(cx);
                             }),
                     ),
@@ -139,25 +136,30 @@ pub(crate) fn open_preview_dialog(
 }
 
 /// 快照回滚：列出最近的配置快照，可一键恢复或对比差异。
-pub(crate) fn open_snapshots_dialog(
-    window: &mut Window,
-    cx: &mut App,
-    view: Entity<RootView>,
-) {
+pub(crate) fn open_snapshots_dialog(window: &mut Window, cx: &mut App, view: Entity<RootView>) {
     let snapshots = config_io::read_snapshots();
 
     window.open_dialog(cx, move |dialog, _window, cx| {
         let muted = cx.theme().muted_foreground;
         let body = if snapshots.is_empty() {
-            v_flex().w_full().py_4().items_center().child(
-                Label::new(
-                    rust_i18n::t!("snapshot.empty", count = config_io::effective_config(&config_io::read_settings()).snapshot_limit.to_string())
+            v_flex()
+                .w_full()
+                .py_4()
+                .items_center()
+                .child(
+                    Label::new(
+                        rust_i18n::t!(
+                            "snapshot.empty",
+                            count = config_io::effective_config(&config_io::read_settings())
+                                .snapshot_limit
+                                .to_string()
+                        )
                         .to_string(),
+                    )
+                    .text_sm()
+                    .text_color(muted),
                 )
-                .text_sm()
-                .text_color(muted),
-            )
-            .into_any_element()
+                .into_any_element()
         } else {
             v_flex()
                 .id("snapshot-list")
@@ -197,7 +199,10 @@ pub(crate) fn open_diff_dialog(
     right: String,
 ) {
     let lines = diff_lines(&left, &right);
-    let added = lines.iter().filter(|line| line.kind == LineKind::Added).count();
+    let added = lines
+        .iter()
+        .filter(|line| line.kind == LineKind::Added)
+        .count();
     let removed = lines
         .iter()
         .filter(|line| line.kind == LineKind::Removed)
@@ -233,11 +238,9 @@ pub(crate) fn open_diff_dialog(
                                     .flex_1()
                                     .min_w_0()
                                     .child(
-                                        Label::new(
-                                            rust_i18n::t!("diff.left").to_string(),
-                                        )
-                                        .text_sm()
-                                        .text_color(muted),
+                                        Label::new(rust_i18n::t!("diff.left").to_string())
+                                            .text_sm()
+                                            .text_color(muted),
                                     )
                                     .child(
                                         Label::new(left_label.clone())
@@ -252,11 +255,9 @@ pub(crate) fn open_diff_dialog(
                                     .flex_1()
                                     .min_w_0()
                                     .child(
-                                        Label::new(
-                                            rust_i18n::t!("diff.right").to_string(),
-                                        )
-                                        .text_sm()
-                                        .text_color(muted),
+                                        Label::new(rust_i18n::t!("diff.right").to_string())
+                                            .text_sm()
+                                            .text_color(muted),
                                     )
                                     .child(
                                         Label::new(right_label.clone())
@@ -281,12 +282,7 @@ pub(crate) fn open_diff_dialog(
                             .bg(cx.theme().muted)
                             .overflow_y_scrollbar()
                             .children(lines.iter().map(|line| {
-                                diff_row(
-                                    line,
-                                    muted,
-                                    cx.theme().success,
-                                    cx.theme().danger,
-                                )
+                                diff_row(line, muted, cx.theme().success, cx.theme().danger)
                             })),
                     ),
             )
@@ -357,9 +353,8 @@ pub(crate) fn open_update_dialog(
                             .secondary()
                             .on_click(move |_, window, cx| {
                                 let url = url_for_system.clone();
-                                view_for_system.update(cx, |view, cx| {
-                                    view.open_update_in_system(url, cx)
-                                });
+                                view_for_system
+                                    .update(cx, |view, cx| view.open_update_in_system(url, cx));
                                 window.close_dialog(cx);
                             }),
                     )
@@ -369,8 +364,7 @@ pub(crate) fn open_update_dialog(
                             .tooltip(rust_i18n::t!("update.builtin_tip").to_string())
                             .primary()
                             .on_click(move |_, window, cx| {
-                                view_for_builtin
-                                    .update(cx, |view, cx| view.start_update(cx));
+                                view_for_builtin.update(cx, |view, cx| view.start_update(cx));
                                 window.close_dialog(cx);
                             }),
                     ),
@@ -379,11 +373,7 @@ pub(crate) fn open_update_dialog(
 }
 
 /// 打开「导入分享链接」对话框：粘贴 srmgui 分享链接后导入其中的源。
-pub(crate) fn open_import_link_dialog(
-    window: &mut Window,
-    cx: &mut App,
-    view: Entity<RootView>,
-) {
+pub(crate) fn open_import_link_dialog(window: &mut Window, cx: &mut App, view: Entity<RootView>) {
     // 输入框与错误提示必须在对话框构建器之外创建，否则每次重建都会清空内容。
     let input = cx.new(|cx| {
         InputState::new(window, cx).placeholder(rust_i18n::t!("share.placeholder").to_string())
@@ -460,11 +450,8 @@ fn open_compare_picker(
     let base_label = base.created_at.clone();
     window.open_dialog(cx, move |dialog, _window, cx| {
         let muted = cx.theme().muted_foreground;
-        let hint = rust_i18n::t!(
-            "snapshot.diff_picker_hint",
-            time = base_label.as_str()
-        )
-        .to_string();
+        let hint =
+            rust_i18n::t!("snapshot.diff_picker_hint", time = base_label.as_str()).to_string();
 
         dialog
             .title(rust_i18n::t!("snapshot.diff_picker_title").to_string())
@@ -635,9 +622,12 @@ pub(crate) fn open_health_dialog(
                                 .max_h(px(320.))
                                 .gap_2()
                                 .overflow_y_scrollbar()
-                                .children(issues.iter().enumerate().map(|(index, issue)| {
-                                    health_issue_row(index, issue, cx)
-                                })),
+                                .children(
+                                    issues
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(index, issue)| health_issue_row(index, issue, cx)),
+                                ),
                         )
                     })
                     .child(
@@ -812,8 +802,8 @@ fn snapshot_row(
                     let left_label = snapshot.created_at.clone();
                     let right_label = current_label;
                     // 读不到当前文件时按空内容处理，让 diff 展示整份快照。
-                    let current = config_io::read_config_content(&snapshot.target)
-                        .unwrap_or_default();
+                    let current =
+                        config_io::read_config_content(&snapshot.target).unwrap_or_default();
                     open_diff_dialog(
                         window,
                         cx,

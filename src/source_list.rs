@@ -163,8 +163,7 @@ fn source_row(
                                     cx.notify();
                                 });
                                 // 持久化删除后的自定义源
-                                let _ =
-                                    config_io::write_customs(&view.app.read(cx).state.customs);
+                                let _ = config_io::write_customs(&view.app.read(cx).state.customs);
                             }
                         }))
                 }),

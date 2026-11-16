@@ -78,10 +78,8 @@ pub(crate) fn render_log_panel(viewport_height: f32, cx: &mut Context<RootView>)
                         .cursor_pointer()
                         .hover(|style| style.underline())
                         .tooltip(move |_, cx| {
-                            cx.new(|_| {
-                                Tooltip::new(rust_i18n::t!("log.open").to_string())
-                            })
-                            .into()
+                            cx.new(|_| Tooltip::new(rust_i18n::t!("log.open").to_string()))
+                                .into()
                         })
                         .on_click(cx.listener(move |_view, _ev, _window, _cx| {
                             open_in_file_manager(Path::new(&log_dir_for_click));

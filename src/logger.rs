@@ -264,9 +264,7 @@ pub(crate) fn format_timestamp() -> String {
     let millis = dur.subsec_millis();
 
     let (year, month, day, hour, min, sec) = unix_to_ymdhms(secs);
-    format!(
-        "{year:04}-{month:02}-{day:02} {hour:02}:{min:02}:{sec:02}.{millis:03}"
-    )
+    format!("{year:04}-{month:02}-{day:02} {hour:02}:{min:02}:{sec:02}.{millis:03}")
 }
 
 /// 将 UNIX 时间戳（秒）转换为 UTC 年月日时分秒。

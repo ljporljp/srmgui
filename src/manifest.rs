@@ -123,9 +123,7 @@ pub(crate) fn parse_manifest(text: &str) -> Result<Vec<ManifestSource>, String> 
         Ok(items) => items,
         Err(_) => serde_json::from_str::<ManifestDocument>(text)
             .map(|document| document.sources)
-            .map_err(|error| {
-                rust_i18n::t!("manifest.invalid", error = error).to_string()
-            })?,
+            .map_err(|error| rust_i18n::t!("manifest.invalid", error = error).to_string())?,
     };
 
     let mut sources = Vec::new();
@@ -160,9 +158,7 @@ pub(crate) fn display_name(source: &ManifestSource) -> String {
 /// 内置源的展示说明，回退顺序同 [`display_name`]。
 pub(crate) fn display_description(source: &ManifestSource) -> String {
     localized(format!("registry.{}.description", source.id))
-        .or_else(|| {
-            (!source.description.is_empty()).then(|| source.description.clone())
-        })
+        .or_else(|| (!source.description.is_empty()).then(|| source.description.clone()))
         .unwrap_or_default()
 }
 
@@ -248,10 +244,7 @@ mod tests {
     fn decodes_json_escapes() {
         let json = r#"[{"id": "a", "name": "quote \" slash \\ tab \t unicode \u4e2d\u6587", "url": "https://a.example.com/"}]"#;
         let sources = parse_manifest(json).unwrap();
-        assert_eq!(
-            sources[0].name,
-            "quote \" slash \\ tab \t unicode 中文"
-        );
+        assert_eq!(sources[0].name, "quote \" slash \\ tab \t unicode 中文");
     }
 
     #[test]

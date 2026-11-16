@@ -328,6 +328,42 @@ health:
   log_failed: "Échec de la vérification de la configuration : %{error}"
   log_unfixable: "La configuration n'a pas pu être analysée et aucune sauvegarde utilisable n'existe : %{path}"
 
+cache:
+  button: Cache
+  button_tip: "Mesurer la taille des caches registry / git sous CARGO_HOME et nettoyer les caches invalides"
+  title: Gestion du cache Cargo
+  home: "CARGO_HOME : %{path}"
+  scanning: Mesure de la taille du cache…
+  cleaning: Nettoyage des caches invalides…
+  failed: "Échec de la mesure du cache : %{error}"
+  empty: Aucun cache registry / git trouvé
+  total: Taille totale du cache
+  registry: Cache registry
+  git: Cache git
+  category:
+    index: Index
+    cache: Téléchargements
+    src: Sources extraites
+    db: Dépôts nus
+    checkouts: Copies de travail
+  invalid_title: Caches invalides
+  invalid_none: Aucun cache invalide trouvé
+  invalid_found: "%{count} entrée(s) invalide(s), %{size} au total"
+  invalid_kind:
+    incomplete_src: Source extraite incomplètement
+    orphan_checkout: Copie de travail Git sans dépôt
+    orphan_registry: Dossier de cache sans index
+  invalid_hint: Le nettoyage ne supprime que les entrées ci-dessus et ne touche pas aux caches de dépendances valides.
+  refresh: Remesurer
+  clean: Nettoyer les caches invalides
+  clean_tip: Supprimer les entrées incomplètes, sans index ou sans dépôt
+  close: Fermer
+  cleaned: "%{count} entrée(s) invalide(s) nettoyée(s), %{size} libérés"
+  cleaned_partial: "%{count} entrée(s) nettoyée(s), échec pour %{failed}"
+  clean_failed: "Échec du nettoyage des caches invalides : %{error}"
+  log_scan_failed: "Échec de la mesure du cache Cargo : %{error}"
+  log_clean_failed: "Échec du nettoyage des caches invalides : %{error}"
+
 settings:
   title: Paramètres de l'application
   button: Paramètres

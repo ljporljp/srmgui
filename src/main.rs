@@ -4,6 +4,8 @@ rust_i18n::i18n!("locales", fallback = "zh-CN");
 
 mod add_form;
 mod app;
+mod cache;
+mod cache_dialog;
 mod config_dialog;
 mod config_io;
 mod diff;
