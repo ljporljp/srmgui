@@ -1,6 +1,6 @@
 [package]
 name = "srmgui"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2024"
 authors = ["liujinpeng <imljp@foxmail.com>"]
 description = "GUI tool to switch Rust Cargo registry mirrors, built with GPUI Kit"
@@ -9,6 +9,8 @@ repository = "https://github.com/ljporljp/srmgui"
 readme = "README.md"
 keywords = ["cargo", "mirror", "registry", "gui", "gpui"]
 categories = ["development-tools", "command-line-utilities"]
+# 演示视频体积较大，超出 crates.io 单包 10MB 限制，不随 crate 发布
+exclude = ["demo"]
 
 [dependencies]
 gpui-kit = "0.9"
