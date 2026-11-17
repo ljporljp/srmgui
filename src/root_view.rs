@@ -731,23 +731,23 @@ impl RootView {
         }
     }
 
-    /// 打开缓存管理对话框：优先复用内存或应用缓存中的统计结果，缓存有更新时才重新统计。
+    /// 打开缓存管理对话框：立即展示界面，统计与缓存复用都在后台执行，避免阻塞主线程。
     fn open_cache_manager(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(
             self.app.read(cx).state.cache,
             cache::CacheState::Idle | cache::CacheState::Failed(_)
         ) {
-            match cache::load_report() {
-                // 缓存目录未变化，直接展示上次结果，避免每次打开都全量扫描。
-                Some(report) => self.set_cache_state(cache::CacheState::Ready(report), cx),
-                None => self.start_cache_scan(cx),
-            }
+            // 立即进入扫描态，后台再决定复用上次结果还是重新统计。
+            self.start_cache_scan(cx);
         }
         let entity = cx.entity();
         cache_dialog::open_cache_dialog(window, cx, entity);
     }
 
     /// 后台统计 `CARGO_HOME` 下的 registry / git 缓存体积与无效缓存。
+    ///
+    /// 优先复用应用缓存中的上次统计结果（含指纹校验），缓存目录未变化时跳过全量扫描；
+    /// 否则才执行真正的统计。整个过程在后台线程执行，不阻塞界面。
     pub(crate) fn start_cache_scan(&mut self, cx: &mut Context<Self>) {
         if matches!(
             self.app.read(cx).state.cache,
@@ -760,7 +760,12 @@ impl RootView {
         cx.spawn(async move |view, cx| {
             let result = cx
                 .background_executor()
-                .spawn(async { cache::scan() })
+                .spawn(async {
+                    match cache::load_report() {
+                        Some(report) => Ok(report),
+                        None => cache::scan(),
+                    }
+                })
                 .await;
             let _ = view.update(cx, |view, cx| match result {
                 Ok(report) => view.set_cache_state(cache::CacheState::Ready(report), cx),

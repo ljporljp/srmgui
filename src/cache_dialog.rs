@@ -1,5 +1,7 @@
 //! Cargo 缓存管理对话框：展示 registry / git 缓存体积与无效缓存，并支持一键清理。
 
+use std::time::Duration;
+
 use gpui_kit::base::Disableable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::label::Label;
@@ -7,7 +9,9 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, WindowExt as _, h_flex, v_flex};
 use gpui_kit::prelude::*;
-use gpui_kit::{AnyElement, App, Entity, SharedString, Window, div, px};
+use gpui_kit::{
+    Animation, AnimationExt as _, AnyElement, App, Entity, SharedString, Window, div, px,
+};
 
 use crate::cache::{self, CacheReport, CacheState, Category, InvalidKind, SourceKind};
 use crate::root_view::RootView;
@@ -65,28 +69,15 @@ pub(crate) fn open_cache_dialog(window: &mut Window, cx: &mut App, view: Entity<
 
 /// 根据缓存状态渲染对话框主体。
 fn render_body(state: &CacheState, view: &Entity<RootView>, cx: &App) -> AnyElement {
-    let muted = cx.theme().muted_foreground;
     match state {
-        CacheState::Idle | CacheState::Scanning => v_flex()
-            .w_full()
-            .py_6()
-            .items_center()
-            .child(
-                Label::new(rust_i18n::t!("cache.scanning").to_string())
-                    .text_sm()
-                    .text_color(muted),
-            )
-            .into_any_element(),
-        CacheState::Cleaning => v_flex()
-            .w_full()
-            .py_6()
-            .items_center()
-            .child(
-                Label::new(rust_i18n::t!("cache.cleaning").to_string())
-                    .text_sm()
-                    .text_color(muted),
-            )
-            .into_any_element(),
+        CacheState::Idle | CacheState::Scanning => render_busy(
+            rust_i18n::t!("cache.scanning").to_string(),
+            cx,
+        ),
+        CacheState::Cleaning => render_busy(
+            rust_i18n::t!("cache.cleaning").to_string(),
+            cx,
+        ),
         CacheState::Failed(error) => v_flex()
             .w_full()
             .py_4()
@@ -99,6 +90,51 @@ fn render_body(state: &CacheState, view: &Entity<RootView>, cx: &App) -> AnyElem
             .into_any_element(),
         CacheState::Ready(report) => render_report(report, view, cx),
     }
+}
+
+/// 忙碌态：提示文案 + 不确定进度条（扫描 / 清理无法精确量化进度）。
+fn render_busy(label: String, cx: &App) -> AnyElement {
+    let muted = cx.theme().muted_foreground;
+    v_flex()
+        .w_full()
+        .py_6()
+        .items_center()
+        .gap_3()
+        .child(
+            Label::new(label)
+                .text_sm()
+                .text_color(muted),
+        )
+        .child(indeterminate_progress(cx))
+        .into_any_element()
+}
+
+/// 不确定进度条：一个在轨道中循环滑动的色条。
+fn indeterminate_progress(cx: &App) -> AnyElement {
+    // 滑块宽度与滑动行程；行程需覆盖对话框主体宽度，确保滑块始终出现在可见区域内。
+    const BLOCK: f32 = 140.;
+    const TRAVEL: f32 = 700.;
+    let duration = Duration::from_secs_f32(1.4);
+
+    div()
+        .w_full()
+        .h(px(4.))
+        .rounded_full()
+        .overflow_hidden()
+        .bg(cx.theme().border)
+        .child(
+            div()
+                .w(px(BLOCK))
+                .h_full()
+                .rounded_full()
+                .bg(cx.theme().primary)
+                .with_animation(
+                    "cache-progress",
+                    Animation::new(duration).repeat(),
+                    move |this, delta| this.ml(px(-BLOCK + TRAVEL * delta)),
+                ),
+        )
+        .into_any_element()
 }
 
 /// 扫描完成后的统计详情。
