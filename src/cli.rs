@@ -16,7 +16,9 @@ use crate::config_io::{self, CustomSource, SCOPE_GLOBAL, SCOPE_PROJECT};
 use crate::health;
 use crate::logger;
 use crate::manifest::{self, ManifestSource};
+use crate::model::Probe;
 use crate::net;
+use crate::region;
 use crate::registry;
 use crate::util;
 
@@ -31,6 +33,7 @@ COMMANDS:
     status                     Show scope, config file and the active source
     list                       List built-in and custom sources
     use <id>                   Switch Cargo to the given source
+    use --best                 Probe all sources and apply the recommended fastest one
     probe [<id>...]            Test connectivity and speed (default: active source)
     custom list                List custom sources
     custom add <id> --url <u>  Add a custom source [--name <n>] [--description <d>]
@@ -53,6 +56,7 @@ OPTIONS:
     --scope <global|project>   Override the scope for this command
     --project <dir>            Project directory (any path inside the project)
     --all                      probe: test every known source
+    --best                     use: pick the fastest healthy source and apply it
     -h, --help                 Show this help
     -V, --version              Show the version
 
@@ -67,6 +71,7 @@ struct Args {
     json: bool,
     all: bool,
     fix: bool,
+    best: bool,
     /// `Some(true)` 表示项目作用域，`Some(false)` 表示全局作用域。
     scope: Option<bool>,
     project: Option<PathBuf>,
@@ -223,6 +228,7 @@ fn parse_args(raw: Vec<String>) -> Result<Args> {
             "json" => args.json = true,
             "all" => args.all = true,
             "fix" => args.fix = true,
+            "best" => args.best = true,
             "scope" => {
                 let value = take("scope")?;
                 args.scope = Some(match value.as_str() {
@@ -461,13 +467,46 @@ fn cmd_list(args: &Args) -> Result<i32> {
     Ok(0)
 }
 
+/// 测速所有内置源，按地区与测速结果选出推荐源标识。
+/// 与 GUI 的推荐条共用 [`region::recommend`]（下载速度优先、同省优先）。
+fn best_source_id(sources: &[ManifestSource]) -> Result<Option<String>> {
+    let settings = config_io::read_settings();
+    let (country, province) = match (settings.region.as_deref(), settings.province.as_deref()) {
+        (Some(country), province) => (country.to_string(), province.map(str::to_string)),
+        // 尚未识别过地区时现场探测；失败则按全球兜底。
+        _ => match region::detect_location() {
+            Some(info) => (info.country, info.province),
+            None => (region::REGION_GLOBAL.to_string(), None),
+        },
+    };
+
+    let mut probes: HashMap<String, Probe> = HashMap::new();
+    for source in sources {
+        let report = net::probe(&source.url);
+        probes.insert(source.id.clone(), Probe::from_report(report));
+    }
+    Ok(region::recommend(
+        &country,
+        province.as_deref(),
+        sources,
+        &probes,
+    ))
+}
+
 fn cmd_use(args: &Args) -> Result<i32> {
-    let id = args
-        .words
-        .get(1)
-        .ok_or_else(|| usage("usage: srmgui use <source-id>"))?
-        .trim()
-        .to_string();
+    let id = if args.best {
+        let sources = builtins();
+        match best_source_id(&sources)? {
+            Some(id) => id,
+            None => bail!("no source available to recommend"),
+        }
+    } else {
+        args.words
+            .get(1)
+            .ok_or_else(|| usage("usage: srmgui use <source-id>"))?
+            .trim()
+            .to_string()
+    };
     let target = resolve_target(args)?;
     let sources = builtins();
     let customs = load_customs(&target, &sources)?;
@@ -1206,6 +1245,13 @@ mod tests {
         assert!(args.json);
         assert_eq!(args.words, vec!["use".to_string(), "rsproxy".to_string()]);
         assert_eq!(args.scope, Some(true));
+    }
+
+    #[test]
+    fn parses_use_best_flag() {
+        let args = parse_args(vec!["use".to_string(), "--best".to_string()]).unwrap();
+        assert!(args.best);
+        assert_eq!(args.words, vec!["use".to_string()]);
     }
 
     #[test]
