@@ -1,0 +1,20 @@
+[Unit]
+Description=Every 5 hours: apply the fastest Cargo mirror (srmgui)
+
+[Timer]
+# 默认每 5 小时：登录后 10 分钟首跑，此后相对上次运行每 5 小时一次。
+OnBootSec=10min
+OnUnitActiveSec=5h
+AccuracySec=5min
+
+# 自定义周期：注释掉上面两行，启用下面任一行。
+# 每 5 小时（整点）：OnCalendar=*-*-* 00,05,10,15,20:00:00
+# 每天 03:00：     OnCalendar=*-*-* 03:00:00    （daily）
+# 每周一 03:00：   OnCalendar=Mon *-*-* 03:00:00 （weekly）
+# 每月 1 日 03:00：OnCalendar=*-01 03:00:00    （monthly）
+# 改用 OnCalendar 后可启用 Persistent=true 补跑错过触发。
+
+Unit=srmgui.service
+
+[Install]
+WantedBy=timers.target

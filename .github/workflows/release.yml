@@ -109,6 +109,12 @@ jobs:
           mkdir -p "$stage" dist
           cp "$bin_path" "$stage/"
           cp README.md LICENSE "$stage/"
+          # Linux 便携包附带 systemd --user 单元
+          if [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
+            mkdir -p "$stage/systemd/user"
+            cp packaging/linux/srmgui.service \
+               packaging/linux/srmgui.timer "$stage/systemd/user/"
+          fi
           tar -czf "dist/srmgui-$version-$platform-portable.tar.gz" -C stage "srmgui-$version-$platform"
 
       - name: Build installer (Windows, Inno Setup)
@@ -181,6 +187,9 @@ jobs:
 
           cargo install cargo-deb --locked
           cargo deb --no-build
+          dpkg-deb -c target/debian/srmgui_*.deb \
+            | grep -q 'usr/lib/systemd/user/srmgui.timer' \
+            || { echo 'missing systemd user units in .deb' >&2; exit 1; }
           mv target/debian/srmgui_*.deb "dist/srmgui-$version-$platform.deb"
 
           appdir="AppDir"

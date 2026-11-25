@@ -24,6 +24,7 @@
 - [内置源](#内置源)
 - [使用指南](#使用指南)
 - [命令行（CLI）](#命令行cli)
+- [Linux 定时应用最优镜像（systemd --user）](#linux-定时应用最优镜像systemd--user)
 - [写入的配置](#写入的配置)
 - [文件与目录](#文件与目录)
 - [构建与运行](#构建与运行)
@@ -217,6 +218,7 @@ description = "这是一个演示源"
 srmgui status                                   # 作用域、配置文件、当前源
 srmgui list                                     # 内置源 + 自定义源，* 为当前生效
 srmgui use rsproxy                              # 按默认作用域切换源
+srmgui use --best                               # 测速所有源并应用最快健康源（地区/同省优先）
 srmgui use aliyun --scope project --project .   # 切换项目级 .cargo/config.toml
 srmgui probe                                    # 测速当前源；也可 probe rsproxy aliyun 或 --all
 srmgui custom list                              # 自定义源列表
@@ -239,6 +241,51 @@ srmgui --help
 - `--json` 输出机器可读结果，便于脚本解析（`status` / `list` / `probe` / `custom list` / `snapshot list` / `doctor` 等）；
 - `--scope global|project` 临时覆盖作用域，`--project <dir>` 指定项目目录（可为项目内任意路径，自动向上查找 `Cargo.toml`），两者都不会改动 GUI 的默认设置，只有 `srmgui scope` 会持久化；
 - 退出码：`0` 成功，`1` 执行失败（含 `probe` 存在失败层、`doctor` 检出问题），`2` 参数错误，`probe` 与 `doctor` 可直接用于 CI 门禁。
+
+## Linux 定时应用最优镜像（systemd --user）
+
+`.deb` 安装后会在 `/usr/lib/systemd/user/` 提供 `srmgui.service` 与 `srmgui.timer`。
+timer 默认**每 5 小时**（登录后 10 分钟先跑一次）执行 `srmgui use --best`：
+测速所有内置源，按「下载速度优先、同省优先」选出最快健康源，写入
+`~/.cargo/config.toml`（与 GUI 推荐条同一算法；写入仍会留 `.bak` 与快照，见下节）。
+已是当前最优源时跳过写入，避免反复生成备份。
+
+启用与管理：
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now srmgui.timer
+systemctl --user list-timers srmgui.timer          # 查看下次触发时间
+systemctl --user start srmgui.service              # 立即应用一次
+journalctl --user -u srmgui.service -n 50          # 查看日志
+```
+
+想固定使用某个源（不做测速选优），编辑 service 的 `ExecStart`：
+
+```bash
+systemctl --user edit srmgui.service
+# [Service]
+# ExecStart=
+# ExecStart=/usr/bin/srmgui use aliyun
+```
+
+**改周期**：`systemctl --user edit srmgui.timer`，先清空默认触发器再启用所需周期：
+
+```ini
+[Timer]
+OnBootSec=
+OnUnitActiveSec=
+OnCalendar=*-*-* 03:00:00     # 每天 03:00
+```
+
+`packaging/linux/srmgui.timer` 注释里预留了各周期示例：每天 `OnCalendar=daily`、
+每周 `OnCalendar=weekly`、每月 `OnCalendar=monthly`、每 5 小时整点
+`OnCalendar=*-*-* 00,05,10,15,20:00:00`。
+
+**便携包 / AppImage**：Linux `portable.tar.gz` 在 `systemd/user/` 附带这两个单元文件，
+请放到 `~/.config/systemd/user/` 并按上面命令 enable（ExecStart 中的 `/usr/bin/srmgui`
+需按实际安装路径调整）。AppImage 为单文件应用，不自带单元文件。此 timer 与 GUI 的
+「更新检查 / 测速周期」互相独立。
 
 ## 写入的配置
 
@@ -330,7 +377,7 @@ srmgui/
 ├── build.rs          # Windows 下将 ico 嵌入可执行文件（Linux/macOS 跳过）
 ├── sources.json      # 内置源清单（启动时在线拉取，离线回退到缓存/内置清单）
 ├── locales/          # 8 种语言的国际化文案
-├── packaging/        # Windows 安装脚本、macOS 签名公证脚本、Linux desktop 文件
+├── packaging/        # Windows 安装脚本、macOS 签名公证脚本、Linux desktop 与 systemd user 单元
 ├── .github/workflows/ # 跨平台构建与 Release 发布流水线
 ├── src/
 │   ├── main.rs       # 程序入口与窗口初始化

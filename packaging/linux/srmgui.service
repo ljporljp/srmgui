@@ -1,0 +1,7 @@
+[Unit]
+Description=Apply the fastest Cargo mirror (srmgui)
+Documentation=https://github.com/ljporljp/srmgui
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/srmgui use --best

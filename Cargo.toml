@@ -42,6 +42,8 @@ assets = [
     ["target/release/srmgui", "usr/bin/", "755"],
     ["packaging/linux/srmgui.desktop", "usr/share/applications/", "644"],
     ["assets/logo.png", "usr/share/icons/hicolor/512x512/apps/srmgui.png", "644"],
+    ["packaging/linux/srmgui.service", "usr/lib/systemd/user/", "644"],
+    ["packaging/linux/srmgui.timer", "usr/lib/systemd/user/", "644"],
 ]
 
 [target.'cfg(windows)'.build-dependencies]
